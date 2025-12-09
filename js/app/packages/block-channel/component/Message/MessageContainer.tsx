@@ -5,6 +5,7 @@ import { reactToMessage } from '@block-channel/signal/reactions';
 import type { ThreadViewData } from '@block-channel/type/threadView';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { scrollIntoViewAndFocus } from '@block-channel/utils/scrollAndFocus';
+import SmileIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import {
@@ -46,10 +47,8 @@ import {
 import type { SetStoreFunction } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { TypingIndicator } from '../MessageList/TypingIndicator';
-import {
-  EmojiSearchSelector,
-  ReactionQuickSelector,
-} from '../ReactionSelector';
+import { EmojiSearchSelector } from '../ReactionSelector';
+// import { ReactionQuickSelector,} from '../ReactionSelector';
 import { ActionMenu } from './ActionMenu';
 import { createMessageActions } from './actions';
 import { EditMessageInput } from './EditMessageInput';
@@ -99,28 +98,26 @@ function NewMessageIndicator(props: NewIndicatorProps) {
 }
 
 type MessageProps = {
-  message: MessageType;
+  setThreadInputAttachmentsStore: SetStoreFunction<Record<string, InputAttachment[]>>;
+  threadInputAttachmentsStore: Record<string, InputAttachment[]>;
+  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
+  setThreadViewStore: SetStoreFunction<ThreadViewData>;
+  setNewIndicatorShown: Setter<number | undefined>;
+  newIndicatorShown: Accessor<number | undefined>;
   lastViewed: Accessor<string | null | undefined>;
-  newMessageIndex: Accessor<number | undefined>;
-  isFocused: boolean;
   setFocusedMessageId: Setter<string | undefined>;
-  index: Accessor<number>;
+  newMessageIndex: Accessor<number | undefined>;
   orderedMessages: Accessor<MessageType[]>;
+  targetMessageId: string | undefined;
+  virtualHandle: VirtualizerHandle;
+  threadViewStore: ThreadViewData;
+  listContext: MessageListContext;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
-  threadViewStore: ThreadViewData;
-  setThreadViewStore: SetStoreFunction<ThreadViewData>;
-  threadInputAttachmentsStore: Record<string, InputAttachment[]>;
-  setThreadInputAttachmentsStore: SetStoreFunction<
-    Record<string, InputAttachment[]>
-  >;
-  newIndicatorShown: Accessor<number | undefined>;
-  setNewIndicatorShown: Setter<number | undefined>;
-  virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
-  listContext: MessageListContext;
-  targetMessageId: string | undefined;
-  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
+  index: Accessor<number>;
+  message: MessageType;
+  isFocused: boolean;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -486,11 +483,10 @@ export function MessageContainer(props: MessageProps) {
       }));
 
       scrollIntoViewAndFocus({
+        targetId: props.threadSiblings?.at(COLLAPSED_THREAD_INDEX_CUTOFF + 1)?.id ?? '',
         virtualHandle: props.virtualHandle,
-        container: props.container,
         targetIndex: props.index() + 1,
-        targetId:
-          props.threadSiblings?.at(COLLAPSED_THREAD_INDEX_CUTOFF + 1)?.id ?? '',
+        container: props.container,
       });
     } else {
       props.setThreadViewStore(message.thread_id, (prev) => ({
@@ -500,9 +496,9 @@ export function MessageContainer(props: MessageProps) {
       if (props.threadViewStore[message.thread_id]?.threadExpanded) {
         scrollIntoViewAndFocus({
           virtualHandle: props.virtualHandle,
-          container: props.container,
           targetIndex: props.index() + 1,
           targetId: message.thread_id,
+          container: props.container,
         });
       } else {
         scrollIntoViewAndFocus({
@@ -602,15 +598,13 @@ export function MessageContainer(props: MessageProps) {
                 shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
                 hoverActions={
                   <ActionMenu
+                    setReactionMenuActivated={setTopBarEmojiMenuOpen}
                     messageId={message.id}
                     actions={actions()}
-                    setReactionMenuActivated={setTopBarEmojiMenuOpen}
                   />
                 }
                 threadDepth={threadDepth()}
-                hasThreadChildren={
-                  hasThreadChildren() || shouldShowFirstReply()
-                }
+                hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
                 isFirstInThread={isFirstInThread()}
                 isLastInThread={isLastInThread()}
                 isDeleted={!!message.deleted_at}
@@ -637,9 +631,7 @@ export function MessageContainer(props: MessageProps) {
                     <EditMessageInput
                       content={props.message?.content ?? ''}
                       setEditing={setEditing}
-                      save={(input) =>
-                        editMessage_(props.message?.id ?? '', input)
-                      }
+                      save={(input) => editMessage_(props.message?.id ?? '', input)}
                     />
                   }
                 >
@@ -654,14 +646,14 @@ export function MessageContainer(props: MessageProps) {
                   </MessageComponent.Body>
                 </Show>
                 <MessageAttachments
-                  videoAttachments={videoAttachments}
-                  imageAttachments={imageAttachments}
+                  isCurrentUser={() => userId() === message.sender_id}
                   documentAttachments={documentAttachments}
                   isDeleted={() => !!message.deleted_at}
-                  isCurrentUser={() => userId() === message.sender_id}
+                  imageAttachments={imageAttachments}
+                  videoAttachments={videoAttachments}
                   channelId={message.channel_id}
-                  messageId={message.id}
                   content={message.content}
+                  messageId={message.id}
                 />
                 <Show when={!message.deleted_at}>
                   <MessageReactions messageId={props.message?.id ?? ''} />
@@ -670,27 +662,18 @@ export function MessageContainer(props: MessageProps) {
               <Show when={isLastInCollapsedThread()}>
                 <div
                   class="border-l border-edge-muted pb-1"
-                  style={{
-                    'margin-left': `var(--left-of-connector)`,
-                  }}
+                  style={{'margin-left': `var(--left-of-connector)`}}
                 >
                   <div
+                    style={{'margin-left': `calc(var(--thread-shift) * ${threadDepth()} - 1px - var(--user-icon-width) / 2)`}}
                     class="relative"
-                    style={{
-                      'margin-left': `calc(var(--thread-shift) * ${threadDepth()} - 1px - var(--user-icon-width) / 2)`,
-                    }}
                   >
                     <ThreadReplyIndicator
-                      countCollapsedMessages={
-                        collapsedThreadMessages()?.length || 0
-                      }
+                      isThreadOpen={props.threadViewStore[message.thread_id!] ?.threadExpanded}
+                      countCollapsedMessages={collapsedThreadMessages()?.length || 0}
                       timestamp={lastReplyTimestamp()}
-                      users={threadReplyUsers()}
                       onClick={handleThreadToggle}
-                      isThreadOpen={
-                        props.threadViewStore[message.thread_id!]
-                          ?.threadExpanded
-                      }
+                      users={threadReplyUsers()}
                     />
                   </div>
                 </div>
@@ -704,41 +687,27 @@ export function MessageContainer(props: MessageProps) {
                 mobileFullScreen
                 overrideStyling
               >
-                <Switch>
-                  <Match when={!reactionSearchOpen()}>
-                    <ReactionQuickSelector
-                      onEmojiClick={(emoji) => react(emoji.emoji)}
-                      handleClose={() => {
-                        setReactionSearchOpen(false);
-                      }}
-                      setSearchOpen={setReactionSearchOpen}
-                      insideMenu
-                      showFocusRing={true}
-                    />
-                  </Match>
-                  <Match when={reactionSearchOpen()}>
-                    <EmojiSearchSelector
-                      onEmojiClick={(emoji) => react(emoji.emoji)}
-                      handleClose={() => {
-                        setReactionSearchOpen(false);
-                      }}
-                      fullWidth={isTouchDevice && isMobileWidth()}
-                      insideMenu={true}
-                    />
-                  </Match>
-                </Switch>
+                {/*<Show when={reactionSearchOpen()}>*/}
+                <Show when={true}>
+                  <EmojiSearchSelector
+                    handleClose={() => {setReactionSearchOpen(false)}}
+                    onEmojiClick={(emoji) => react(emoji.emoji)}
+                    fullWidth={isTouchDevice && isMobileWidth()}
+                    insideMenu={true}
+                  />
+                </Show>
                 <Show when={isTouchDevice && isMobileWidth()}>
                   <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
                     <MessageComponent
-                      focused={props.isFocused}
-                      senderId={message.sender_id}
                       isFirstMessage={isFirstMessage()}
                       isLastMessage={isLastMessage()}
+                      senderId={message.sender_id}
+                      focused={props.isFocused}
                       hideConnectors
                     >
                       <MessageComponent.TopBar
-                        name={displayName()}
                         timestamp={message.created_at}
+                        name={displayName()}
                       />
                       <MessageComponent.Body>
                         <StaticMarkdown
@@ -748,14 +717,14 @@ export function MessageContainer(props: MessageProps) {
                         />
                       </MessageComponent.Body>
                       <MessageAttachments
-                        videoAttachments={videoAttachments}
-                        imageAttachments={imageAttachments}
+                        isCurrentUser={() => userId() === message.sender_id}
                         documentAttachments={documentAttachments}
                         isDeleted={() => !!message.deleted_at}
-                        isCurrentUser={() => userId() === message.sender_id}
+                        imageAttachments={imageAttachments}
+                        videoAttachments={videoAttachments}
                         channelId={message.channel_id}
-                        messageId={message.id}
                         content={message.content}
+                        messageId={message.id}
                       />
                     </MessageComponent>
                   </ContextMenu.Item>
