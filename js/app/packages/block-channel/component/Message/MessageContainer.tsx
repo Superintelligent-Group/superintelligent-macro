@@ -730,7 +730,7 @@ export function MessageContainer(props: MessageProps) {
                   </ContextMenu.Item>
                 </Show>
                 <Show when={!reactionSearchOpen()}>
-                  <div class={MENU_CONTENT_CLASS + ' mt-4'}>
+                  <div class={MENU_CONTENT_CLASS + ' mt-[-1px]'}>
                     <For each={actions().filter((a) => a.enabled)}>
                       {(a) => (
                         <>

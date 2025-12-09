@@ -24,9 +24,7 @@ export function ActionMenu(props: {
   // default emojis
   const defaultEmojis = DEV_MODE_ENV ? ['🧯', '🚬', '🔧', '🎫'] : ['❤️', '👍', '😂'];
 
-  const react = createCallback((emoji: string) =>
-    reactToMessage(emoji, props.messageId)
-  );
+  const react = createCallback((emoji: string) =>reactToMessage(emoji, props.messageId));
   return (
     <div class="flex flex-row bg-menu items-center allow-css-brackets">
       <For each={defaultEmojis}>

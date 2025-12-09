@@ -151,27 +151,27 @@ export function EmojiSearchSelector(props: EmojiSearchSelectorProps) {
 
   return (
     <Dynamic
+      class={`${props.fullWidth ? 'w-full' : 'w-[258px]'} h-[315px] flex flex-col bg-menu shadow-lg border border-edge`}
       component={props.insideMenu ? ContextMenu.Item : 'div'}
-      class={`${props.fullWidth ? 'w-full' : 'w-[258px]'} h-[315px] pl-2 pt-2 rounded-md flex flex-col bg-menu shadow-lg border border-edge-muted`}
-      role="dialog"
+      {...(props.insideMenu && { closeOnSelect: false })}
       aria-label="Emoji search"
       ref={containerRef}
-      {...(props.insideMenu && { closeOnSelect: false })}
+      role="dialog"
     >
-      <div class="flex pr-2 w-full">
-        <div class="flex flex-row items-center text-ink gap-1 border border-edge-muted rounded-md px-2 py-1 text-xs w-full">
+      <div class="flex w-full">
+        <div class="flex flex-row items-center text-ink gap-1 border-edge border-b-[1px] px-2 h-[31px] text-xs w-full">
           <SearchIcon class="w-3 h-3" />
           <input
-            ref={searchInputRef}
-            value={input()}
             onInput={(e) => setInput(e.target.value)}
-            placeholder="Search emojis"
+            placeholder="Search Emojis"
+            aria-label="Search Emojis"
+            ref={searchInputRef}
             role="searchbox"
-            aria-label="Search emojis"
+            value={input()}
           />
         </div>
       </div>
-      <div class="flex-grow overflow-y-auto overflow-x-hidden mt-2">
+      <div class="flex-grow overflow-y-auto overflow-x-hidden" style="scrollbar-width: none;">
         <EmojiSelector
           nameFilter={input()}
           onEmojiClick={(emoji) => {
