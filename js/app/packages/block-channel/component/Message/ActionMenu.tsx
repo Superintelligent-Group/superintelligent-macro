@@ -5,6 +5,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { type Component, For, type Setter } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';
 import type { MessageAction } from './actions';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 
 false && clickOutside;
 
@@ -21,7 +22,7 @@ export function ActionMenu(props: {
   setReactionMenuActivated?: Setter<boolean>;
 }) {
   // default emojis
-  const defaultEmojis = ['❤️', '👍', '😂'];
+  const defaultEmojis = DEV_MODE_ENV ? ['🧯', '🚬', '🔧', '🎫'] : ['❤️', '👍', '😂'];
 
   const react = createCallback((emoji: string) =>
     reactToMessage(emoji, props.messageId)
