@@ -713,16 +713,17 @@ export function ShareButton(props: ShareButtonProps) {
             </Tooltip>
           </Match>
           <Match when={shareAccessLevelText() === 'Shared'}>
-              <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
-                <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
-                  <IconUsers class="size-4" />
-                </button>
-              </Tooltip>
-
+            <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+                &nbsp;Share
+                <IconUsers class="size-4" />
+              </button>
+            </Tooltip>
           </Match>
           <Match when={shareAccessLevelText() === 'Just me'}>
             <Tooltip tooltip={<div>Only you can access this document</div>}>
               <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+                &nbsp;Share
                 <IconEyeSlash class="size-4" />
               </button>
             </Tooltip>
