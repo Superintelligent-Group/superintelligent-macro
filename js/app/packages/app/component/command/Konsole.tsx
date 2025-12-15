@@ -332,19 +332,6 @@ export function KommandMenuInner(props: {
           value={rawQuery()}
           autofocus
         />
-        <ToggleSwitch
-          onChange={(val) => {
-            if (val) {
-              setKonsoleMode('FULL_TEXT_SEARCH');
-            } else {
-              setKonsoleMode('ENTITY_SEARCH');
-            }
-          }}
-          checked={isFullTextSearch()}
-          // switchRootClass='subtle'
-          label="Full Text Search"
-          size="SM"
-        />
       </div>
       <div class="bg-panel">
         <KonsoleFilter />
