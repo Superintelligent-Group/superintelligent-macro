@@ -1,6 +1,5 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
@@ -46,7 +45,6 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
-  setKonsoleMode,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
