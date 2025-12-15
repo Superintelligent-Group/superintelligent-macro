@@ -699,37 +699,35 @@ export function ShareButton(props: ShareButtonProps) {
     return 'Just me';
   });
 
-  const shareIcon = createMemo(() => {
-    const accessLevel = shareAccessLevelText();
-    if (accessLevel === 'Public') {
-      return IconGlobe;
-    }
-    if (accessLevel === 'Shared') {
-      return IconUsers;
-    }
-    if (accessLevel === 'Just me') {
-      return IconEyeSlash;
-    }
-    return IconGlobe;
-  });
-
   return (
     <>
       <div class="border-1 border-edge-muted flex">
-        <button class="text-xs bg-ink-muted group-hover:bg-accent text-page p-1 flex">
-          Share
-          {/*{shareIcon}*/}
-          <Tooltip tooltip={{
-            label:
-              shareAccessLevelText() === 'Public'
-                ? 'Share • Anyone with the link can access'
-                : shareAccessLevelText() === 'Shared'
-                  ? 'Share • Shared with specific people'
-                  : shareAccessLevelText() === 'Just me'
-                    ? 'Share • Only you can access'
-                    : 'Share',
-          }}/>
-        </button>
+
+        <Switch>
+          <Match when={shareAccessLevelText() === 'Public'}>
+            <Tooltip tooltip={<div>Anyone with the link can access this document</div>}>
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+                &nbsp;Share
+                <IconGlobe class="size-4" />
+              </button>
+            </Tooltip>
+          </Match>
+          <Match when={shareAccessLevelText() === 'Shared'}>
+              <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
+                <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+                  <IconUsers class="size-4" />
+                </button>
+              </Tooltip>
+
+          </Match>
+          <Match when={shareAccessLevelText() === 'Just me'}>
+            <Tooltip tooltip={<div>Only you can access this document</div>}>
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+                <IconEyeSlash class="size-4" />
+              </button>
+            </Tooltip>
+          </Match>
+        </Switch>
 
         <div class="h-[24px] w-[1px] bg-edge-muted"/>
 
