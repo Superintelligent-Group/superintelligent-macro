@@ -682,7 +682,7 @@ export function ShareButton(props: ShareButtonProps) {
     return {
       action: (e: MouseEvent | KeyboardEvent) => {
         e.stopPropagation();
-        copyLink();
+        // copyLink();
       },
       icon: IconLink,
     };
@@ -772,7 +772,10 @@ export function ShareButton(props: ShareButtonProps) {
           size="sm"
           theme="clear"
           icon={ShareLinkAction().icon}
-          onClick={ShareLinkAction().action}
+          onClick={() => {
+            copyLink();
+            ShareLinkAction().action;
+          }}
           tooltip={{ label: 'Copy Share Link' }}
         />
       </div>
