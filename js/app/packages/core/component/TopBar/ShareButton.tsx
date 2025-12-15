@@ -61,7 +61,7 @@ import { Permissions } from '../SharePermissions';
 import { TextButton } from '../TextButton';
 import { toast } from '../Toast/Toast';
 import { openLoginModal } from './LoginButton';
-import Tooltip from '@corvu/tooltip';
+import { Tooltip } from '../Tooltip';
 
 false && clickOutside;
 
@@ -718,7 +718,7 @@ export function ShareButton(props: ShareButtonProps) {
       <div class="border-1 border-edge-muted flex">
         <button class="text-xs bg-ink-muted group-hover:bg-accent text-page p-1 flex">
           Share
-          {shareIcon}
+          {/*{shareIcon}*/}
           <Tooltip tooltip={{
             label:
               shareAccessLevelText() === 'Public'
