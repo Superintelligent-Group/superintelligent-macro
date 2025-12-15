@@ -702,11 +702,19 @@ export function ShareButton(props: ShareButtonProps) {
   return (
     <>
       <div class="border-1 border-edge-muted flex">
-
         <Switch>
           <Match when={shareAccessLevelText() === 'Public'}>
             <Tooltip tooltip={<div>Anyone with the link can access this document</div>}>
-              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1"
+                onClick={(e) => {
+                  if (!isAuthenticated()) {
+                    openLoginModal();
+                  } else {
+                    track(TrackingEvents.SHARE.OPEN);
+                    ShareLinkAction().action(e);
+                    setIsSharePermOpen(true);
+                  }
+                }}>
                 &nbsp;Share
                 <IconGlobe class="size-4" />
               </button>
@@ -714,7 +722,15 @@ export function ShareButton(props: ShareButtonProps) {
           </Match>
           <Match when={shareAccessLevelText() === 'Shared'}>
             <Tooltip tooltip={<div>Shared with specific people or channels</div>}>
-              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1" onClick={(e) => {
+                if (!isAuthenticated()) {
+                  openLoginModal();
+                } else {
+                  track(TrackingEvents.SHARE.OPEN);
+                  ShareLinkAction().action(e);
+                  setIsSharePermOpen(true);
+                }
+              }}>
                 &nbsp;Share
                 <IconUsers class="size-4" />
               </button>
@@ -722,7 +738,15 @@ export function ShareButton(props: ShareButtonProps) {
           </Match>
           <Match when={shareAccessLevelText() === 'Just me'}>
             <Tooltip tooltip={<div>Only you can access this document</div>}>
-              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1">
+              <button class="text-xs hover:bg-hover text-ink p-1 flex items-center gap-1" onClick={(e) => {
+                if (!isAuthenticated()) {
+                  openLoginModal();
+                } else {
+                  track(TrackingEvents.SHARE.OPEN);
+                  ShareLinkAction().action(e);
+                  setIsSharePermOpen(true);
+                }
+              }}>
                 &nbsp;Share
                 <IconEyeSlash class="size-4" />
               </button>
