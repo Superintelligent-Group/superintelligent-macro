@@ -602,7 +602,7 @@ export const Launcher = (props: LauncherProps) => {
                         size="sm"
                       />
                     </Dialog.CloseButton>
-                    <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+                    <Dialog.Title class="text-sm">{`Create`}</Dialog.Title>
                   </div>
                 </div>
                 {/*<div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">*/}
