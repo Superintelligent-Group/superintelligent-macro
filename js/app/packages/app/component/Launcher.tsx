@@ -33,6 +33,9 @@ import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
+import { DialogWrapper } from '@core/component/DialogWrapper';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -536,30 +539,23 @@ const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   return (
-    <div>
-      <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
-        classList={{
-          [gridColsClass()]: true,
-        }}
-        ref={ref}
-      >
-        <div class="absolute pointer-events-none size-full inset-0"></div>
+    <div
+      class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+      classList={{[gridColsClass()]: true}}
+      ref={ref}
+    >
+      <div class="absolute pointer-events-none size-full inset-0"></div>
 
-        <For each={CREATABLE_BLOCKS}>
-          {(item, index) => (
-            <LauncherMenuItem
-              creatableBlock={item}
-              onMouseEnter={() => setFocusedIndex(index())}
-              onFocus={() => setFocusedIndex(index())}
-              focused={focusedIndex() === index()}
-            />
-          )}
-        </For>
-      </div>
-      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold option to open in a new split view
-      </div>
+      <For each={CREATABLE_BLOCKS}>
+        {(item, index) => (
+          <LauncherMenuItem
+            onMouseEnter={() => setFocusedIndex(index())}
+            onFocus={() => setFocusedIndex(index())}
+            focused={focusedIndex() === index()}
+            creatableBlock={item}
+          />
+        )}
+      </For>
     </div>
   );
 };
@@ -575,36 +571,34 @@ export const Launcher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          classList={{
-            'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-          }}
-        >
-          <Show when={useJuicedScrim}>
-            <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
-              <PcNoiseGrid
-                cellSize={20}
-                crunch={0.379}
-                size={[0, 1]}
-                speed={[0.03, 0.4]}
-                circleMask={1}
-                stroke={1}
-                fill={0}
-              />
-            </div>
-          </Show>
-        </Dialog.Overlay>
+        <DialogWrapper>
 
-        <Dialog.Content>
-          <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
-        </Dialog.Content>
+            {/*<Show when={useJuicedScrim}>
+              <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
+                <PcNoiseGrid
+                  cellSize={20}
+                  crunch={0.379}
+                  size={[0, 1]}
+                  speed={[0.03, 0.4]}
+                  circleMask={1}
+                  stroke={1}
+                  fill={0}
+                />
+              </div>
+            </Show>*/}
+
+            <ClippedPanel tl={!beveledCorners()} active>
+              <Dialog.Content>
+                {/*<div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">*/}
+                  <LauncherInner
+                    onClose={(shouldReturnFocus) =>
+                      props.onOpenChange(false, shouldReturnFocus)
+                    }
+                  />
+                {/*</div>*/}
+              </Dialog.Content>
+            </ClippedPanel>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );
