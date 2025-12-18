@@ -1,6 +1,9 @@
 import type { BlockAlias, BlockName } from '@core/block';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
+import { IconButton } from '@core/component/IconButton';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -19,6 +22,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
+import IconClose from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
@@ -32,12 +36,8 @@ import WideTask from '@macro-icons/wide/task.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
-import { useSplitLayout } from './split-layout/layout';
-import { DialogWrapper } from '@core/component/DialogWrapper';
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { IconButton } from '@core/component/IconButton';
-import IconClose from '@icon/regular/x.svg';
+import { useSplitLayout } from './split-layout/layout';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -307,13 +307,13 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         'text-ink-extra-muted': !props.focused,
       }}
       onClick={() => props.creatableBlock.keyDownHandler()}
-      onFocus={props.onFocus}
-      onMouseEnter={props.onMouseEnter}
-      tabindex={0}
-      ref={buttonRef}
       onPointerEnter={() => {
         buttonRef?.focus();
       }}
+      onMouseEnter={props.onMouseEnter}
+      onFocus={props.onFocus}
+      ref={buttonRef}
+      tabindex={0}
     >
       {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
                 because they do not get garbage collected fast enough */}
@@ -543,7 +543,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div
       class="relative grid grid-cols-2 sm:grid-cols-4 gap-2 p-4 isolate bg-panel suppress-css-brackets"
-      classList={{[gridColsClass()]: true}}
+      classList={{ [gridColsClass()]: true }}
       ref={ref}
     >
       <div class="absolute pointer-events-none size-full inset-0"></div>
@@ -574,8 +574,7 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <DialogWrapper>
-
-            {/*<Show when={useJuicedScrim}>
+          {/*<Show when={useJuicedScrim}>
               <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
                 <PcNoiseGrid
                   cellSize={20}
@@ -589,31 +588,31 @@ export const Launcher = (props: LauncherProps) => {
               </div>
             </Show>*/}
 
-            <ClippedPanel tl={!beveledCorners()} active>
-              <Dialog.Content>
-                <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
-                  <div class="flex flex-row items-center gap-2">
-                    <Dialog.CloseButton>
-                      <IconButton
-                        tooltip={{ label: 'Close' }}
-                        icon={IconClose}
-                        iconSize={16}
-                        theme="clear"
-                        size="sm"
-                      />
-                    </Dialog.CloseButton>
-                    <Dialog.Title class="text-sm">{`Create`}</Dialog.Title>
-                  </div>
+          <ClippedPanel tl={!beveledCorners()} active>
+            <Dialog.Content>
+              <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                <div class="flex flex-row items-center gap-2">
+                  <Dialog.CloseButton>
+                    <IconButton
+                      tooltip={{ label: 'Close' }}
+                      icon={IconClose}
+                      iconSize={16}
+                      theme="clear"
+                      size="sm"
+                    />
+                  </Dialog.CloseButton>
+                  <Dialog.Title class="text-sm">{`Create`}</Dialog.Title>
                 </div>
-                {/*<div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">*/}
-                  <LauncherInner
-                    onClose={(shouldReturnFocus) =>
-                      props.onOpenChange(false, shouldReturnFocus)
-                    }
-                  />
-                {/*</div>*/}
-              </Dialog.Content>
-            </ClippedPanel>
+              </div>
+              {/*<div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">*/}
+              <LauncherInner
+                onClose={(shouldReturnFocus) =>
+                  props.onOpenChange(false, shouldReturnFocus)
+                }
+              />
+              {/*</div>*/}
+            </Dialog.Content>
+          </ClippedPanel>
         </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
