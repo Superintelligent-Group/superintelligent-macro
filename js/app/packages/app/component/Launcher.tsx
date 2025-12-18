@@ -36,6 +36,8 @@ import { useSplitLayout } from './split-layout/layout';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { IconButton } from '@core/component/IconButton';
+import IconClose from '@icon/regular/x.svg';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -299,7 +301,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   return (
     <button
-      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
+      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-22 relative flex sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
       classList={{
         '-translate-y-2 text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
@@ -540,7 +542,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   return (
     <div
-      class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+      class="relative grid grid-cols-2 sm:grid-cols-4 gap-2 p-4 isolate bg-panel suppress-css-brackets"
       classList={{[gridColsClass()]: true}}
       ref={ref}
     >
@@ -589,6 +591,20 @@ export const Launcher = (props: LauncherProps) => {
 
             <ClippedPanel tl={!beveledCorners()} active>
               <Dialog.Content>
+                <div class="flex flex-row items-center justify-between px-2 h-[40px] gap-2 border-b-1 border-b-edge-muted">
+                  <div class="flex flex-row items-center gap-2">
+                    <Dialog.CloseButton>
+                      <IconButton
+                        tooltip={{ label: 'Close' }}
+                        icon={IconClose}
+                        iconSize={16}
+                        theme="clear"
+                        size="sm"
+                      />
+                    </Dialog.CloseButton>
+                    <Dialog.Title class="text-sm">{`Share: ${props.name}`}</Dialog.Title>
+                  </div>
+                </div>
                 {/*<div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">*/}
                   <LauncherInner
                     onClose={(shouldReturnFocus) =>
