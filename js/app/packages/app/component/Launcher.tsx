@@ -301,15 +301,15 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   return (
     <button
       class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
+      onClick={() => props.creatableBlock.keyDownHandler()}
       classList={{
         'text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
       }}
-      onClick={() => props.creatableBlock.keyDownHandler()}
-      onFocus={props.onFocus}
       onMouseEnter={props.onMouseEnter}
-      tabindex={0}
+      onFocus={props.onFocus}
       ref={buttonRef}
+      tabindex={0}
     >
       {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
                 because they do not get garbage collected fast enough */}
@@ -338,8 +338,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         classList={{
           [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
             true,
-          'scale-y-0': !props.focused,
           'scale-y-100': props.focused,
+          'scale-y-0': !props.focused,
         }}
       ></div>
 
@@ -376,16 +376,12 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   );
 };
 
-type LauncherInnerProps = {
-  onClose: (shouldReturnFocus?: boolean) => void;
-};
+type LauncherInnerProps = { onClose: (shouldReturnFocus?: boolean) => void };
 
 const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
-
-  let ref!: HTMLDivElement;
-
   const [focusedIndex, setFocusedIndex] = createSignal(0);
+  let ref!: HTMLDivElement;
 
   const focusMenuItem = (label: string) => {
     const menuItem = document.querySelector<HTMLElement>(
@@ -403,20 +399,17 @@ const LauncherInner = (props: LauncherInnerProps) => {
     const activeElIndex = activeEl
       ? tabbableEls.indexOf(activeEl as FocusableElement)
       : -1;
-
-    if (activeElIndex === -1 || tabbableEls.length === 0) return false;
-
+    if (activeElIndex === -1 || tabbableEls.length === 0) {
+      return false;
+    }
     const nextIndex =
       (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
-
     const nextEl = tabbableEls[nextIndex];
-
-    if (!nextEl) return false;
-
+    if (!nextEl) {
+      return false;
+    }
     nextEl.focus();
-
     setFocusedIndex(nextIndex);
-
     return true;
   };
 
@@ -526,7 +519,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       </div>
 
       <div
-        class="grid grid-cols-6 gap-3 p-6 isolate suppress-css-brackets"
+        class="grid grid-cols-4 gap-3 p-6 isolate suppress-css-brackets w-min"
         ref={ref}
       >
         <For each={CREATABLE_BLOCKS}>
