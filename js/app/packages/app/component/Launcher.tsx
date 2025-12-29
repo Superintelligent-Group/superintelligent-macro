@@ -1,6 +1,9 @@
 import type { BlockAlias, BlockName } from '@core/block';
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
+import { IconButton } from '@core/component/IconButton';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -18,6 +21,7 @@ import {
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
+import CloseIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
@@ -31,6 +35,7 @@ import WideTask from '@macro-icons/wide/task.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { useSplitLayout } from './split-layout/layout';
 
 const createBlock = async (spec: {
@@ -295,7 +300,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <button
       class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
       classList={{
-        '-translate-y-2 text-ink bracket-offset-1': props.focused,
+        'text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
       }}
       onClick={() => props.creatableBlock.keyDownHandler()}
@@ -303,9 +308,6 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       onMouseEnter={props.onMouseEnter}
       tabindex={0}
       ref={buttonRef}
-      onPointerEnter={() => {
-        buttonRef?.focus();
-      }}
     >
       {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
                 because they do not get garbage collected fast enough */}
@@ -386,14 +388,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
   const [focusedIndex, setFocusedIndex] = createSignal(0);
 
   const focusMenuItem = (label: string) => {
-    const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label}`
-    );
-
-    if (menuItem) {
-      menuItem.focus();
-    }
-
+    const menuItem = document.querySelector<HTMLElement>(`.create-menu-${label}`);
+    if(menuItem){menuItem.focus()}
     return true;
   };
 
@@ -406,8 +402,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
     if (activeElIndex === -1 || tabbableEls.length === 0) return false;
 
-    const nextIndex =
-      (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
+    const nextIndex = (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
 
     const nextEl = tabbableEls[nextIndex];
 
@@ -422,15 +417,15 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   CREATABLE_BLOCKS.forEach((item) => {
     registerHotkey({
-      hotkeyToken: item.hotkeyToken,
-      hotkey: item.hotkey,
-      scopeId: launcherScope,
       description: item.description,
+      hotkeyToken: item.hotkeyToken,
       keyDownHandler: () => {
         item.keyDownHandler();
         props.onClose(false);
         return true;
       },
+      scopeId: launcherScope,
+      hotkey: item.hotkey,
     });
 
     if (item.altHotkeyToken) {
@@ -508,41 +503,27 @@ const LauncherInner = (props: LauncherInnerProps) => {
     displayPriority: 8,
   });
 
-  onMount(() => {
-    if (!ref) return;
-
-    attachHotkeys(ref);
-
-    setTimeout(() => {
-      const firstItem = CREATABLE_BLOCKS[0];
-
-      if (firstItem) {
-        focusMenuItem(firstItem.label);
-      }
-    }, 0);
-  });
-
-  // horrible but tailwind requires the full strings
-  const gridColsClass = () => {
-    const length = CREATABLE_BLOCKS.length;
-    if (length >= 8) return 'xl:grid-cols-8';
-    if (length >= 7) return 'xl:grid-cols-7';
-    if (length >= 6) return 'xl:grid-cols-6';
-    if (length >= 5) return 'xl:grid-cols-5';
-    return '';
-  };
+  onMount(() => attachHotkeys(ref));
 
   return (
-    <div>
+    <>
+      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+        <Dialog.CloseButton>
+          <IconButton
+            tooltip={{ label: 'Close' }}
+            icon={CloseIcon}
+            iconSize={16}
+            theme="clear"
+            size="sm"
+          />
+        </Dialog.CloseButton>
+        <Dialog.Title class="text-sm">Create New</Dialog.Title>
+      </div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
-        classList={{
-          [gridColsClass()]: true,
-        }}
+        class="grid grid-cols-6 gap-3 p-6 isolate suppress-css-brackets"
+        // classList={{[gridColsClass()]: true}}
         ref={ref}
       >
-        <div class="absolute pointer-events-none size-full inset-0"></div>
-
         <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
@@ -554,12 +535,11 @@ const LauncherInner = (props: LauncherInnerProps) => {
           )}
         </For>
       </div>
-      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold option to open in a new split view
-      </div>
-    </div>
+    </>
   );
 };
+
+// Hold option to open in a new split view
 
 type LauncherProps = {
   open: boolean;
@@ -570,22 +550,17 @@ export const Launcher = (props: LauncherProps) => {
   const useJuicedScrim = false;
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          classList={{
-            'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-          }}
-        >
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted">
           <Show when={useJuicedScrim}>
             <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
               <PcNoiseGrid
-                cellSize={20}
-                crunch={0.379}
-                size={[0, 1]}
                 speed={[0.03, 0.4]}
                 circleMask={1}
+                crunch={0.379}
+                cellSize={20}
+                size={[0, 1]}
                 stroke={1}
                 fill={0}
               />
@@ -593,22 +568,17 @@ export const Launcher = (props: LauncherProps) => {
           </Show>
         </Dialog.Overlay>
 
-        <Dialog.Content>
-          <div
-            class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                props.onOpenChange(false);
-              }
-            }}
-          >
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
-        </Dialog.Content>
+        <DialogWrapper>
+          <Dialog.Content>
+            <ClippedPanel tl={!beveledCorners()} active>
+              <LauncherInner
+                onClose={(shouldReturnFocus) =>
+                  props.onOpenChange(false, shouldReturnFocus)
+                }
+              />
+            </ClippedPanel>
+          </Dialog.Content>
+        </DialogWrapper>
       </Dialog.Portal>
     </Dialog>
   );

@@ -192,8 +192,8 @@ export function ParticipantList(props: {
       </Show>
       <div class="flex flex-col gap-3 max-h-[300px] w-full overflow-y-auto overflow-x-hidden">
         <Show
-          when={filteredParticipants().length > 0}
           fallback={<EmptyParticipantList query={searchQuery()} />}
+          when={filteredParticipants().length > 0}
         >
           <VList
             data={filteredParticipants()}
@@ -206,14 +206,12 @@ export function ParticipantList(props: {
           >
             {(participant) => (
               <UserItem
-                mountPoint={ref}
-                id={participant.user_id}
+                removeParticipant={() => removeParticipants([participant.user_id])}
                 description={participant.role}
                 currentUserId={props.userId}
-                removeParticipant={() =>
-                  removeParticipants([participant.user_id])
-                }
                 editable={props.editable}
+                id={participant.user_id}
+                mountPoint={ref}
               />
             )}
           </VList>
