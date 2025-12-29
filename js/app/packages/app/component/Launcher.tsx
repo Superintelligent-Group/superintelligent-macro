@@ -519,7 +519,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
       </div>
 
       <div
-        class="grid grid-cols-4 gap-3 p-6 isolate suppress-css-brackets w-min"
+        style="grid-template-columns: repeat(4, min-content); justify-self: center;"
+        class="grid gap-3 p-6 isolate suppress-css-brackets w-min"
         ref={ref}
       >
         <For each={CREATABLE_BLOCKS}>

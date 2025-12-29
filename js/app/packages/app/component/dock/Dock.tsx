@@ -2,6 +2,7 @@ import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featu
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
+import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
@@ -19,7 +20,6 @@ import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
-import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
@@ -210,9 +210,9 @@ export function Dock() {
                   'height': '24px',
                   'gap': '10px'
                 }}
+                data-hotkey-token={TOKENS.global.createCommand}
                 onClick={() => { setCreateMenuOpen(true) }}
                 class="dock-button-hover"
-                data-hotkey-token={TOKENS.global.createCommand}
               >
                 <MacroCreateIcon
                   style={{
