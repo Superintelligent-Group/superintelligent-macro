@@ -241,13 +241,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Code',
-    icon: () => <WideFileCode />,
-    description: 'Create code file',
-    blockName: 'code',
-    hotkeyToken: TOKENS.create.code,
-    altHotkeyToken: TOKENS.create.codeNewSplit,
-    hotkey: 'o',
     keyDownHandler: () => {
       createBlock({
         blockName: 'code',
@@ -255,10 +248,12 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
         createFn: async () => {
           const result = await createCodeFileFromText({
             code: 'print("Hello, World!")',
-            extension: 'py',
             title: 'New Code File',
+            extension: 'py',
           });
-          if (isErr(result)) return;
+          if (isErr(result)) {
+            return;
+          }
           const [, id] = ok(result[1]?.documentId);
           return id;
         },
@@ -266,6 +261,13 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.codeNewSplit,
+    description: 'Create code file',
+    hotkeyToken: TOKENS.create.code,
+    icon: () => <WideFileCode />,
+    blockName: 'code',
+    label: 'Code',
+    hotkey: 'o',
   },
 ];
 
@@ -347,10 +349,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
       <div
         class="absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50"
-        classList={{
-          [textFg()]: true,
-        }}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
+        classList={{ [textFg()]: true }}
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
@@ -365,9 +365,9 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       <div
         class="w-1/3 -translate-y-1 transition-all ease-click duration-200"
         classList={{
-          [textFg()]: props.focused,
           'text-edge': !props.focused,
           'scale-110': props.focused,
+          [textFg()]: props.focused,
         }}
       >
         {Icon && <Icon />}
@@ -388,8 +388,12 @@ const LauncherInner = (props: LauncherInnerProps) => {
   const [focusedIndex, setFocusedIndex] = createSignal(0);
 
   const focusMenuItem = (label: string) => {
-    const menuItem = document.querySelector<HTMLElement>(`.create-menu-${label}`);
-    if(menuItem){menuItem.focus()}
+    const menuItem = document.querySelector<HTMLElement>(
+      `.create-menu-${label}`
+    );
+    if (menuItem) {
+      menuItem.focus();
+    }
     return true;
   };
 
@@ -402,7 +406,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
     if (activeElIndex === -1 || tabbableEls.length === 0) return false;
 
-    const nextIndex = (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
+    const nextIndex =
+      (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
 
     const nextEl = tabbableEls[nextIndex];
 
@@ -430,76 +435,76 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
     if (item.altHotkeyToken) {
       registerHotkey({
-        hotkeyToken: item.altHotkeyToken,
-        hotkey: `opt+${item.hotkey}` as ValidHotkey,
-        scopeId: launcherScope,
         description: `${item.description} in new split`,
+        hotkey: `opt+${item.hotkey}` as ValidHotkey,
+        hotkeyToken: item.altHotkeyToken,
         keyDownHandler: () => {
           item.keyDownHandler();
           props.onClose();
           return true;
         },
+        scopeId: launcherScope,
       });
     }
   });
 
   registerHotkey({
-    hotkey: 'c',
-    scopeId: launcherScope,
     description: 'Close Launcher',
-    condition: createMenuOpen,
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;
     },
+    condition: createMenuOpen,
+    scopeId: launcherScope,
+    hotkey: 'c',
   });
   registerHotkey({
-    hotkey: 'arrowleft',
-    scopeId: launcherScope,
-    description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
+    description: 'Navigate Left',
+    scopeId: launcherScope,
+    hotkey: 'arrowleft',
   });
 
   registerHotkey({
     hotkey: 'arrowright' as ValidHotkey,
-    scopeId: launcherScope,
-    description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
+    description: 'Navigate Right',
+    scopeId: launcherScope,
   });
 
   registerHotkey({
-    hotkey: 'escape',
+    keyDownHandler: () => {
+      props.onClose();
+      return true;
+    },
     scopeId: launcherScope,
     description: 'Exit',
-    keyDownHandler: () => {
-      props.onClose();
-      return true;
-    },
+    hotkey: 'escape',
   });
 
   registerHotkey({
-    hotkey: 'enter',
-    scopeId: launcherScope,
+    keyDownHandler: () => {
+      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
+      props.onClose();
+      return true;
+    },
     description: 'Open in current split',
-    keyDownHandler: () => {
-      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
-      props.onClose();
-      return true;
-    },
     runWithInputFocused: true,
+    scopeId: launcherScope,
     displayPriority: 7,
+    hotkey: 'enter',
   });
 
   registerHotkey({
-    hotkey: 'opt+enter' as ValidHotkey,
-    scopeId: launcherScope,
-    description: 'Open in new split',
     keyDownHandler: () => {
       CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
       return true;
     },
+    hotkey: 'opt+enter' as ValidHotkey,
+    description: 'Open in new split',
     runWithInputFocused: true,
+    scopeId: launcherScope,
     displayPriority: 8,
   });
 
@@ -519,18 +524,18 @@ const LauncherInner = (props: LauncherInnerProps) => {
         </Dialog.CloseButton>
         <Dialog.Title class="text-sm">Create New</Dialog.Title>
       </div>
+
       <div
         class="grid grid-cols-6 gap-3 p-6 isolate suppress-css-brackets"
-        // classList={{[gridColsClass()]: true}}
         ref={ref}
       >
         <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
-              creatableBlock={item}
               onMouseEnter={() => setFocusedIndex(index())}
               onFocus={() => setFocusedIndex(index())}
               focused={focusedIndex() === index()}
+              creatableBlock={item}
             />
           )}
         </For>
@@ -542,8 +547,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
 // Hold option to open in a new split view
 
 type LauncherProps = {
-  open: boolean;
   onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
+  open: boolean;
 };
 
 export const Launcher = (props: LauncherProps) => {

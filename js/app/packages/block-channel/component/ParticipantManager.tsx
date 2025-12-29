@@ -206,7 +206,9 @@ export function ParticipantList(props: {
           >
             {(participant) => (
               <UserItem
-                removeParticipant={() => removeParticipants([participant.user_id])}
+                removeParticipant={() =>
+                  removeParticipants([participant.user_id])
+                }
                 description={participant.role}
                 currentUserId={props.userId}
                 editable={props.editable}
