@@ -1,5 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
@@ -67,12 +68,14 @@ export function KommandMenu() {
     } else {
       if (now - lastCommandTime() >= TIME_THRESHOLD) {
         const mode = getModeConfig(untrack(currentKonsoleMode));
-        // keep the sigil (e.g., '%' for FULL_TEXT_SEARCH) so mode doesn’t flip
+        // keep the sigil (e.g., '%' for FULL_TEXT_SEARCH) so mode doesn't flip
         setRawQuery(mode.sigil);
         setCommandCategoryIndex(0);
       }
     }
   });
+
+
 
   return (
     <StaticMarkdownContext>
@@ -81,7 +84,6 @@ export function KommandMenu() {
         onOpenChange={(_) => toggleKonsoleVisibility()}
       >
         <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-modal bg-transparent" />
           <DialogWrapper>
             <div ref={setCommandKRef}>
               <Dialog.Content>

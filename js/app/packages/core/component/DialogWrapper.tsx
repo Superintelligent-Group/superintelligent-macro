@@ -13,7 +13,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
 
   return (
     <div
-      class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4"
+      class="z-modal fixed inset-0"
       ref={props.overlayRef}
     >
       <div

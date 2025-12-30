@@ -24,6 +24,7 @@ import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
+import { DialogBackdrop } from '@core/component/DialogBackdrop';
 
 const AUTH_URLS = [
   '/app/login',
@@ -164,15 +165,14 @@ export function Layout(props: RouteSectionProps) {
         </Resize.Zone>
       </div>
       <Suspense>
-        <Show
-          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
-        >
+        <Show when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
           <Show when={!isNativeMobilePlatform()}>
             <Dock />
           </Show>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
         </Show>
       </Suspense>
+      <DialogBackdrop />
     </div>
   );
 }

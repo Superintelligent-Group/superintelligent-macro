@@ -1,15 +1,29 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { debouncedDependent } from '@core/util/debounce';
 import { createEffect, createSignal, untrack } from 'solid-js';
+import { dialogCount, setDialogCount } from '@core/component/DialogBackdrop';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 10;
 
-export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
-export const toggleKonsoleVisibility = () => {
-  const isOpen = konsoleOpen();
+const [konsoleOpen, _setKonsoleOpen] = createControlledOpenSignal();
 
-  setKonsoleOpen(!isOpen);
+export { konsoleOpen };
+
+export const setKonsoleOpen = (open: boolean) => {
+  const wasOpen = konsoleOpen();
+  _setKonsoleOpen(open);
+  
+  // Update dialog count on state change
+  if (open && !wasOpen) {
+    setDialogCount(dialogCount() + 1);
+  } else if (!open && wasOpen) {
+    setDialogCount(Math.max(0, dialogCount() - 1));
+  }
+};
+
+export const toggleKonsoleVisibility = () => {
+  setKonsoleOpen(!konsoleOpen());
 };
 
 export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
