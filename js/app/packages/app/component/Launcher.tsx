@@ -4,7 +4,6 @@ import { DialogWrapper } from '@core/component/DialogWrapper';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { IconButton } from '@core/component/IconButton';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
@@ -90,45 +89,40 @@ const createComponent = async (spec: {
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
-  label: string;
-  blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
+  blockName: BlockName;
+  label: string;
 };
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
-    label: 'Note',
-    icon: () => <WideFileMd />,
-    description: 'Create note',
-    blockName: 'md',
-    hotkeyToken: TOKENS.create.note,
-    altHotkeyToken: TOKENS.create.noteNewSplit,
-    hotkey: 'n',
     keyDownHandler: () => {
       createBlock({
-        blockName: 'md',
-        loading: true,
         createFn: () =>
           createMarkdownFile({
-            title: '',
-            content: '',
             projectId: undefined,
+            content: '',
+            title: '',
           }),
         shouldInsert: pressedKeys().has('opt'),
+        blockName: 'md',
+        loading: true,
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.noteNewSplit,
+    hotkeyToken: TOKENS.create.note,
+    description: 'Create note',
+    icon: () => <WideFileMd />,
+    blockName: 'md',
+    label: 'Note',
+    hotkey: 'n',
+
   },
   ...(ENABLE_CREATE_TASK
     ? [
         {
-          label: 'Task',
-          icon: () => <WideTask />,
-          description: 'Create task',
-          blockName: 'task' as BlockName,
-          hotkeyToken: TOKENS.create.task,
           altHotkeyToken: TOKENS.create.taskNewSplit,
-          hotkey: 't' as const,
           keyDownHandler: () => {
             createComponent({
               componentId: 'task-compose',
@@ -136,128 +130,135 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
             });
             return true;
           },
+          hotkeyToken: TOKENS.create.task,
+          blockName: 'task' as BlockName,
+          description: 'Create task',
+          icon: () => <WideTask />,
+          hotkey: 't' as const,
+          label: 'Task',
         },
       ]
     : []),
   {
-    label: 'Email',
-    icon: () => <WideEmail />,
-    description: 'Create email',
-    blockName: 'email',
-    hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
-    hotkey: 'e',
     keyDownHandler: () => {
       createComponent({
+        shouldInsert: pressedKeys().has('opt'),
         componentId: 'email-compose',
-        shouldInsert: pressedKeys().has('opt'),
       });
       return true;
     },
+    hotkeyToken: TOKENS.create.email,
+    description: 'Create email',
+    icon: () => <WideEmail />,
+    blockName: 'email',
+    label: 'Email',
+    hotkey: 'e',
   },
+
   {
-    label: 'Message',
-    icon: () => <WideChat />,
-    description: 'Create message',
-    blockName: 'channel',
-    hotkeyToken: TOKENS.create.message,
     altHotkeyToken: TOKENS.create.messageNewSplit,
-    hotkey: 'm',
     keyDownHandler: () => {
       createComponent({
-        componentId: 'channel-compose',
         shouldInsert: pressedKeys().has('opt'),
+        componentId: 'channel-compose',
       });
       return true;
     },
+    hotkeyToken: TOKENS.create.message,
+    description: 'Create message',
+    icon: () => <WideChat />,
+    blockName: 'channel',
+    label: 'Message',
+    hotkey: 'm',
   },
+
   {
-    label: 'AI',
-    icon: () => <WideStar />,
-    description: 'Create AI chat',
-    blockName: 'chat' as BlockName,
-    hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
-    hotkey: 'a',
     keyDownHandler: () => {
       createBlock({
-        blockName: 'chat',
+        shouldInsert: pressedKeys().has('opt'),
         createFn: async () => {
           const result = await createChat();
-          if ('error' in result) {
-            return;
-          }
+          if('error' in result){return}
           return result.chatId;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        blockName: 'chat',
       });
       return true;
     },
+    hotkeyToken: TOKENS.create.chat,
+    blockName: 'chat' as BlockName,
+    description: 'Create AI chat',
+    icon: () => <WideStar />,
+    hotkey: 'a',
+    label: 'AI',
   },
+
   {
-    label: 'Canvas',
-    icon: () => <WideDiagram />,
-    description: 'Create canvas',
-    blockName: 'canvas',
-    hotkeyToken: TOKENS.create.canvas,
-    altHotkeyToken: TOKENS.create.canvasNewSplit,
-    hotkey: 'd',
     keyDownHandler: () => {
       createBlock({
-        blockName: 'canvas',
-        loading: true,
         createFn: async () => {
           const result = await createCanvasFileFromJsonString({
             json: JSON.stringify({ nodes: [], edges: [] }),
             title: 'New Canvas',
           });
-          if ('error' in result) return;
+          if('error' in result){return}
           const [_, id] = ok(result.documentId);
           return id;
         },
         shouldInsert: pressedKeys().has('opt'),
+        blockName: 'canvas',
+        loading: true,
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.canvasNewSplit,
+    hotkeyToken: TOKENS.create.canvas,
+    description: 'Create canvas',
+    icon: () => <WideDiagram />,
+    blockName: 'canvas',
+    label: 'Canvas',
+    hotkey: 'd',
   },
+
   {
-    label: 'Folder',
-    icon: () => <WideFolder />,
-    description: 'Create folder',
-    blockName: 'project',
-    hotkeyToken: TOKENS.create.project,
-    altHotkeyToken: TOKENS.create.projectNewSplit,
-    hotkey: 'f',
     keyDownHandler: () => {
       createBlock({
-        blockName: 'project',
         createFn: () => {
           const createProject = useCreateProject();
           return createProject({ name: 'New Folder' });
         },
         shouldInsert: pressedKeys().has('opt'),
+        blockName: 'project',
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.projectNewSplit,
+    hotkeyToken: TOKENS.create.project,
+    description: 'Create folder',
+    icon: () => <WideFolder />,
+    blockName: 'project',
+    label: 'Folder',
+    hotkey: 'f',
   },
+
   {
     keyDownHandler: () => {
       createBlock({
-        blockName: 'code',
-        loading: true,
         createFn: async () => {
           const result = await createCodeFileFromText({
             code: 'print("Hello, World!")',
             title: 'New Code File',
             extension: 'py',
           });
-          if (isErr(result)) {
-            return;
-          }
+          if(isErr(result)){return}
           const [, id] = ok(result[1]?.documentId);
           return id;
         },
         shouldInsert: pressedKeys().has('opt'),
+        blockName: 'code',
+        loading: true,
       });
       return true;
     },
@@ -311,33 +312,10 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       ref={buttonRef}
       tabindex={0}
     >
-      {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
-                because they do not get garbage collected fast enough */}
-      {/*<div
-        class="inset-0 absolute bg-panel opacity-2 mask-b-from-0% mask-b-to-100%"
-        classList={{
-          'text-ink-extra-muted opacity-2': !props.focused,
-          [textFg() + ' opacity-50']: props.focused,
-        }}
-      >
-        <PcNoiseGrid
-          cellSize={21 / 2}
-          rounding={10}
-          warp={0}
-          freq={0.002}
-          crunch={0.4}
-          size={[0.0, 0.2]}
-          fill={1}
-          stroke={0}
-          speed={[props.focused ? 0.3 : 0, 0]}
-        />
-      </div>*/}
-
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
         classList={{
-          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
-            true,
+          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]: true,
           'scale-y-100': props.focused,
           'scale-y-0': !props.focused,
         }}
@@ -350,7 +328,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       <div
         class="absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50"
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
-        classList={{ [textFg()]: true }}
+        classList={{[textFg()]: true}}
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
@@ -384,12 +362,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
   let ref!: HTMLDivElement;
 
   const focusMenuItem = (label: string) => {
-    const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label}`
-    );
-    if (menuItem) {
-      menuItem.focus();
-    }
+    const menuItem = document.querySelector<HTMLElement>(`.create-menu-${label}`);
+    if(menuItem){menuItem.focus()}
     return true;
   };
 
@@ -442,16 +416,6 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    description: 'Close Launcher',
-    keyDownHandler: () => {
-      setCreateMenuOpen(false);
-      return true;
-    },
-    condition: createMenuOpen,
-    scopeId: launcherScope,
-    hotkey: 'c',
-  });
-  registerHotkey({
     keyDownHandler: () => moveFocus(-1),
     description: 'Navigate Left',
     scopeId: launcherScope,
@@ -465,14 +429,39 @@ const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
   });
 
+  // registerHotkey({
+  //   keyDownHandler: () => moveFocus(-1),
+  //   description: 'Navigate Up',
+  //   scopeId: launcherScope,
+  //   hotkey: 'arrowup',
+  // });
+
+  // registerHotkey({
+  //   keyDownHandler: () => moveFocus(-1),
+  //   description: 'Navigate Down',
+  //   scopeId: launcherScope,
+  //   hotkey: 'arrowdown',
+  // });
+
   registerHotkey({
+    description: 'Close Launcher',
     keyDownHandler: () => {
       props.onClose();
       return true;
     },
     scopeId: launcherScope,
-    description: 'Exit',
     hotkey: 'escape',
+  });
+
+  registerHotkey({
+    description: 'Close Launcher',
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    condition: createMenuOpen,
+    scopeId: launcherScope,
+    hotkey: 'c',
   });
 
   registerHotkey({
@@ -546,27 +535,10 @@ type LauncherProps = {
 };
 
 export const Launcher = (props: LauncherProps) => {
-  const useJuicedScrim = false;
-
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted">
-          <Show when={useJuicedScrim}>
-            <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
-              <PcNoiseGrid
-                speed={[0.03, 0.4]}
-                circleMask={1}
-                crunch={0.379}
-                cellSize={20}
-                size={[0, 1]}
-                stroke={1}
-                fill={0}
-              />
-            </div>
-          </Show>
-        </Dialog.Overlay>
-
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <DialogWrapper>
           <Dialog.Content>
             <ClippedPanel tl={!beveledCorners()} active>
