@@ -4,6 +4,9 @@ name = "properties"
 publish = false
 version = "0.1.0"
 
+[features]
+schema = ["dep:schemars", "dep:utoipa"]
+
 [dependencies]
 anyhow = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
@@ -13,16 +16,20 @@ macro_db_client = { path = "../macro_db_client" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = ["cloud_storage", "user_permissions"] }
 macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
+chrono = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 model_notifications = { path = "../model_notifications" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+schemars = { workspace = true, optional = true, features = ["uuid1"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
