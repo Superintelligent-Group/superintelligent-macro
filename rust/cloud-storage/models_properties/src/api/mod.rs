@@ -8,9 +8,11 @@ pub mod filters;
 pub mod query_params;
 pub mod requests;
 pub mod responses;
+pub mod sorts;
 
 pub use error::*;
 pub use filters::{FilterOperation, FilterValue, FilterValues, PropertyFilter};
 pub use query_params::*;
 pub use requests::*;
 pub use responses::*;
+pub use sorts::{PropertySort, SortDirection};
