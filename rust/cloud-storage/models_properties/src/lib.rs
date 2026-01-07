@@ -15,5 +15,8 @@ pub mod shared;
 // Re-export commonly used shared types for convenience
 pub use shared::{DataType, EntityPropertyReference, EntityReference, EntityType, PropertyOwner};
 
+// Re-export API filter types
+pub use api::{FilterOperation, FilterValue, FilterValues, PropertyFilter};
+
 // Re-export conversion function
 pub use service::property_value::convert_set_property_value_to_property_value;
