@@ -8,6 +8,7 @@ use super::EntityType;
 
 /// Entity reference for entity-type property values.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EntityReference {
     pub entity_id: String,
     pub entity_type: EntityType,

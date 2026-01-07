@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 /// Type of entity that can be referenced by entity properties.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq, Hash, sqlx::Type)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(
     type_name = "property_entity_type",
