@@ -1,6 +1,7 @@
 #![deny(missing_docs)]
 //! This crate contains all filters for various item types to be used in soup/search.
 
+use models_properties::PropertyFilter;
 use non_empty::IsEmpty;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
@@ -202,6 +203,9 @@ pub struct EntityFilters {
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
+    /// Property filters to apply to entities. Examples: [{"property_id": "...", "operation": {"equal": {"values": {"number": {"values": [5.0]}}}}}]. Empty to ignore property filtering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub property_filters: Vec<PropertyFilter>,
 }
 
 impl IsEmpty for EntityFilters {
@@ -212,12 +216,13 @@ impl IsEmpty for EntityFilters {
             chat_filters,
             channel_filters,
             email_filters,
+            property_filters,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
-            && chat_filters.is_empty()
             && email_filters.is_empty()
             && channel_filters.is_empty()
+            && property_filters.is_empty()
     }
 }
