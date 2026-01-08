@@ -123,6 +123,9 @@ where
         }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
+        // Extract property filters before converting to EntityFilterAst
+        let property_filters = filters.property_filters.clone();
+
         let filters = EntityFilterAst::new_from_filters(filters)?;
 
         let create_fallback = move || {
@@ -165,6 +168,7 @@ where
                 user: macro_user_id,
                 email_preview_view: email_view,
                 link_id: email_link.map(|l| l.id),
+                property_filters,
             })
             .await?;
 

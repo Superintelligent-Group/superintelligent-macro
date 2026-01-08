@@ -113,6 +113,7 @@ where
                         Frecency,
                     )),
                     user_id: user,
+                    property_filters: vec![],
                 },
             )
             .await?;
@@ -178,6 +179,7 @@ where
                                 }
                             },
                             user_id: user,
+                            property_filters: vec![],
                         },
                     )
                     .await?,
@@ -316,6 +318,7 @@ where
                         limit,
                         cursor: SimpleSortQuery::from_entity_cursor(cursor),
                         user_id: req.user.copied(),
+                        property_filters: req.property_filters,
                     },
                 );
 

@@ -39,7 +39,9 @@ model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
+properties = { path = "../properties" }
 non_empty = { path = "../non_empty" }
 recursion = { workspace = true }
 serde = { workspace = true }

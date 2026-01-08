@@ -7,6 +7,7 @@ use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
     SimpleSortMethod, SortOn,
 };
+use models_properties::PropertyFilter;
 use models_soup::item::SoupItem;
 use thiserror::Error;
 use uuid::Uuid;
@@ -26,6 +27,8 @@ pub struct SimpleSortRequest<'a> {
     pub(crate) cursor: SimpleSortQuery,
     /// the id of the user
     pub(crate) user_id: MacroUserIdStr<'a>,
+    /// property filters to apply
+    pub(crate) property_filters: Vec<PropertyFilter>,
 }
 
 #[derive(Debug)]
@@ -114,6 +117,8 @@ pub struct SoupRequest {
     pub user: MacroUserIdStr<'static>,
     pub email_preview_view: PreviewView,
     pub link_id: Option<Uuid>,
+    /// Property filters to apply across all entity types
+    pub property_filters: Vec<PropertyFilter>,
 }
 
 impl SoupRequest {

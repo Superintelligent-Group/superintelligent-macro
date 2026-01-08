@@ -11,12 +11,14 @@ use item_filters::ast::{
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
+use models_properties::PropertyFilter;
 use models_soup::{
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
     item::SoupItem,
     project::SoupProject,
 };
+use properties::outbound::query_builder::apply_filter_to_table;
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
 use system_properties::{StatusOption, SystemPropertyKey};
@@ -287,25 +289,50 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
+/// Build property filter EXISTS clauses for a specific entity type
+fn build_property_filter_clause(
+    builder: &mut QueryBuilder<'_, Postgres>,
+    property_filters: &[PropertyFilter],
+    entity_alias: &str,
+    entity_type: &str,
+) {
+    for filter in property_filters {
+        builder.push(format!(
+            " AND EXISTS (SELECT 1 FROM entity_properties ep_filter WHERE ep_filter.entity_id = {}.id::text AND ep_filter.entity_type = '{}' AND ep_filter.property_definition_id = ",
+            entity_alias, entity_type
+        ));
+        builder.push_bind(filter.property_id);
+        apply_filter_to_table(&filter.operation, builder, "ep_filter");
+        builder.push(")");
+    }
+}
+
+fn build_query(
+    filter_ast: &EntityFilterAst,
+    exclude_frecency: bool,
+    property_filters: &[PropertyFilter],
+) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
     builder.push("Combined AS (");
 
     // Document clause
     builder.push(DOCUMENT_CLAUSE);
     builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+    build_property_filter_clause(&mut builder, property_filters, "d", "DOCUMENT");
 
     builder.push(" UNION ALL ");
 
     // Chat clause
     builder.push(CHAT_CLAUSE);
     builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
+    build_property_filter_clause(&mut builder, property_filters, "c", "CHAT");
 
     builder.push(" UNION ALL ");
 
     // Project clause
     builder.push(PROJECT_CLAUSE);
     builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+    build_property_filter_clause(&mut builder, property_filters, "p", "PROJECT");
 
     builder.push(") ");
 
@@ -492,6 +519,8 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// whether or not the query should explicitly remove items that DO have
     /// frecency records
     pub exclude_frecency: bool,
+    /// property filters to apply
+    pub property_filters: Vec<PropertyFilter>,
 }
 
 #[tracing::instrument(skip(db), err)]
@@ -504,6 +533,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         limit,
         cursor,
         exclude_frecency,
+        property_filters,
     } = args;
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
@@ -512,7 +542,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    build_query(cursor.filter(), exclude_frecency)
+    build_query(cursor.filter(), exclude_frecency, &property_filters)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)

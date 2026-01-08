@@ -6,6 +6,7 @@ use crate::{
     outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
+use item_filters::ast::EntityFilterAst;
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 
@@ -40,6 +41,7 @@ impl SoupRepo for PgSoupRepo {
                             limit: req.limit,
                             cursor: query.map_filter(|(_, ast)| ast),
                             exclude_frecency: true,
+                            property_filters: req.property_filters,
                         },
                     ),
                 ))
@@ -52,25 +54,62 @@ impl SoupRepo for PgSoupRepo {
                         limit: req.limit,
                         cursor: ast,
                         exclude_frecency: false,
+                        property_filters: req.property_filters,
                     },
                 ),
             )),
-            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
-                expanded::by_cursor::no_frecency_expanded_generic_soup(
-                    &self.inner,
-                    req.user_id,
-                    req.limit,
-                    f,
-                ),
-            )),
-            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
-                expanded::by_cursor::expanded_generic_cursor_soup(
-                    &self.inner,
-                    req.user_id,
-                    req.limit,
-                    f,
-                ),
-            )),
+            SimpleSortQuery::FilterFrecency(f) => {
+                // If property filters exist, use dynamic query path
+                if !req.property_filters.is_empty() {
+                    Either::Left(Either::Left(
+                        expanded::dynamic::expanded_dynamic_cursor_soup(
+                            &self.inner,
+                            ExpandedDynamicCursorArgs {
+                                user_id: req.user_id,
+                                limit: req.limit,
+                                cursor: f.map_filter(|_| EntityFilterAst::default()),
+                                exclude_frecency: true,
+                                property_filters: req.property_filters,
+                            },
+                        ),
+                    ))
+                } else {
+                    Either::Right(Either::Left(
+                        expanded::by_cursor::no_frecency_expanded_generic_soup(
+                            &self.inner,
+                            req.user_id,
+                            req.limit,
+                            f,
+                        ),
+                    ))
+                }
+            }
+            SimpleSortQuery::NoFilter(f) => {
+                // If property filters exist, use dynamic query path
+                if !req.property_filters.is_empty() {
+                    Either::Left(Either::Right(
+                        expanded::dynamic::expanded_dynamic_cursor_soup(
+                            &self.inner,
+                            ExpandedDynamicCursorArgs {
+                                user_id: req.user_id,
+                                limit: req.limit,
+                                cursor: f.map_filter(|_| EntityFilterAst::default()),
+                                exclude_frecency: false,
+                                property_filters: req.property_filters,
+                            },
+                        ),
+                    ))
+                } else {
+                    Either::Right(Either::Right(
+                        expanded::by_cursor::expanded_generic_cursor_soup(
+                            &self.inner,
+                            req.user_id,
+                            req.limit,
+                            f,
+                        ),
+                    ))
+                }
+            }
         }
     }
 
