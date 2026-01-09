@@ -5319,6 +5319,11 @@
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
             "description": "the bundled [ProjectFilters]"
+          },
+          "property_filters": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PropertyFilter" },
+            "description": "Property filters to apply to entities. Examples: [{\"property_id\": \"...\", \"operation\": {\"equal\": {\"values\": {\"number\": {\"values\": [5.0]}}}}}]. Empty to ignore property filtering."
           }
         }
       },
@@ -5841,6 +5846,198 @@
           "img",
           "swf"
         ]
+      },
+      "FilterOperation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Matches any of the provided values",
+            "required": ["values", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["equal"] },
+              "values": { "$ref": "#/components/schemas/FilterValues" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Does not match any of the provided values",
+            "required": ["values", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["not_equal"] },
+              "values": { "$ref": "#/components/schemas/FilterValues" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Greater than the provided value (DATE, NUMBER, SELECT only)",
+            "required": ["value", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["greater_than"] },
+              "value": { "$ref": "#/components/schemas/FilterValue" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Greater than or equal to the provided value (DATE, NUMBER, SELECT only)",
+            "required": ["value", "operation"],
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": ["greater_than_or_equal"]
+              },
+              "value": { "$ref": "#/components/schemas/FilterValue" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Less than the provided value (DATE, NUMBER, SELECT only)",
+            "required": ["value", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["less_than"] },
+              "value": { "$ref": "#/components/schemas/FilterValue" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Less than or equal to the provided value (DATE, NUMBER, SELECT only)",
+            "required": ["value", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["less_than_or_equal"] },
+              "value": { "$ref": "#/components/schemas/FilterValue" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Has any of the specified values",
+            "required": ["values", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["has_any"] },
+              "values": { "$ref": "#/components/schemas/FilterValues" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Has all of the specified values",
+            "required": ["values", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["has_all"] },
+              "values": { "$ref": "#/components/schemas/FilterValues" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Does not have any of the specified values",
+            "required": ["values", "operation"],
+            "properties": {
+              "operation": { "type": "string", "enum": ["does_not_have"] },
+              "values": { "$ref": "#/components/schemas/FilterValues" }
+            }
+          }
+        ],
+        "description": "Filter operation types with embedded values.\n\n## Single-select property operations\n- `Equal`: Matches any of the provided values\n- `NotEqual`: Does not match any of the provided values\n- `GreaterThan`: Greater than (DATE, NUMBER, SELECT only)\n- `GreaterThanOrEqual`: Greater than or equal (DATE, NUMBER, SELECT only)\n- `LessThan`: Less than (DATE, NUMBER, SELECT only)\n- `LessThanOrEqual`: Less than or equal (DATE, NUMBER, SELECT only)\n\n## Multi-select property operations\n- `HasAny`: Has any of the specified values\n- `HasAll`: Has all of the specified values\n- `DoesNotHave`: Does not have any of the specified values"
+      },
+      "FilterValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean true/false value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["boolean"] },
+              "value": { "type": "boolean" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date and time value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["date"] },
+              "value": { "type": "string", "format": "date-time" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["number"] },
+              "value": { "type": "number", "format": "double" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option by ID (for SELECT_STRING or SELECT_NUMBER properties)",
+            "required": ["option_id", "type"],
+            "properties": {
+              "option_id": { "type": "string", "format": "uuid" },
+              "type": { "type": "string", "enum": ["select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference (for ENTITY properties)",
+            "required": ["reference", "type"],
+            "properties": {
+              "reference": { "$ref": "#/components/schemas/EntityReference" },
+              "type": { "type": "string", "enum": ["entity_reference"] }
+            }
+          }
+        ],
+        "description": "Single filter value for comparison operations.\n\nUse this for operations that compare against a single value (GreaterThan, LessThan, etc.)\n\nNote: STRING and LINK property types are not filterable."
+      },
+      "FilterValues": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Multiple date/time values",
+            "required": ["values", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["date"] },
+              "values": {
+                "type": "array",
+                "items": { "type": "string", "format": "date-time" }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple numeric values",
+            "required": ["values", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["number"] },
+              "values": {
+                "type": "array",
+                "items": { "type": "number", "format": "double" }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)",
+            "required": ["option_ids", "type"],
+            "properties": {
+              "option_ids": {
+                "type": "array",
+                "items": { "type": "string", "format": "uuid" }
+              },
+              "type": { "type": "string", "enum": ["select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple entity references (for ENTITY properties)",
+            "required": ["references", "type"],
+            "properties": {
+              "references": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/EntityReference" }
+              },
+              "type": { "type": "string", "enum": ["entity_reference"] }
+            }
+          }
+        ],
+        "description": "Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable."
       },
       "FolderItem": {
         "type": "object",
@@ -6899,6 +7096,22 @@
           "owner": { "type": "string" },
           "path": { "type": "array", "items": { "type": "string" } },
           "updatedAt": { "type": "integer", "format": "int64" }
+        }
+      },
+      "PropertyFilter": {
+        "type": "object",
+        "description": "Filter criteria for property values.",
+        "required": ["property_id", "operation"],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/FilterOperation",
+            "description": "Filter operation with embedded value(s)"
+          },
+          "property_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the property definition to filter by"
+          }
         }
       },
       "PropertyInput": {

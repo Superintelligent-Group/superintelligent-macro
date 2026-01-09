@@ -1439,7 +1439,194 @@ export const postItemsSoupBody = zod.object({
   "project_filters": zod.object({
   "owners": zod.array(zod.string()).optional().describe('Filter by project owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
   "project_ids": zod.array(zod.string()).optional().describe('Project IDs to search within. Examples: [\'project1\']. Empty to search all accessible projects.')
-}).optional().describe('The project filters used to filter down what projects you search over.')
+}).optional().describe('The project filters used to filter down what projects you search over.'),
+  "property_filters": zod.array(zod.object({
+  "operation": zod.union([zod.object({
+  "operation": zod.enum(['equal']),
+  "values": zod.union([zod.object({
+  "type": zod.enum(['date']),
+  "values": zod.array(zod.string().datetime({}))
+}).describe('Multiple date/time values'),zod.object({
+  "type": zod.enum(['number']),
+  "values": zod.array(zod.number())
+}).describe('Multiple numeric values'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['select_option'])
+}).describe('Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['entity_reference'])
+}).describe('Multiple entity references (for ENTITY properties)')]).describe('Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Matches any of the provided values'),zod.object({
+  "operation": zod.enum(['not_equal']),
+  "values": zod.union([zod.object({
+  "type": zod.enum(['date']),
+  "values": zod.array(zod.string().datetime({}))
+}).describe('Multiple date/time values'),zod.object({
+  "type": zod.enum(['number']),
+  "values": zod.array(zod.number())
+}).describe('Multiple numeric values'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['select_option'])
+}).describe('Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['entity_reference'])
+}).describe('Multiple entity references (for ENTITY properties)')]).describe('Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Does not match any of the provided values'),zod.object({
+  "operation": zod.enum(['greater_than']),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference (for ENTITY properties)')]).describe('Single filter value for comparison operations.\n\nUse this for operations that compare against a single value (GreaterThan, LessThan, etc.)\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Greater than the provided value (DATE, NUMBER, SELECT only)'),zod.object({
+  "operation": zod.enum(['greater_than_or_equal']),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference (for ENTITY properties)')]).describe('Single filter value for comparison operations.\n\nUse this for operations that compare against a single value (GreaterThan, LessThan, etc.)\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Greater than or equal to the provided value (DATE, NUMBER, SELECT only)'),zod.object({
+  "operation": zod.enum(['less_than']),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference (for ENTITY properties)')]).describe('Single filter value for comparison operations.\n\nUse this for operations that compare against a single value (GreaterThan, LessThan, etc.)\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Less than the provided value (DATE, NUMBER, SELECT only)'),zod.object({
+  "operation": zod.enum(['less_than_or_equal']),
+  "value": zod.union([zod.object({
+  "type": zod.enum(['boolean']),
+  "value": zod.boolean()
+}).describe('Boolean true/false value'),zod.object({
+  "type": zod.enum(['date']),
+  "value": zod.string().datetime({})
+}).describe('Date and time value'),zod.object({
+  "type": zod.enum(['number']),
+  "value": zod.number()
+}).describe('Numeric value'),zod.object({
+  "option_id": zod.string().uuid(),
+  "type": zod.enum(['select_option'])
+}).describe('Select option by ID (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "reference": zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.'),
+  "type": zod.enum(['entity_reference'])
+}).describe('Entity reference (for ENTITY properties)')]).describe('Single filter value for comparison operations.\n\nUse this for operations that compare against a single value (GreaterThan, LessThan, etc.)\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Less than or equal to the provided value (DATE, NUMBER, SELECT only)'),zod.object({
+  "operation": zod.enum(['has_any']),
+  "values": zod.union([zod.object({
+  "type": zod.enum(['date']),
+  "values": zod.array(zod.string().datetime({}))
+}).describe('Multiple date/time values'),zod.object({
+  "type": zod.enum(['number']),
+  "values": zod.array(zod.number())
+}).describe('Multiple numeric values'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['select_option'])
+}).describe('Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['entity_reference'])
+}).describe('Multiple entity references (for ENTITY properties)')]).describe('Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Has any of the specified values'),zod.object({
+  "operation": zod.enum(['has_all']),
+  "values": zod.union([zod.object({
+  "type": zod.enum(['date']),
+  "values": zod.array(zod.string().datetime({}))
+}).describe('Multiple date/time values'),zod.object({
+  "type": zod.enum(['number']),
+  "values": zod.array(zod.number())
+}).describe('Multiple numeric values'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['select_option'])
+}).describe('Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['entity_reference'])
+}).describe('Multiple entity references (for ENTITY properties)')]).describe('Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Has all of the specified values'),zod.object({
+  "operation": zod.enum(['does_not_have']),
+  "values": zod.union([zod.object({
+  "type": zod.enum(['date']),
+  "values": zod.array(zod.string().datetime({}))
+}).describe('Multiple date/time values'),zod.object({
+  "type": zod.enum(['number']),
+  "values": zod.array(zod.number())
+}).describe('Multiple numeric values'),zod.object({
+  "option_ids": zod.array(zod.string().uuid()),
+  "type": zod.enum(['select_option'])
+}).describe('Multiple select option IDs (for SELECT_STRING or SELECT_NUMBER properties)'),zod.object({
+  "references": zod.array(zod.object({
+  "entity_id": zod.string(),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
+}).describe('Entity reference for entity-type property values.')),
+  "type": zod.enum(['entity_reference'])
+}).describe('Multiple entity references (for ENTITY properties)')]).describe('Homogeneous collection of filter values (all must be same type).\n\nUse this for operations that accept multiple values (Equal, NotEqual, HasAny, etc.)\nto ensure type safety at the API level.\n\nNote: STRING and LINK property types are not filterable.')
+}).describe('Does not have any of the specified values')]).describe('Filter operation types with embedded values.\n\n## Single-select property operations\n- `Equal`: Matches any of the provided values\n- `NotEqual`: Does not match any of the provided values\n- `GreaterThan`: Greater than (DATE, NUMBER, SELECT only)\n- `GreaterThanOrEqual`: Greater than or equal (DATE, NUMBER, SELECT only)\n- `LessThan`: Less than (DATE, NUMBER, SELECT only)\n- `LessThanOrEqual`: Less than or equal (DATE, NUMBER, SELECT only)\n\n## Multi-select property operations\n- `HasAny`: Has any of the specified values\n- `HasAll`: Has all of the specified values\n- `DoesNotHave`: Does not have any of the specified values'),
+  "property_id": zod.string().uuid().describe('ID of the property definition to filter by')
+}).describe('Filter criteria for property values.')).optional().describe('Property filters to apply to entities. Examples: [{\"property_id\": \"...\", \"operation\": {\"equal\": {\"values\": {\"number\": {\"values\": [5.0]}}}}}]. Empty to ignore property filtering.')
 }).describe('a bundle of all of the filters for each entity type').and(zod.object({
   "expand": zod.boolean().nullish().describe('Whether to expand projects. Defaults to true.'),
   "limit": zod.number().min(postItemsSoupBodyLimitMin).nullish().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
