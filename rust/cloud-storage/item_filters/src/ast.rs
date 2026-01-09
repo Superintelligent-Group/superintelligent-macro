@@ -60,7 +60,7 @@ pub enum ExpandErr {
 pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 
 /// Describes a bundle of filters that should be applied across different entity types
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[non_exhaustive]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity

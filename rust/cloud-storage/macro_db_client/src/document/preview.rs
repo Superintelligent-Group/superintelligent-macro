@@ -47,7 +47,7 @@ pub async fn batch_get_document_preview_v2(
                 d.name as "document_name!",
                 d."fileType" as file_type,
                 d.owner as "owner!",
-                d."updatedAt"::timestamptz as "updated_at",
+                d."updatedAt"::timestamptz as "updated_at!",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 CASE 
                     WHEN dt.sub_type = 'task' 

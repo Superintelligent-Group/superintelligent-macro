@@ -307,11 +307,11 @@ fn build_property_filter_clause(
     }
 }
 
-fn build_query(
-    filter_ast: &EntityFilterAst,
+fn build_query<'a>(
+    filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
-    property_filters: &[PropertyFilter],
-) -> QueryBuilder<'_, Postgres> {
+    property_filters: &'a [PropertyFilter],
+) -> QueryBuilder<'a, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
     builder.push("Combined AS (");
 
