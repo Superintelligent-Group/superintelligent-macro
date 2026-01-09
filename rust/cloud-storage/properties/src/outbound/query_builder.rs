@@ -8,13 +8,6 @@ use sqlx::{Postgres, QueryBuilder};
 
 use models_properties::{FilterOperation, FilterValue, FilterValues, PropertyFilter};
 
-/// Apply a filter operation to a query builder.
-///
-/// Uses the default table alias "ep" for the entity_properties table.
-pub fn apply_filter(filter_op: &FilterOperation, query_builder: &mut QueryBuilder<'_, Postgres>) {
-    apply_filter_to_table(filter_op, query_builder, "ep");
-}
-
 /// Apply a filter operation to a specific table alias.
 ///
 /// # Arguments
@@ -215,13 +208,61 @@ fn apply_multi_select_filter(
         }
         MultiSelectOp::HasAll => {
             // Has all: all values must be present
-            push_multi_value_checks(qb, alias, values, " AND ");
+            // Use @> with array of all values - more efficient than multiple AND checks
+            push_has_all_check(qb, alias, values);
         }
         MultiSelectOp::DoesNotHave => {
             // Does not have: none of the values are present
             qb.push(" AND NOT (");
             push_multi_value_checks(qb, alias, values, " OR ");
             qb.push(")");
+        }
+    }
+}
+
+/// Push a single HasAll check using @> with array of all values
+/// More efficient than multiple AND checks - @> checks if left array contains all elements of right array
+fn push_has_all_check(qb: &mut QueryBuilder<'_, Postgres>, alias: &str, values: &FilterValues) {
+    match values {
+        FilterValues::SelectOption { option_ids } => {
+            qb.push(format!(
+                " AND {}.values->>'type' = 'SelectOption' AND {}.values->'value' @> ",
+                alias, alias
+            ));
+            // Build array with all option IDs: ["uuid1", "uuid2", ...]
+            let array_json = format!(
+                "[{}]",
+                option_ids
+                    .iter()
+                    .map(|id| format!("\"{}\"", id))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            qb.push_bind(array_json);
+        }
+        FilterValues::EntityReference { references } => {
+            qb.push(format!(
+                " AND {}.values->>'type' = 'EntityReference' AND {}.values->'value' @> ",
+                alias, alias
+            ));
+            // Build array with all entity references
+            let refs_json: Vec<String> = references
+                .iter()
+                .map(|ref_| {
+                    let entity_type_str = serde_json::to_string(&ref_.entity_type)
+                        .unwrap_or_else(|_| format!("\"{}\"", ref_.entity_type));
+                    format!(
+                        "{{\"entity_id\":\"{}\",\"entity_type\":{}}}",
+                        ref_.entity_id, entity_type_str
+                    )
+                })
+                .collect();
+            let array_json = format!("[{}]", refs_json.join(","));
+            qb.push_bind(array_json);
+        }
+        // Multi-select operations typically only apply to SelectOption and EntityReference
+        FilterValues::Number { .. } | FilterValues::Date { .. } => {
+            // These types don't support multi-select operations
         }
     }
 }
@@ -351,24 +392,6 @@ mod tests {
                 sql
             );
         }
-    }
-
-    /// Helper to verify SQL output matches expected SQL exactly (or contains it)
-    fn verify_sql_matches(filter_op: &FilterOperation, table_alias: &str, expected_sql: &str) {
-        // Build the query
-        let mut qb = QueryBuilder::new("SELECT 1 WHERE ");
-        apply_filter_to_table(filter_op, &mut qb, table_alias);
-
-        // Extract the actual SQL string
-        let sql = get_sql_string(&qb);
-
-        // Verify the SQL contains the expected SQL (accounting for parameter placeholders)
-        assert!(
-            sql.contains(expected_sql),
-            "Expected SQL pattern not found. Expected: {}. Generated: {}",
-            expected_sql,
-            sql
-        );
     }
 
     /// Helper to verify query builds successfully
@@ -716,5 +739,841 @@ mod tests {
         };
         apply_filter_to_table(&filter_op, &mut qb, "custom_alias");
         verify_query_builds(qb);
+    }
+
+    // ============================================================================
+    // SQL Generation Tests - Verify actual SQL output
+    // ============================================================================
+
+    #[test]
+    fn test_sql_equal_number_generates_correct_sql() {
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::Number { values: vec![5.0] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Verify structure: AND ( type check AND value IN (...) )
+        assert!(
+            sql.contains(" AND ("),
+            "Should start with AND (. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->>'type' = 'Number'"),
+            "Should check type = Number. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("(ep.values->>'value')::numeric IN ("),
+            "Should cast value to numeric and use IN. Got: {}",
+            sql
+        );
+        assert!(
+            sql.ends_with(")"),
+            "Should end with closing paren. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_equal_number_multiple_values_has_placeholders() {
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::Number {
+                values: vec![5.0, 10.0, 15.0],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Should have 3 placeholders separated by commas
+        assert!(
+            sql.contains("$1, $2, $3"),
+            "Should have 3 placeholders comma-separated. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_not_equal_wraps_with_not() {
+        let filter_op = FilterOperation::NotEqual {
+            values: FilterValues::Number { values: vec![5.0] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // NotEqual should wrap with AND NOT (...)
+        assert!(
+            sql.contains(" AND NOT ("),
+            "NotEqual should use AND NOT (. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->>'type' = 'Number'"),
+            "Should still check type. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_equal_date_uses_timestamptz() {
+        let date = Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::Date { values: vec![date] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("ep.values->>'type' = 'Date'"),
+            "Should check type = Date. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("(ep.values->>'value')::timestamptz IN ("),
+            "Should cast to timestamptz. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_equal_select_option_uses_jsonb_contains() {
+        let option_id = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option_id],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("ep.values->>'type' = 'SelectOption'"),
+            "Should check type = SelectOption. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->'value' @>"),
+            "Should use @> (JSONB contains) operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_equal_select_option_multiple_uses_or() {
+        let option1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let option2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option1, option2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Multiple select options should be ORed together
+        assert!(
+            sql.contains(" OR "),
+            "Multiple select options should use OR. Got: {}",
+            sql
+        );
+        // Should have two @> operators
+        let contains_count = sql.matches("@>").count();
+        assert_eq!(
+            contains_count, 2,
+            "Should have 2 @> operators for 2 options. Got {} in: {}",
+            contains_count, sql
+        );
+    }
+
+    #[test]
+    fn test_sql_equal_entity_reference_serializes_correctly() {
+        let ref1 = models_properties::EntityReference {
+            entity_id: "doc-123".to_string(),
+            entity_type: EntityType::Document,
+            specific_message_id: None,
+        };
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::EntityReference {
+                references: vec![ref1],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("ep.values->>'type' = 'EntityReference'"),
+            "Should check type = EntityReference. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->'value' @>"),
+            "Should use @> operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_greater_than_number_uses_correct_operator() {
+        let filter_op = FilterOperation::GreaterThan {
+            value: FilterValue::Number { value: 10.0 },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("::numeric >"),
+            "Should use > operator after numeric cast. Got: {}",
+            sql
+        );
+        assert!(
+            !sql.contains(">="),
+            "Should not use >= for GreaterThan. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_greater_than_or_equal_number_uses_correct_operator() {
+        let filter_op = FilterOperation::GreaterThanOrEqual {
+            value: FilterValue::Number { value: 10.0 },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("::numeric >="),
+            "Should use >= operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_less_than_number_uses_correct_operator() {
+        let filter_op = FilterOperation::LessThan {
+            value: FilterValue::Number { value: 10.0 },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("::numeric <"),
+            "Should use < operator. Got: {}",
+            sql
+        );
+        assert!(
+            !sql.contains("<="),
+            "Should not use <= for LessThan. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_less_than_or_equal_number_uses_correct_operator() {
+        let filter_op = FilterOperation::LessThanOrEqual {
+            value: FilterValue::Number { value: 10.0 },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("::numeric <="),
+            "Should use <= operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_less_than_date_uses_correct_operator() {
+        let date = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let filter_op = FilterOperation::LessThan {
+            value: FilterValue::Date { value: date },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("::timestamptz <"),
+            "Should use < operator with timestamptz. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_greater_than_select_option_uses_display_order() {
+        let option_id = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
+        let filter_op = FilterOperation::GreaterThan {
+            value: FilterValue::SelectOption { option_id },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Should use EXISTS with property_options and display_order comparison
+        assert!(
+            sql.contains("EXISTS ("),
+            "Should use EXISTS subquery. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("property_options po"),
+            "Should reference property_options table. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("po.display_order >"),
+            "Should compare display_order with >. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("po2.display_order"),
+            "Should reference po2.display_order for comparison. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_comparison_boolean_is_noop() {
+        let filter_op = FilterOperation::GreaterThan {
+            value: FilterValue::Boolean { value: true },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Boolean comparison should be a no-op, so SQL should be unchanged
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "Boolean comparison should not add any SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_comparison_entity_reference_is_noop() {
+        let ref1 = models_properties::EntityReference {
+            entity_id: "doc-1".to_string(),
+            entity_type: EntityType::Document,
+            specific_message_id: None,
+        };
+        let filter_op = FilterOperation::GreaterThan {
+            value: FilterValue::EntityReference { reference: ref1 },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // EntityReference comparison should be a no-op
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "EntityReference comparison should not add any SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_has_any_uses_or_logic() {
+        let option1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let option2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option1, option2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // HasAny: AND ( check1 OR check2 )
+        assert!(
+            sql.contains(" AND ("),
+            "HasAny should start with AND (. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains(" OR "),
+            "HasAny should use OR between options. Got: {}",
+            sql
+        );
+        // Should have two @> checks
+        let contains_count = sql.matches("@>").count();
+        assert_eq!(
+            contains_count, 2,
+            "Should have 2 @> operators. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_has_all_uses_and_logic() {
+        let option1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let option2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let filter_op = FilterOperation::HasAll {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option1, option2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // HasAll: Single @> check with array of all values (more efficient)
+        // Should NOT contain OR
+        assert!(
+            !sql.contains(" OR "),
+            "HasAll should NOT use OR. Got: {}",
+            sql
+        );
+        // Should have exactly 1 @> operator (single check with array)
+        let contains_count = sql.matches("@>").count();
+        assert_eq!(
+            contains_count, 1,
+            "HasAll should have exactly 1 @> operator (single array check). Got {} in: {}",
+            contains_count, sql
+        );
+        // Should have type check and @> operator
+        assert!(
+            sql.contains("ep.values->>'type' = 'SelectOption'"),
+            "Should check SelectOption type. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->'value' @>"),
+            "Should use @> operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_does_not_have_uses_not_or_logic() {
+        let option1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let option2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let filter_op = FilterOperation::DoesNotHave {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option1, option2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // DoesNotHave: AND NOT ( check1 OR check2 )
+        assert!(
+            sql.contains(" AND NOT ("),
+            "DoesNotHave should use AND NOT (. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains(" OR "),
+            "DoesNotHave should use OR inside NOT. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_does_not_have_entity_reference() {
+        let ref1 = models_properties::EntityReference {
+            entity_id: "user-123".to_string(),
+            entity_type: EntityType::User,
+            specific_message_id: None,
+        };
+        let ref2 = models_properties::EntityReference {
+            entity_id: "user-456".to_string(),
+            entity_type: EntityType::User,
+            specific_message_id: None,
+        };
+        let filter_op = FilterOperation::DoesNotHave {
+            values: FilterValues::EntityReference {
+                references: vec![ref1, ref2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains(" AND NOT ("),
+            "Should use AND NOT. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("EntityReference"),
+            "Should check type EntityReference. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains(" OR "),
+            "Should use OR inside NOT. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_empty_select_option_is_noop() {
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::SelectOption { option_ids: vec![] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "Empty HasAny should not modify SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_empty_entity_reference_is_noop() {
+        let filter_op = FilterOperation::HasAll {
+            values: FilterValues::EntityReference { references: vec![] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "Empty HasAll EntityReference should not modify SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_empty_number_is_noop() {
+        let filter_op = FilterOperation::DoesNotHave {
+            values: FilterValues::Number { values: vec![] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "Empty DoesNotHave Number should not modify SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_empty_date_is_noop() {
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::Date { values: vec![] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert_eq!(
+            sql, "SELECT 1 WHERE 1=1",
+            "Empty HasAny Date should not modify SQL. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_multi_select_number_is_noop() {
+        // Number doesn't support multi-select operations - should be no-op
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::Number {
+                values: vec![1.0, 2.0],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Should add AND ( ) but nothing inside because Number doesn't support multi-select
+        // The function adds " AND (" but push_multi_value_checks does nothing for Number
+        assert!(
+            sql.contains(" AND ("),
+            "Should have AND ( wrapper. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("()"),
+            "Should have empty parens since Number is not supported. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_custom_table_alias_used_throughout() {
+        let filter_op = FilterOperation::Equal {
+            values: FilterValues::Number { values: vec![5.0] },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "my_custom_alias");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains("my_custom_alias.values->>'type'"),
+            "Should use custom alias for type check. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("my_custom_alias.values->>'value'"),
+            "Should use custom alias for value extraction. Got: {}",
+            sql
+        );
+        assert!(
+            !sql.contains("ep."),
+            "Should NOT use default 'ep' alias. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_build_property_filter_exists_structure() {
+        let property_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+        let filter = PropertyFilter {
+            property_id,
+            operation: FilterOperation::GreaterThan {
+                value: FilterValue::Number { value: 100.0 },
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT * FROM docs d WHERE d.active = true");
+        build_property_filter_exists(&mut qb, &filter, "d.doc_id::text");
+        let sql = get_sql_string(&qb);
+
+        // Verify EXISTS subquery structure
+        assert!(
+            sql.contains(" AND EXISTS (SELECT 1 FROM entity_properties ep_filter WHERE ep_filter.entity_id = d.doc_id::text"),
+            "Should have proper EXISTS structure. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep_filter.property_definition_id ="),
+            "Should filter by property_definition_id. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep_filter.values->>'type' = 'Number'"),
+            "Should use ep_filter alias in filter. Got: {}",
+            sql
+        );
+        assert!(
+            sql.ends_with(")"),
+            "Should close EXISTS paren. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_build_property_filters_chains_multiple() {
+        let prop_id1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let prop_id2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let filters = vec![
+            PropertyFilter {
+                property_id: prop_id1,
+                operation: FilterOperation::Equal {
+                    values: FilterValues::Number { values: vec![5.0] },
+                },
+            },
+            PropertyFilter {
+                property_id: prop_id2,
+                operation: FilterOperation::LessThan {
+                    value: FilterValue::Number { value: 10.0 },
+                },
+            },
+        ];
+
+        let mut qb = QueryBuilder::new("SELECT * FROM docs WHERE 1=1");
+        build_property_filters(&mut qb, &filters, "docs.id");
+        let sql = get_sql_string(&qb);
+
+        // Should have two EXISTS clauses
+        let exists_count = sql.matches("EXISTS").count();
+        assert_eq!(
+            exists_count, 2,
+            "Should have 2 EXISTS clauses. Got {} in: {}",
+            exists_count, sql
+        );
+
+        // Both should use ep_filter alias
+        let ep_filter_count = sql.matches("ep_filter").count();
+        assert!(
+            ep_filter_count >= 4,
+            "Should have multiple ep_filter references. Got {} in: {}",
+            ep_filter_count,
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_has_any_entity_reference_structure() {
+        let ref1 = models_properties::EntityReference {
+            entity_id: "task-abc".to_string(),
+            entity_type: EntityType::Task,
+            specific_message_id: None,
+        };
+        let ref2 = models_properties::EntityReference {
+            entity_id: "task-def".to_string(),
+            entity_type: EntityType::Task,
+            specific_message_id: None,
+        };
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::EntityReference {
+                references: vec![ref1, ref2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        assert!(
+            sql.contains(" AND ("),
+            "HasAny should wrap with AND (. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->>'type' = 'EntityReference'"),
+            "Should check EntityReference type. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains(" OR "),
+            "Should use OR for HasAny. Got: {}",
+            sql
+        );
+        // Two @> operators for two references
+        let contains_count = sql.matches("@>").count();
+        assert_eq!(
+            contains_count, 2,
+            "Should have 2 @> operators. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_has_all_entity_reference_structure() {
+        let ref1 = models_properties::EntityReference {
+            entity_id: "doc-1".to_string(),
+            entity_type: EntityType::Document,
+            specific_message_id: None,
+        };
+        let ref2 = models_properties::EntityReference {
+            entity_id: "doc-2".to_string(),
+            entity_type: EntityType::Document,
+            specific_message_id: None,
+        };
+        let filter_op = FilterOperation::HasAll {
+            values: FilterValues::EntityReference {
+                references: vec![ref1, ref2],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // HasAll: Single @> check with array of all entity references (more efficient)
+        assert!(
+            !sql.contains(" OR "),
+            "HasAll should NOT use OR. Got: {}",
+            sql
+        );
+        // Should have exactly 1 @> operator (single check with array)
+        let contains_count = sql.matches("@>").count();
+        assert_eq!(
+            contains_count, 1,
+            "HasAll should have exactly 1 @> operator (single array check). Got {} in: {}",
+            contains_count, sql
+        );
+        // Should have type check and @> operator
+        assert!(
+            sql.contains("ep.values->>'type' = 'EntityReference'"),
+            "Should check EntityReference type. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("ep.values->'value' @>"),
+            "Should use @> operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_single_option_has_any_no_or() {
+        let option = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let filter_op = FilterOperation::HasAny {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Single option shouldn't need OR
+        assert!(
+            !sql.contains(" OR "),
+            "Single option HasAny should not have OR. Got: {}",
+            sql
+        );
+        assert!(
+            sql.contains("@>"),
+            "Should still use @> operator. Got: {}",
+            sql
+        );
+    }
+
+    #[test]
+    fn test_sql_single_option_has_all_structure() {
+        let option = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let filter_op = FilterOperation::HasAll {
+            values: FilterValues::SelectOption {
+                option_ids: vec![option],
+            },
+        };
+
+        let mut qb = QueryBuilder::new("SELECT 1 WHERE 1=1");
+        apply_filter_to_table(&filter_op, &mut qb, "ep");
+        let sql = get_sql_string(&qb);
+
+        // Single option HasAll should just be AND check
+        assert!(sql.contains(" AND "), "Should have AND. Got: {}", sql);
+        assert!(sql.contains("@>"), "Should use @> operator. Got: {}", sql);
     }
 }
