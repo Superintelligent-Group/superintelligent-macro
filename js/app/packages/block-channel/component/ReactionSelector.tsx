@@ -91,6 +91,17 @@ export function ReactionSelector(props: ReactionSelectorProps) {
     props.onOpenChange?.(isOpen);
   };
 
+  const handleTriggerInteraction = (e: MouseEvent) => {
+    // Prevent the event from bubbling up and closing context menus
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    // For mousedown, also prevent default to avoid focus changes
+    if (e.type === 'mousedown') {
+      e.preventDefault();
+    }
+  };
+
   return (
     <Popover
       placement="top"
@@ -99,7 +110,11 @@ export function ReactionSelector(props: ReactionSelectorProps) {
       slide={true}
       open={openPopover()}
     >
-      <Popover.Trigger>
+      <Popover.Trigger
+        onClick={handleTriggerInteraction}
+        onMouseDown={handleTriggerInteraction}
+        onPointerDown={handleTriggerInteraction}
+      >
         <DeprecatedIconButton icon={SmileIcon} tabIndex={-1} />
       </Popover.Trigger>
 
@@ -107,7 +122,10 @@ export function ReactionSelector(props: ReactionSelectorProps) {
         <Popover.Content class="z-modal">
           <Popover.Arrow class="fill-menu" />
           <EmojiSearchSelector
-            onEmojiClick={props.onEmojiClick}
+            onEmojiClick={(emoji) => {
+              props.onEmojiClick(emoji);
+              handleClose();
+            }}
             handleClose={handleClose}
           />
         </Popover.Content>
