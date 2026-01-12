@@ -5,6 +5,7 @@ import { reactToMessage } from '@block-channel/signal/reactions';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import SmileyIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
 import {
   ContextMenuContent,
   MENU_CONTENT_CLASS,
@@ -35,18 +36,13 @@ import {
   createMemo,
   createSignal,
   For,
-  Match,
   onMount,
   type Setter,
   Show,
-  Switch,
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { TypingIndicator } from '../MessageList/TypingIndicator';
-import {
-  EmojiSearchSelector,
-  ReactionQuickSelector,
-} from '../ReactionSelector';
+import { EmojiSearchSelector } from '../ReactionSelector';
 import { ActionMenu } from './ActionMenu';
 import { createMessageActions } from './actions';
 import { EditMessageInput } from './EditMessageInput';
@@ -658,29 +654,6 @@ export function MessageContainer(props: MessageProps) {
                 mobileFullScreen
                 overrideStyling
               >
-                <Switch>
-                  <Match when={!reactionSearchOpen()}>
-                    <ReactionQuickSelector
-                      onEmojiClick={(emoji) => react(emoji.emoji)}
-                      handleClose={() => {
-                        setReactionSearchOpen(false);
-                      }}
-                      setSearchOpen={setReactionSearchOpen}
-                      insideMenu
-                      showFocusRing={true}
-                    />
-                  </Match>
-                  <Match when={reactionSearchOpen()}>
-                    <EmojiSearchSelector
-                      onEmojiClick={(emoji) => react(emoji.emoji)}
-                      handleClose={() => {
-                        setReactionSearchOpen(false);
-                      }}
-                      fullWidth={isTouchDevice() && isMobileWidth()}
-                      insideMenu={true}
-                    />
-                  </Match>
-                </Switch>
                 <Show when={isTouchDevice() && isMobileWidth()}>
                   <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
                     <MessageComponent
@@ -714,9 +687,29 @@ export function MessageContainer(props: MessageProps) {
                     </MessageComponent>
                   </ContextMenu.Item>
                 </Show>
-                <Show when={!reactionSearchOpen()}>
-                  <div class={`${MENU_CONTENT_CLASS} mt-4`}>
-                    <For each={actions().filter((a) => a.enabled)}>
+                <div class={`${MENU_CONTENT_CLASS} ${isTouchDevice() && isMobileWidth() ? 'mt-4' : ''}`}>
+                  <MenuItem
+                    onClick={() => setReactionSearchOpen(!reactionSearchOpen())}
+                    icon={SmileyIcon}
+                    text="React"
+                  />
+                  <Show when={reactionSearchOpen()}>
+                    <MenuSeparator />
+                    <div class="p-2">
+                      <EmojiSearchSelector
+                        onEmojiClick={(emoji) => {
+                          react(emoji.emoji);
+                          setReactionSearchOpen(false);
+                        }}
+                        handleClose={() => {
+                          setReactionSearchOpen(false);
+                        }}
+                        fullWidth
+                        insideMenu
+                      />
+                    </div>
+                  </Show>
+                  <For each={actions().filter((a) => a.enabled)}>
                       {(a) => (
                         <>
                           <Show when={a.dividerBefore}>
@@ -729,9 +722,8 @@ export function MessageContainer(props: MessageProps) {
                           />
                         </>
                       )}
-                    </For>
-                  </div>
-                </Show>
+                  </For>
+                </div>
               </ContextMenuContent>
             </ContextMenu.Portal>
           </ContextMenu>
