@@ -5,6 +5,7 @@ export { EntityIcon } from './EntityIcon';
 export { EntityValue } from './EntityValue';
 export { LinkValue } from './LinkValue';
 export { NumberValue } from './NumberValue';
+export { PropertyTooltip } from './PropertyTooltip';
 export { PropertyValue } from './PropertyValue';
 export { PropertyValueIcon } from './PropertyValueIcon';
 export { SelectValue } from './SelectValue';

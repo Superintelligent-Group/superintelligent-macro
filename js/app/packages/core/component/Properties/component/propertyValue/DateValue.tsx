@@ -1,23 +1,19 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import { formatDate } from '../../utils';
 import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
-import { EmptyValue, PropertyValueDeleteButton } from './ValueComponents';
-
-type DateValueProps = {
-  property: Property;
-  canEdit: boolean;
-  onEdit?: (property: Property, anchor?: HTMLElement) => void;
-  onRefresh?: () => void;
-};
+import {
+  EmptyValue,
+  PropertyValueDeleteButton,
+  type PropertyValueProps,
+} from './ValueComponents';
 
 /**
  * Display component for date properties
  * Opens date picker modal on click
  */
-export const DateValue: Component<DateValueProps> = (props) => {
+export const DateValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [isHovered, setIsHovered] = createSignal(false);
   const [isSaving, setIsSaving] = createSignal(false);

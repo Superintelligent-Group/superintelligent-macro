@@ -1056,9 +1056,6 @@ export function EntityWithEverything(
             </div>
           </div>
           <EntityTitle />
-          <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-            <KeyPropertiesGrid properties={properties()} />
-          </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div

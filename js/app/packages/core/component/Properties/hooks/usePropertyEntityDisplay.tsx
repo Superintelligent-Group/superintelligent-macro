@@ -3,18 +3,19 @@ import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
-import { idToDisplayName } from '@core/user';
+import { idToDisplayName, tryMacroId, useDisplayName } from '@core/user';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import UserDuotoneIcon from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { entityTypeToItemType } from '../utils';
+import { match } from 'ts-pattern';
 
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
-/** Entity types that require preview lookup for name/icon resolution */
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
   'TASK',
@@ -22,7 +23,12 @@ const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'CHAT',
   'CHANNEL',
   'THREAD',
-];
+] as const;
+
+type PreviewableEntityType = (typeof PREVIEWABLE_ENTITY_TYPES)[number];
+
+const isPreviewable = (type: EntityType): type is PreviewableEntityType =>
+  PREVIEWABLE_ENTITY_TYPES.includes(type);
 
 type PropertyEntityDisplayResult = {
   /** Resolved display name for the entity */
@@ -56,58 +62,54 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
-  const needsPreview = () =>
-    PREVIEWABLE_ENTITY_TYPES.includes(entityType().toUpperCase() as EntityType);
+  const previewType = () => entityTypeToItemType(entityType());
 
-  // Map entity type to preview type
-  const getPreviewType = () => {
-    const type = entityType().toUpperCase();
-    if (type === 'TASK') return 'document';
-    if (type === 'THREAD') return 'email';
-    return type.toLowerCase() as 'document' | 'project' | 'chat' | 'channel';
+  const previewManager = () => {
+    if (isPreviewable(entityType())) {
+      return useItemPreview({
+        id: entityId(),
+        type: previewType(),
+      });
+    }
+    return useItemPreview({ id: '' });
   };
 
-  const [preview] = useItemPreview({
-    id: needsPreview() ? entityId() : '',
-    type: needsPreview() ? getPreviewType() : undefined,
-  });
+  const preview = () => previewManager()[0];
 
-  const channelName = useChannelName(
-    entityType().toUpperCase() === 'CHANNEL' ? entityId() : '',
-    'Unknown Channel'
-  );
-
-  const isLoading = createMemo(() => {
-    if (!needsPreview()) return false;
-    const previewItem = preview();
-    return !previewItem || previewItem.loading;
-  });
-
-  const name = createMemo(() => {
-    const type = entityType().toUpperCase();
-    switch (type) {
-      case 'USER': {
-        const displayName = idToDisplayName(entityId());
-        return displayName.replace('macro|', '');
-      }
-      case 'CHANNEL':
-        return channelName() ?? 'Unknown Channel';
-      case 'DOCUMENT':
-      case 'TASK':
-      case 'PROJECT':
-      case 'CHAT':
-      case 'THREAD': {
-        const previewItem = preview();
-        if (!previewItem || previewItem.loading) return 'Loading...';
-        if (!isAccessiblePreviewItem(previewItem)) return 'Unavailable';
-        return previewItem.name || `Unknown ${type.toLowerCase()}`;
-      }
-      case 'COMPANY':
-        return entityId() ?? 'Company';
-      default:
-        return entityId();
+  const channelNameManager = () => {
+    if (previewType() === 'channel') {
+      return useChannelName(entityId());
     }
-  });
+    return () => '';
+  };
+
+  const channelName = () => channelNameManager()();
+
+  const isLoading = () => {
+    if (!isPreviewable(entityType())) return false;
+    const previewItem = preview();
+    return !previewItem || previewItem().loading;
+  };
+
+  const nameFn = () => {
+    return match(entityType())
+      .with('USER', () => {
+        const displayName = useDisplayName(tryMacroId(entityId()));
+        return displayName[0];
+      })
+      .with('CHANNEL', () => () => channelName() ?? 'Channel')
+      .with('COMPANY', () => entityId)
+      .otherwise(() => () => {
+        const item = preview()();
+        if (!item || item.loading) return 'Loading...';
+        if (isAccessiblePreviewItem(item)) {
+          return item.name;
+        }
+        return `Unknown ${entityType().toLowerCase()}`;
+      });
+  };
+
+  const name = () => nameFn()();
 
   const icon = createMemo(() => {
     const type = entityType().toUpperCase();
