@@ -31,6 +31,7 @@ build_lambdas:
     just deleted_item_poller/build
     just email_refresh_handler/build
     just user_link_cleanup_handler/build
+    just email_scheduled_handler/build
 
 # TESTING
 
