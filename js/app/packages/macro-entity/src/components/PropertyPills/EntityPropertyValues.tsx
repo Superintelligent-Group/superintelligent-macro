@@ -13,6 +13,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { usePropertyInvalidation } from '@queries/properties/invalidation';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { invalidatePropertiesForEntity } from '@queries/properties/entity';
 
 type EntityPropertyValuesProps = {
   properties: Property[];
@@ -122,9 +123,8 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
 
         if (result.ok) {
           // Successful save - invalidate queries to ensure fresh data
-          await invalidateEntityProperties(props.entityId, props.entityType);
-          invalidateAllProperties();
           props.onRefresh?.();
+          invalidatePropertiesForEntity(props.entityType, props.entityId);
         } else {
           // Save failed - revert optimistic update by invalidating
           await invalidateEntityProperties(props.entityId, props.entityType);

@@ -143,10 +143,10 @@ export const hasValue = (property: Property): boolean => {
   return true;
 };
 
-export const hasSingleValue = (property: SingleValueProperty): boolean => {
-  return property.value !== null;
+export const hasSingleValue = (property: MultiValueProperty): boolean => {
+  return property.value !== null && property.value.length === 1;
 };
 
 export const hasMultiValue = (property: MultiValueProperty): boolean => {
-  return property.value !== null && property.value.length > 0;
+  return property.value !== null && property.value.length > 1;
 };
