@@ -6,7 +6,7 @@ import { formatPropertyValue } from '@core/component/Properties/utils';
 import type { Component } from 'solid-js';
 import { For } from 'solid-js';
 import type { Property } from '../../types';
-import { isDateProperty, hasValue } from '../../guards';
+import { isDateProperty, hasValue, isMultiValueProperty } from '../../guards';
 
 type CondensedPropertyValueProps = {
   property: Property;
@@ -196,6 +196,8 @@ const getDisplayValues = (property: Property): string[] => {
 
 const formatPillValue = (property: Property): string | null => {
   if (!hasValue(property)) return null;
+  if (isMultiValueProperty(property)) {
+  }
 
   if (
     (property.valueType === 'DATE' && property.value instanceof Date) ||
