@@ -1,5 +1,3 @@
-import { isErr } from '@core/util/maybeResult';
-import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
@@ -193,24 +191,4 @@ export function isPropertyDefinition(
   p: PropertyDefinitionResponse
 ): p is PropertyDefinition {
   return !('definition' in p);
-}
-
-/**
- * Fetch property definitions without options (flat structure)
- * Narrows the response type from PropertyDefinitionResponse[] to PropertyDefinition[]
- */
-export async function listPropertiesFlat(
-  scope: PropertyScope
-): Promise<PropertyDefinition[]> {
-  const result = await propertiesServiceClient.listProperties({
-    scope,
-    include_options: false,
-  });
-
-  if (isErr(result)) {
-    return [];
-  }
-
-  const [, data] = result;
-  return (Array.isArray(data) ? data : []).filter(isPropertyDefinition);
 }

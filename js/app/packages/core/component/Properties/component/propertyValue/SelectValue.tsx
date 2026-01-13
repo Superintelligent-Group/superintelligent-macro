@@ -3,7 +3,6 @@ import { createSignal, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import { formatPropertyValue, getSelectValues } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import {
   AddPropertyValueButton,
@@ -41,20 +40,13 @@ export const SelectValue: Component<PropertyValueProps> = (props) => {
         return;
       }
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType,
         values: newValues.length > 0 ? newValues : null,
       });
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'SelectValue.handleRemoveValue'
-        )
-      ) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

@@ -1,8 +1,8 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
+import type { Property } from '../../types';
 import { formatDate } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import {
   EmptyValue,
   PropertyValueDeleteButton,
@@ -30,20 +30,13 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
     setIsSaving(true);
 
     try {
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'DATE',
         value: null,
       });
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'DateValue.handleDelete'
-        )
-      ) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

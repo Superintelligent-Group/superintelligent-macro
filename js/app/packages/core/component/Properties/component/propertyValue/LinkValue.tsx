@@ -11,7 +11,6 @@ import {
   isValidUrl,
   normalizeUrl,
 } from '../../utils';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import {
   AddPropertyValueButton,
   EmptyValue,
@@ -73,19 +72,14 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues,
       });
-
-      if (result.ok) {
-        cancelAdding();
-        props.onRefresh?.();
-      } else {
-        setError(ERROR_MESSAGES.PROPERTY_SAVE);
-      }
-    } catch (_err) {
-      setError(ERROR_MESSAGES.PROPERTY_SAVE);
+      cancelAdding();
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }
@@ -99,14 +93,13 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link: string) => link !== url);
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues.length > 0 ? newValues : null,
       });
-
-      if (result.ok) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }
