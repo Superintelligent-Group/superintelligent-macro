@@ -66,6 +66,58 @@ export type Property = {
   | { valueType: 'LINK'; value: string[] | null }
 );
 
+// ============================================================================
+// Extracted Types from Property Discriminated Union
+// ============================================================================
+
+/** Extract a Property variant by its valueType */
+type PropertyOfType<T extends ValueType> = Extract<Property, { valueType: T }>;
+
+/** Property with a string value */
+export type StringProperty = PropertyOfType<'STRING'>;
+
+/** Property with a number value */
+export type NumberProperty = PropertyOfType<'NUMBER'>;
+
+/** Property with a boolean value */
+export type BooleanProperty = PropertyOfType<'BOOLEAN'>;
+
+/** Property with a Date value */
+export type DateProperty = PropertyOfType<'DATE'>;
+
+/** Property with string option IDs for select */
+export type SelectStringProperty = PropertyOfType<'SELECT_STRING'>;
+
+/** Property with number option IDs for select */
+export type SelectNumberProperty = PropertyOfType<'SELECT_NUMBER'>;
+
+/** Property with entity references */
+export type EntityProperty = PropertyOfType<'ENTITY'>;
+
+/** Property with link values */
+export type LinkProperty = PropertyOfType<'LINK'>;
+
+// ============================================================================
+// Grouped Types
+// ============================================================================
+
+/** Properties that hold a single primitive value */
+export type SingleValueProperty =
+  | StringProperty
+  | NumberProperty
+  | BooleanProperty
+  | DateProperty;
+
+/** Properties that hold multiple values (arrays) */
+export type MultiValueProperty =
+  | SelectStringProperty
+  | SelectNumberProperty
+  | EntityProperty
+  | LinkProperty;
+
+/** Properties with select options */
+export type SelectProperty = SelectStringProperty | SelectNumberProperty;
+
 /**
  * Flat property definition type (when include_options is false)
  * Used for property selection and display

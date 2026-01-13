@@ -8,10 +8,12 @@ import { LinkValue } from './LinkValue';
 import { NumberValue } from './NumberValue';
 import { SelectValue } from './SelectValue';
 import { TextValue } from './TextValue';
+import { CondensedPropertyValue } from './CondensedPropertyValue';
 
 type PropertyValueProps = {
   property: Property;
   onEdit?: (property: Property, anchor?: HTMLElement) => void;
+  condensed?: boolean;
 };
 
 /**
@@ -20,6 +22,11 @@ type PropertyValueProps = {
  */
 export const PropertyValue: Component<PropertyValueProps> = (props) => {
   const { entityType, canEdit, onRefresh } = usePropertiesContext();
+
+  // If condensed mode, use the condensed component
+  if (props.condensed) {
+    return <CondensedPropertyValue property={props.property} />;
+  }
 
   // Route based on valueType
   switch (props.property.valueType) {
@@ -105,9 +112,7 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
         (_exhaustiveCheck as Property).valueType
       );
       return (
-        <div class="text-failure-ink text-xs px-2 py-1">
-          Unsupported Property Type
-        </div>
+        <div class="text-failure-ink px-2 py-1">Unsupported Property Type</div>
       );
     }
   }

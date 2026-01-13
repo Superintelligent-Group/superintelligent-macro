@@ -37,22 +37,24 @@ async function fetchBulkWithCachePartition(
 ): Promise<BulkEntityPropertiesData> {
   if (params.entities.length === 0) return {};
 
-  const { cached, missing } = partitionByQueryCache<
-    EntityReference,
-    Property[]
-  >({
-    queryClient,
-    items: params.entities,
-    queryKeyOf: (entity) =>
-      entityPropertiesKey(entity, params.propertyDefinitionIds),
-  });
+  // const { cached, missing } = partitionByQueryCache<
+  //   EntityReference,
+  //   Property[]
+  // >({
+  //   queryClient,
+  //   items: params.entities,
+  //   queryKeyOf: (entity) =>
+  //     entityPropertiesKey(entity, params.propertyDefinitionIds),
+  // });
 
+  const cached = [];
+  const missing = params.entities;
   const out: BulkEntityPropertiesData = {};
-  for (const [entity, properties] of cached.entries()) {
-    out[entity.entity_id] = properties;
-  }
+  // for (const [entity, properties] of cached.entries()) {
+  //   out[entity.entity_id] = properties;
+  // }
 
-  if (missing.length === 0) return out;
+  // if (missing.length === 0) return out;
 
   const result = await propertiesServiceClient.getBulkEntityProperties({
     body: {
@@ -92,7 +94,9 @@ function bulkEntityPropertiesQueryOptions(
       entities: params.entities,
       propertyDefinitionIds: params.propertyDefinitionIds,
     }).queryKey,
-    queryFn: () => fetchBulkWithCachePartition(params),
+    queryFn: () => {
+      return fetchBulkWithCachePartition(params);
+    },
   };
 }
 
@@ -106,7 +110,7 @@ export function useBulkEntityPropertiesQuery(
     >
   >
 ) {
-  return useQuery(
+  const query = useQuery(
     () => {
       const currentEntities = entities();
       const placeholder: BulkEntityPropertiesData = {};
@@ -129,4 +133,6 @@ export function useBulkEntityPropertiesQuery(
     },
     () => queryClient
   );
+
+  return query;
 }

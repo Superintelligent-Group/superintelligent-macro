@@ -28,7 +28,7 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid'
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
-import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
+import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { syncServiceClient } from '@service-sync/client';
@@ -263,7 +263,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
-  subType?: BasicDocumentSubTypeProperty;
+  subType?: BasicDocumentSubType;
   itemType: Item['type'];
 };
 
@@ -272,6 +272,24 @@ export type CommandPreview = {
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   name: string;
   command: HotkeyCommand;
+};
+
+export type PropertyEditPreview = {
+  id: string;
+  name: string;
+  entity: any; // EntityData from macro-entity
+  entityType: string;
+  propertyType?: string;
+  propertyName?: string;
+  isMultiSelect?: boolean;
+  selectedEntities?: any[];
+};
+
+export type PropertyBulkEditPreview = {
+  id: string;
+  name: string;
+  command: string;
+  selectedEntities: any[];
 };
 
 export type ChannelPreview = {
@@ -314,6 +332,14 @@ export type CommandItemCard = (
   | {
       type: 'command';
       data: CommandPreview;
+    }
+  | {
+      type: 'property-edit';
+      data: PropertyEditPreview;
+    }
+  | {
+      type: 'property-bulk-edit';
+      data: PropertyBulkEditPreview;
     }
 ) &
   CommandItemBase;
@@ -417,11 +443,48 @@ export function useCommandItemAction(args: {
             break;
           }
         }
+        case 'property-edit': {
+          // Handle property editing for specific entity
+          const { entity, propertyName } = item.data;
+          console.log(
+            'Edit property:',
+            propertyName,
+            'for entity:',
+            entity.name
+          );
+          // TODO: Open property editor modal for the specific entity/property
+          // This would integrate with the SoupPropertiesContext
+          setKonsoleOpen(false);
+          resetQuery();
+          resetKonsoleMode();
+          break;
+        }
+        case 'property-bulk-edit': {
+          // Handle bulk property editing for multiple entities
+          const { command, selectedEntities } = item.data;
+          console.log(
+            'Bulk edit:',
+            command,
+            'for',
+            selectedEntities.length,
+            'entities'
+          );
+          // TODO: Open bulk property editor modal
+          setKonsoleOpen(false);
+          resetQuery();
+          resetKonsoleMode();
+          break;
+        }
       }
     }
 
     // Clear search term when item action is triggered
-    if (item.type !== 'loadmore' && item.type !== 'command') {
+    if (
+      item.type !== 'loadmore' &&
+      item.type !== 'command' &&
+      item.type !== 'property-edit' &&
+      item.type !== 'property-bulk-edit'
+    ) {
       setKonsoleOpen(false); // Split handles focus.
       resetQuery();
       resetKonsoleMode();

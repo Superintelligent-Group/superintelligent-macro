@@ -10,6 +10,7 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';

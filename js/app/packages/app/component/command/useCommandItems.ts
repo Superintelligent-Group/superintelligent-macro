@@ -75,7 +75,7 @@ export function useCommandItems() {
           data: item,
           itemType: item.type,
           fileType: item.type === 'document' ? item.fileType : undefined,
-          subType: item.type === 'document' ? item.subType : undefined,
+          subType: item.type === 'document' ? (item.subType as any) : undefined,
         },
         updatedAt: item.updatedAt,
         viewedAt: item.viewedAt,

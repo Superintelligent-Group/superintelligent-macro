@@ -16,9 +16,11 @@ export function partitionByQueryCache<Item, Data>(args: {
   for (const item of args.items) {
     const key = args.queryKeyOf(item);
     const data = args.queryClient.getQueryData<Data>(key);
+    console.log(data);
     if (data !== undefined) cached.set(item, data);
     else missing.push(item);
   }
 
+  console.log({ cached, missing });
   return { cached, missing };
 }

@@ -7,6 +7,7 @@ import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -50,9 +51,34 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
+import { KeyPropertiesGrid, EntityPropertyValues } from './PropertyPills';
 
 export const ENTITY_HEIGHT = 40;
+
+/**
+ * Helper function to map EntityData type to Properties EntityType
+ */
+function getPropertiesEntityType(entity: EntityData): EntityType {
+  // Handle task entities (documents with task subtype)
+  if (entity.type === 'document' && entity.subType?.type === 'task') {
+    return 'TASK';
+  }
+
+  switch (entity.type) {
+    case 'document':
+      return 'DOCUMENT';
+    case 'channel':
+      return 'CHANNEL';
+    case 'email':
+      return 'THREAD'; // Email entities map to THREAD in Properties service
+    case 'project':
+      return 'PROJECT';
+    case 'chat':
+      return 'CHAT';
+    default:
+      return 'DOCUMENT'; // Default fallback
+  }
+}
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -1038,9 +1064,11 @@ export function EntityWithEverything(
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
             <Show when={properties().length > 0}>
               <div class="pr-2 overflow-hidden shrink min-w-0">
-                <PropertyPills
+                <EntityPropertyValues
                   properties={properties()}
-                  excludeKeyProperties={isTaskEntity(props.entity)}
+                  entityId={props.entity.id}
+                  entityType={getPropertiesEntityType(props.entity)}
+                  // excludeKeyProperties={isTaskEntity(props.entity)}
                 />
               </div>
             </Show>

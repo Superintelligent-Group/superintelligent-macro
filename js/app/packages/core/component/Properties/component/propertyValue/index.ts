@@ -1,4 +1,5 @@
 export { BooleanValue } from './BooleanValue';
+export { CondensedPropertyValue } from './CondensedPropertyValue';
 export { DateValue } from './DateValue';
 export { EntityIcon } from './EntityIcon';
 export { EntityValue } from './EntityValue';
