@@ -34,10 +34,10 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 
 const createBlock = async (spec: {
-  blockName: BlockName | BlockAlias;
   createFn: () => Promise<string | undefined>;
-  loading?: boolean;
+  blockName: BlockName | BlockAlias;
   shouldInsert?: boolean;
+  loading?: boolean;
 }) => {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
@@ -70,15 +70,15 @@ const createBlock = async (spec: {
     if (split)
       split.replace({
         next: { type: blockName, id },
-        mergeHistory: true,
         referredFrom: 'launcher',
+        mergeHistory: true,
       });
   }
 };
 
 const createComponent = async (spec: {
-  componentId: string;
   shouldInsert?: boolean;
+  componentId: string;
   asPopover?: boolean;
 }) => {
   setCreateMenuOpen(false, false);
@@ -98,9 +98,9 @@ const createComponent = async (spec: {
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
-  label: string;
-  blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
+  blockName: BlockName;
+  label: string;
 };
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
@@ -118,9 +118,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
         loading: true,
         createFn: () =>
           createMarkdownFile({
-            title: '',
-            content: '',
             projectId: undefined,
+            content: '',
+            title: '',
           }),
         shouldInsert: pressedKeys().has('opt'),
       });
@@ -130,13 +130,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   ...(ENABLE_CREATE_TASK
     ? [
         {
-          label: 'Task',
-          icon: () => <WideTask />,
-          description: 'Create task',
-          blockName: 'task' as BlockName,
-          hotkeyToken: TOKENS.create.task,
           altHotkeyToken: TOKENS.create.taskNewSplit,
-          hotkey: 't' as const,
+          hotkeyToken: TOKENS.create.task,
           keyDownHandler: () => {
             createComponent({
               componentId: 'task-compose',
@@ -144,6 +139,11 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
             });
             return true;
           },
+          blockName: 'task' as BlockName,
+          description: 'Create task',
+          icon: () => <WideTask />,
+          hotkey: 't' as const,
+          label: 'Task',
         },
       ]
     : []),
@@ -203,13 +203,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Canvas',
-    icon: () => <WideDiagram />,
-    description: 'Create canvas',
-    blockName: 'canvas',
-    hotkeyToken: TOKENS.create.canvas,
-    altHotkeyToken: TOKENS.create.canvasNewSplit,
-    hotkey: 'd',
     keyDownHandler: () => {
       createBlock({
         blockName: 'canvas',
@@ -227,15 +220,15 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.canvasNewSplit,
+    hotkeyToken: TOKENS.create.canvas,
+    description: 'Create canvas',
+    icon: () => <WideDiagram />,
+    blockName: 'canvas',
+    label: 'Canvas',
+    hotkey: 'd',
   },
   {
-    label: 'Folder',
-    icon: () => <WideFolder />,
-    description: 'Create folder',
-    blockName: 'project',
-    hotkeyToken: TOKENS.create.project,
-    altHotkeyToken: TOKENS.create.projectNewSplit,
-    hotkey: 'f',
     keyDownHandler: () => {
       createBlock({
         blockName: 'project',
@@ -247,15 +240,15 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.projectNewSplit,
+    hotkeyToken: TOKENS.create.project,
+    description: 'Create folder',
+    icon: () => <WideFolder />,
+    blockName: 'project',
+    label: 'Folder',
+    hotkey: 'f',
   },
   {
-    label: 'Code',
-    icon: () => <WideFileCode />,
-    description: 'Create code file',
-    blockName: 'code',
-    hotkeyToken: TOKENS.create.code,
-    altHotkeyToken: TOKENS.create.codeNewSplit,
-    hotkey: 'o',
     keyDownHandler: () => {
       createBlock({
         blockName: 'code',
@@ -263,8 +256,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
         createFn: async () => {
           const result = await createCodeFileFromText({
             code: 'print("Hello, World!")',
-            extension: 'py',
             title: 'New Code File',
+            extension: 'py',
           });
           if (isErr(result)) return;
           const [, id] = ok(result[1]?.documentId);
@@ -274,6 +267,13 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       });
       return true;
     },
+    altHotkeyToken: TOKENS.create.codeNewSplit,
+    description: 'Create code file',
+    hotkeyToken: TOKENS.create.code,
+    icon: () => <WideFileCode />,
+    blockName: 'code',
+    label: 'Code',
+    hotkey: 'o',
   },
 ];
 
@@ -312,13 +312,11 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         'text-ink-extra-muted': !props.focused,
       }}
       onClick={() => props.creatableBlock.keyDownHandler()}
-      onFocus={props.onFocus}
+      onPointerEnter={() => {buttonRef?.focus()}}
       onMouseEnter={props.onMouseEnter}
-      tabindex={0}
+      onFocus={props.onFocus}
       ref={buttonRef}
-      onPointerEnter={() => {
-        buttonRef?.focus();
-      }}
+      tabindex={0}
     >
       {/** TODO (seamus): we need to pool/cache these canvases. they brick the color picker/or any other gl context
                 because they do not get garbage collected fast enough */}
@@ -330,25 +328,24 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         }}
       >
         <PcNoiseGrid
+          speed={[props.focused ? 0.3 : 0, 0]}
           cellSize={21 / 2}
+          size={[0.0, 0.2]}
           rounding={10}
-          warp={0}
           freq={0.002}
           crunch={0.4}
-          size={[0.0, 0.2]}
-          fill={1}
           stroke={0}
-          speed={[props.focused ? 0.3 : 0, 0]}
+          warp={0}
+          fill={1}
         />
       </div>*/}
 
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
         classList={{
-          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
-            true,
-          'scale-y-0': !props.focused,
+          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]: true,
           'scale-y-100': props.focused,
+          'scale-y-0': !props.focused,
         }}
       ></div>
 
@@ -358,10 +355,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
       <div
         class="absolute size-2 right-2 top-2 z-1 transition-transform ease-click duration-200 transition-color border border-edge/50"
-        classList={{
-          [textFg()]: true,
-        }}
         style={{ background: props.focused ? 'currentColor' : 'transparent' }}
+        classList={{[textFg()]: true}}
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
@@ -435,77 +430,78 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   CREATABLE_BLOCKS.forEach((item) => {
     registerHotkey({
-      hotkeyToken: item.hotkeyToken,
-      hotkey: item.hotkey,
-      scopeId: launcherScope,
       description: item.description,
+      hotkeyToken: item.hotkeyToken,
       keyDownHandler: () => {
         item.keyDownHandler();
         props.onClose(false);
         return true;
       },
+      scopeId: launcherScope,
+      hotkey: item.hotkey,
     });
 
     if (item.altHotkeyToken) {
       registerHotkey({
-        hotkeyToken: item.altHotkeyToken,
-        hotkey: `opt+${item.hotkey}` as ValidHotkey,
-        scopeId: launcherScope,
         description: `${item.description} in new split`,
         keyDownHandler: () => {
           item.keyDownHandler();
           props.onClose();
           return true;
         },
+        hotkey: `opt+${item.hotkey}` as ValidHotkey,
+        hotkeyToken: item.altHotkeyToken,
+        scopeId: launcherScope,
       });
     }
   });
 
   registerHotkey({
-    hotkey: 'c',
-    scopeId: launcherScope,
     description: 'Close Launcher',
-    condition: createMenuOpen,
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: 'arrowleft',
+    condition: createMenuOpen,
     scopeId: launcherScope,
-    description: 'Navigate Left',
+    hotkey: 'c',
+  });
+
+  registerHotkey({
     keyDownHandler: () => moveFocus(-1),
+    description: 'Navigate Left',
+    scopeId: launcherScope,
+    hotkey: 'arrowleft',
   });
 
   registerHotkey({
     hotkey: 'arrowright' as ValidHotkey,
-    scopeId: launcherScope,
-    description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
+    description: 'Navigate Right',
+    scopeId: launcherScope,
   });
 
   registerHotkey({
-    hotkey: 'escape',
-    scopeId: launcherScope,
-    description: 'Exit',
     keyDownHandler: () => {
       props.onClose();
       return true;
     },
+    scopeId: launcherScope,
+    description: 'Exit',
+    hotkey: 'escape',
   });
 
   registerHotkey({
-    hotkey: 'enter',
-    scopeId: launcherScope,
-    description: 'Open in current split',
     keyDownHandler: () => {
       CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
       return true;
     },
+    description: 'Open in current split',
     runWithInputFocused: true,
+    scopeId: launcherScope,
     displayPriority: 7,
+    hotkey: 'enter',
   });
 
   registerHotkey({
@@ -559,10 +555,10 @@ const LauncherInner = (props: LauncherInnerProps) => {
         <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
-              creatableBlock={item}
               onMouseEnter={() => setFocusedIndex(index())}
               onFocus={() => setFocusedIndex(index())}
               focused={focusedIndex() === index()}
+              creatableBlock={item}
             />
           )}
         </For>
@@ -575,8 +571,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
 };
 
 type LauncherProps = {
-  open: boolean;
   onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
+  open: boolean;
 };
 
 export const Launcher = (props: LauncherProps) => {
@@ -587,18 +583,16 @@ export const Launcher = (props: LauncherProps) => {
       <Dialog.Portal>
         <Dialog.Overlay
           class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          classList={{
-            'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
-          }}
+          classList={{'backdrop-filter-[blur(0.5px)]': useJuicedScrim}}
         >
           <Show when={useJuicedScrim}>
             <div class="absolute pointer-events-none size-full inset-0 bg-modal-overlay text-ink opacity-5">
               <PcNoiseGrid
-                cellSize={20}
-                crunch={0.379}
-                size={[0, 1]}
                 speed={[0.03, 0.4]}
                 circleMask={1}
+                crunch={0.379}
+                cellSize={20}
+                size={[0, 1]}
                 stroke={1}
                 fill={0}
               />
