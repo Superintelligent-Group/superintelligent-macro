@@ -10,7 +10,15 @@ import {
 } from '@core/signal/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  type JSX,
+  onCleanup,
+} from 'solid-js';
 import { entityTypeToItemType } from '../utils';
 import { match } from 'ts-pattern';
 
@@ -49,6 +57,48 @@ const checkPreviewItem = (item?: PreviewItem): item is PreviewItemAccess => {
 };
 
 /**
+ * Creates a reactive hook manager that properly disposes and recreates hooks
+ * when dependencies change. This solves the problem of hooks that take plain
+ * values (not accessors) needing to react to changes.
+ * @param deps - Accessor that returns dependencies to track
+ * @param shouldCreate - Predicate to determine if hook should be created
+ * @param createHook - Factory function that creates the hook and returns its value
+ * @param defaultValue - Default value when hook is not created
+ * @returns Accessor to the current hook value
+ */
+function useReactiveHook<TDeps, TValue>(
+  deps: Accessor<TDeps>,
+  shouldCreate: (deps: TDeps) => boolean,
+  createHook: (deps: TDeps) => TValue,
+  defaultValue: TValue
+): Accessor<TValue> {
+  const [value, setValue] = createSignal<TValue>(defaultValue);
+  let dispose: (() => void) | undefined;
+
+  createEffect(() => {
+    const currentDeps = deps();
+
+    // Clean up previous hook instance
+    dispose?.();
+    dispose = undefined;
+
+    if (shouldCreate(currentDeps)) {
+      createRoot((d) => {
+        dispose = d;
+        const hookValue = createHook(currentDeps);
+        setValue(() => hookValue);
+      });
+    } else {
+      setValue(() => defaultValue);
+    }
+  });
+
+  onCleanup(() => dispose?.());
+
+  return value;
+}
+
+/**
  * Hook to resolve entity display information (name, icon) for property entity values.
  * Handles preview fetching, channel name resolution, and user display names.
  *
@@ -69,52 +119,62 @@ export function usePropertyEntityDisplay(
 ): PropertyEntityDisplayResult {
   const previewType = () => entityTypeToItemType(entityType());
 
-  const previewManager = () => {
-    if (isPreviewable(entityType())) {
-      return useItemPreview({
-        id: entityId(),
-        type: previewType(),
+  const previewAccessor = useReactiveHook(
+    () => ({ id: entityId(), type: entityType(), previewType: previewType() }),
+    (deps) => isPreviewable(deps.type),
+    (deps) => {
+      const [preview] = useItemPreview({
+        id: deps.id,
+        type: deps.previewType,
       });
-    }
-    return useItemPreview({ id: '' });
-  };
+      return preview;
+    },
+    () => undefined as PreviewItem | undefined
+  );
 
-  const preview = () => previewManager()[0];
+  const preview = () => previewAccessor()();
 
-  const channelNameManager = () => {
-    if (previewType() === 'channel') {
-      return useChannelName(entityId());
-    }
-    return () => '';
-  };
+  const channelNameAccessor = useReactiveHook(
+    () => ({ id: entityId(), type: previewType() }),
+    (deps) => deps.type === 'channel',
+    (deps) => useChannelName(deps.id),
+    () => ''
+  );
 
-  const channelName = () => channelNameManager()();
+  const channelName = () => channelNameAccessor()();
 
-  const isLoading = () => {
+  const userNameAccessor = useReactiveHook(
+    () => ({ id: entityId(), type: entityType() }),
+    (deps) => deps.type === 'USER',
+    (deps) => {
+      const [displayName] = useDisplayName(tryMacroId(deps.id));
+      return displayName;
+    },
+    () => ''
+  );
+
+  const userName = () => userNameAccessor()();
+
+  const isLoading = createMemo(() => {
     if (!isPreviewable(entityType())) return false;
     const previewItem = preview();
-    return !previewItem || previewItem().loading;
-  };
+    return !previewItem || previewItem.loading;
+  });
 
-  const nameFn = () => {
-    return match(entityType())
-      .with('USER', () => {
-        const displayName = useDisplayName(tryMacroId(entityId()));
-        return displayName[0];
-      })
-      .with('CHANNEL', () => () => channelName() ?? 'Channel')
-      .with('COMPANY', () => entityId)
-      .otherwise(() => () => {
-        const item = preview()();
+  const name = createMemo(() =>
+    match(entityType())
+      .with('USER', () => userName())
+      .with('CHANNEL', () => channelName() || 'Channel')
+      .with('COMPANY', () => entityId())
+      .otherwise(() => {
+        const item = preview();
         if (!item || item.loading) return 'Loading...';
         if (isAccessiblePreviewItem(item)) {
           return item.name;
         }
         return `Unknown ${entityType().toLowerCase()}`;
-      });
-  };
-
-  const name = createMemo(() => nameFn()());
+      })
+  );
 
   const icon = createMemo(() =>
     match(entityType())
@@ -122,7 +182,7 @@ export function usePropertyEntityDisplay(
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {
-        const item = preview()();
+        const item = preview();
         if (!checkPreviewItem(item)) {
           return <CoreEntityIcon targetType="unknown" size="xs" />;
         }
@@ -150,7 +210,7 @@ export function usePropertyEntityDisplay(
       .with('TASK', () => 'task')
       .with('THREAD', () => 'email')
       .with('DOCUMENT', () => {
-        const item = preview()();
+        const item = preview();
         if (!checkPreviewItem(item)) {
           return null;
         }
