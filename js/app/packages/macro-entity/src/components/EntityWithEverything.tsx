@@ -51,7 +51,7 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import { KeyPropertiesGrid, EntityPropertyValues } from './PropertyPills';
+import { EntityPropertyValues } from './EntityPropertyValues';
 
 export const ENTITY_HEIGHT = 40;
 

@@ -1,7 +1,6 @@
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
-import type { PropertyScope } from '@service-properties/generated/schemas/propertyScope';
 import type {
   BooleanProperty,
   DateProperty,
@@ -192,3 +191,23 @@ export function isPropertyDefinition(
 ): p is PropertyDefinition {
   return !('definition' in p);
 }
+
+export const hasValue = (property: Property): boolean => {
+  if (property.value === null) {
+    return false;
+  }
+
+  if (Array.isArray(property.value)) {
+    return property.value.length > 0;
+  }
+
+  return true;
+};
+
+export const hasSingleValue = (property: MultiValueProperty): boolean => {
+  return property.value !== null && property.value.length === 1;
+};
+
+export const hasMultiValue = (property: MultiValueProperty): boolean => {
+  return property.value !== null && property.value.length > 1;
+};

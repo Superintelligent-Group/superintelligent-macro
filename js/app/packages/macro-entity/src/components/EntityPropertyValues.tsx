@@ -4,14 +4,13 @@ import {
   type PropertySaveHandler,
 } from '@core/component/Properties/context/PropertiesContext';
 import { Modals } from '@core/component/Properties/component/modal';
-import { saveEntityProperty } from '@core/component/Properties/api';
 import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, createMemo } from 'solid-js';
-import { invalidatePropertiesForEntity } from '@queries/properties/entity';
+import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
 
 type EntityPropertyValuesProps = {
   properties: Property[];
@@ -29,47 +28,30 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
     props.properties.slice(0, props.maxDisplay ?? MAX_DEFAULT_DISPLAY)
   );
 
+  const saveMutation = useSaveEntityPropertyMutation({
+    onSuccess: () => {
+      props.onRefresh?.();
+    },
+  });
+
   const saveHandler: PropertySaveHandler = {
-    saveProperty: async (property: Property, value: PropertyApiValues) => {
-      try {
-        const result = await saveEntityProperty(
-          props.entityId,
-          props.entityType,
-          property,
-          value
-        );
-        if (result.ok) {
-          props.onRefresh?.();
-          invalidatePropertiesForEntity(props.entityType, props.entityId);
-        }
-        return result;
-      } catch (error) {
-        console.error('Property save error', error);
-        return { ok: false, error };
-      }
-    },
-    saveDate: async (property: Property, date: Date) => {
-      const dateValue = date.toISOString();
-      try {
-        const result = await saveEntityProperty(
-          props.entityId,
-          props.entityType,
-          property,
-          {
-            valueType: 'DATE',
-            value: dateValue,
-          }
-        );
-        if (result.ok) {
-          invalidatePropertiesForEntity(props.entityType, props.entityId);
-          props.onRefresh?.();
-        }
-        return result;
-      } catch (error) {
-        console.error('Property save error', error);
-        return { ok: false, error };
-      }
-    },
+    saveProperty: (property: Property, value: PropertyApiValues) =>
+      saveMutation.mutateAsync({
+        entityId: props.entityId,
+        entityType: props.entityType,
+        property,
+        apiValues: value,
+      }),
+    saveDate: (property: Property, date: Date) =>
+      saveMutation.mutateAsync({
+        entityId: props.entityId,
+        entityType: props.entityType,
+        property,
+        apiValues: {
+          valueType: 'DATE',
+          value: date.toISOString(),
+        },
+      }),
   };
 
   return (
@@ -83,7 +65,7 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
         onPropertyDeleted={() => props.onRefresh?.()}
         saveHandler={saveHandler}
       >
-        <div class="flex items-center gap-1 justify-end">
+        <div class="flex items-center gap-1 justify-start overflow-hidden">
           <For each={displayProperties()}>
             {(property) => (
               <div class="relative">

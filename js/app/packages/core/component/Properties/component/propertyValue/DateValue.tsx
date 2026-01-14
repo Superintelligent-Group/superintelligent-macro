@@ -1,7 +1,6 @@
 import type { Component } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import { formatDate } from '../../utils';
 import {
   EmptyValue,

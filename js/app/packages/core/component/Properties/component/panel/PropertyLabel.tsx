@@ -1,4 +1,4 @@
-import { useBlockId, useMaybeBlockAliasedName } from '@core/block';
+import { useMaybeBlockAliasedName, useMaybeBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -31,7 +31,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockId = useBlockId();
+  const blockId = useMaybeBlockId();
   const blockName = useMaybeBlockAliasedName();
   const isBuiltin =
     blockName &&
@@ -65,6 +65,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   };
 
   const handleDeleteConfirm = async () => {
+    if (!blockId) return;
     try {
       await deleteMutation.mutateAsync({
         entityPropertyId: props.property.propertyId,
@@ -90,10 +91,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         onMouseLeave={() => setIsHovered(false)}
       >
         <PropertyDataTypeIcon
-          property={{
-            data_type: props.property.valueType,
-            specific_entity_type: props.property.specificEntityType,
-          }}
+          property={props.property}
           class="size-4 shrink-0 opacity-40"
         />
         <span class="truncate flex-shrink min-w-0">
@@ -129,7 +127,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!isBuiltin && props.withDelete}>
+          <Show when={!isBuiltin && props.withDelete && blockId}>
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
