@@ -19,6 +19,21 @@ export type EmailFormRecipients = {
   bcc: EmailRecipient[];
 };
 
+export type DraftFormAttachment =
+  | {
+      type: 'local';
+      file: File;
+      attachmentID?: string;
+    }
+  | {
+      type: 'remote';
+      url: string;
+      fileName: string;
+      contentType: string;
+      attachmentID: string;
+      fileSize: number;
+    };
+
 /**
  * Creates a state object for the email form.
  * @param key - The db_id of the email being replied to.
@@ -60,6 +75,19 @@ export function createEmailFormState(key: string) {
   );
 
   const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
+
+  // TODO: Replace this signal with a memo deriving the attachments from the draft data
+  // and a temporary queue to track attachments to be uploaded on draft save
+  const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>(
+    draft?.attachments_draft.map((a) => ({
+      type: 'remote',
+      attachmentID: a.id,
+      contentType: a.content_type,
+      fileName: a.file_name,
+      url: a.s3_key,
+      fileSize: a.size,
+    })) ?? []
+  );
 
   const initialReplyType: ReplyType | undefined = replyingTo
     ? (replyingTo.to.length ?? 0) + (replyingTo.cc.length ?? 0) > 1
@@ -183,6 +211,8 @@ export function createEmailFormState(key: string) {
     setSubjectInner(initialSubject);
     setShouldFocusInput(false);
 
+    setAttachments([]);
+
     // Mark as dirty to propagate change
     callDirty();
   };
@@ -210,6 +240,31 @@ export function createEmailFormState(key: string) {
     },
     setCapturedEditor: (editor: LexicalEditor) => {
       setCapturedEditor(editor);
+    },
+    attachments: {
+      list: attachments,
+      add: (attachment: DraftFormAttachment) => {
+        setAttachments((p) => [...p, attachment]);
+      },
+      assignAttachmentID: (file: File, attachmentID: string) => {
+        setAttachments((p) =>
+          p.map((a) =>
+            a.type === 'local' && a.file === file ? { ...a, attachmentID } : a
+          )
+        );
+      },
+      removeByFile: (file: File) => {
+        setAttachments((p) =>
+          p.filter((a) => a.type !== 'local' || a.file !== file)
+        );
+      },
+      removeByID: (attachmentID: string) => {
+        setAttachments((p) =>
+          p.filter(
+            (a) => a.type !== 'remote' || a.attachmentID !== attachmentID
+          )
+        );
+      },
     },
   };
 

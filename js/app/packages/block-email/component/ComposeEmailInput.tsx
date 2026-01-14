@@ -4,6 +4,7 @@ import { MacroSignatureButton } from '@block-email/component/MacroSignatureButto
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import {
@@ -13,6 +14,7 @@ import {
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
+import XIcon from '@icon/regular/x.svg';
 import {
   $appendWatermarkNodeToLast,
   type DocumentMentionInfo,
@@ -69,7 +71,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
 
   const [content, setContent] = createSignal('');
 
@@ -159,6 +160,36 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     attachComposeHotkeys(container);
   });
 
+  const onAddFilesAndDirs = (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[],
+    dropEvent?: DragEvent
+  ) => {
+    const editor_ = editor();
+    if (!editor_) return;
+
+    const getPositionCallback = dropEvent
+      ? () => getDragDropPosition(editor_, dropEvent, true)
+      : undefined;
+
+    handleFileFolderDrop(
+      files,
+      directories,
+      createFilesReadyHandler(
+        editor_,
+        undefined,
+        undefined,
+        getPositionCallback,
+        (uploadedItemIds) => {
+          uploadedItemIds.forEach((itemId) => {
+            makeAttachmentPublic(itemId);
+          });
+        },
+        { width: 542, height: 542 }
+      )
+    );
+  };
+
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId: composeHotkeyScope,
@@ -200,28 +231,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: (fileEntries, folderEntries, e) => {
-              const editor_ = editor();
-              if (!editor_ || !e) return;
-              handleFileFolderDrop(
-                fileEntries,
-                folderEntries,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  () => getDragDropPosition(editor_, e, true),
-                  (uploadedItemIds) => {
-                    setIsDragging(false);
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                    // TODO: schedule draft save, when implemented
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            },
+            onDrop: onAddFilesAndDirs,
           }}
         >
           <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
@@ -244,44 +254,34 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               focusSibling('next');
             }}
             portalScope="local"
-            onPasteFilesAndDirs={(files, directories) => {
-              const editor_ = editor();
-              if (!editor_) return;
-              handleFileFolderDrop(
-                files,
-                directories,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  undefined,
-                  (uploadedItemIds) => {
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            }}
+            onPasteFilesAndDirs={onAddFilesAndDirs}
           />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <DeprecatedTextButton
+            class="w-fit"
+            icon={PaperclipIcon}
+            secondaryIcon={XIcon}
+            secondaryTooltip={{ label: 'Remove attachment' }}
+            onOptionClick={() => {}}
+            theme="base"
+          >
+            Test attachment.pdf
+          </DeprecatedTextButton>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <DeprecatedIconButton
-              theme="base"
-              icon={PaperclipIcon}
-              tooltip={{ label: 'Attach' }}
-              disabled={props.disabled}
-              onClick={() => setAttachMenuOpen(true)}
-            />
             <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
+              trigger={
+                <DeprecatedIconButton
+                  theme="base"
+                  icon={PaperclipIcon}
+                  tooltip={{ label: 'Attach' }}
+                  disabled={props.disabled}
+                />
+              }
               onAttach={onAttach}
               onAttachDocuments={onAttachDocuments}
               setIsPending={setIsPendingUpload}
