@@ -3,6 +3,14 @@ import type { Property } from '@core/component/Properties/types';
 import {
   extractDomain,
   formatPropertyValue,
+  isBooleanProperty,
+  isDateProperty,
+  isEntityProperty,
+  isLinkProperty,
+  isNumberProperty,
+  isSelectProperty,
+  isSelectStringProperty,
+  isStringProperty,
   PropertyDataTypeIcon,
 } from '@core/component/Properties/utils';
 import { UserIcon } from '@core/component/UserIcon';
@@ -20,7 +28,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import { hasValue as propertyHasValue } from '@core/component/Properties/utils';
 
@@ -33,32 +40,31 @@ type PropertyTooltipProps = ParentProps<{
  * Routes to type-specific tooltip content based on valueType
  */
 export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
-  return match(props.property)
-    .with({ valueType: 'STRING' }, (property) => (
-      <StringTooltipContent property={property} />
-    ))
-    .with({ valueType: 'NUMBER' }, (property) => (
-      <NumberTooltipContent property={property} />
-    ))
-    .with({ valueType: 'BOOLEAN' }, (property) => (
-      <BooleanTooltipContent property={property} />
-    ))
-    .with({ valueType: 'DATE' }, (property) => (
-      <DateTooltipContent property={property} />
-    ))
-    .with({ valueType: 'SELECT_STRING' }, (property) => (
-      <SelectTooltipContent property={property} />
-    ))
-    .with({ valueType: 'SELECT_NUMBER' }, (property) => (
-      <SelectTooltipContent property={property} />
-    ))
-    .with({ valueType: 'ENTITY' }, (property) => (
-      <EntityTooltipContent property={property} />
-    ))
-    .with({ valueType: 'LINK' }, (property) => (
-      <LinkTooltipContent property={property} />
-    ))
-    .exhaustive();
+  return (
+    <Switch>
+      <Match when={isStringProperty(props.property) && props.property}>
+        {(property) => <StringTooltipContent property={property()} />}
+      </Match>
+      <Match when={isNumberProperty(props.property) && props.property}>
+        {(property) => <NumberTooltipContent property={property()} />}
+      </Match>
+      <Match when={isBooleanProperty(props.property) && props.property}>
+        {(property) => <BooleanTooltipContent property={property()} />}
+      </Match>
+      <Match when={isDateProperty(props.property) && props.property}>
+        {(property) => <DateTooltipContent property={property()} />}
+      </Match>
+      <Match when={isSelectProperty(props.property) && props.property}>
+        {(property) => <SelectTooltipContent property={property()} />}
+      </Match>
+      <Match when={isEntityProperty(props.property) && props.property}>
+        {(property) => <EntityTooltipContent property={property()} />}
+      </Match>
+      <Match when={isLinkProperty(props.property) && props.property}>
+        {(property) => <LinkTooltipContent property={property()} />}
+      </Match>
+    </Switch>
+  );
 };
 
 /**

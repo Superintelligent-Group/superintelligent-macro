@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { Dynamic, Show } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
@@ -21,10 +21,7 @@ export const PropertyValue: Component<{
   condensed?: boolean;
 }> = (props) => {
   const { entityType, canEdit, onRefresh } = usePropertiesContext();
-
-  if (props.condensed) {
-    return <CondensedPropertyValue property={props.property} />;
-  }
+  const expanded = () => !props.condensed;
 
   const valueComponent = () =>
     match(props.property)
@@ -39,13 +36,18 @@ export const PropertyValue: Component<{
       .exhaustive();
 
   return (
-    <Dynamic
-      component={valueComponent()}
-      property={props.property}
-      canEdit={canEdit}
-      entityType={entityType}
-      onEdit={props.onEdit}
-      onRefresh={onRefresh}
-    />
+    <Show
+      when={expanded()}
+      fallback={<CondensedPropertyValue property={props.property} />}
+    >
+      <Dynamic
+        component={valueComponent()}
+        property={props.property}
+        canEdit={canEdit}
+        entityType={entityType}
+        onEdit={props.onEdit}
+        onRefresh={onRefresh}
+      />
+    </Show>
   );
 };

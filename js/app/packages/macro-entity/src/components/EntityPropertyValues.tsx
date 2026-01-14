@@ -58,11 +58,7 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
     return sorted.slice(0, props.maxDisplay ?? MAX_DEFAULT_DISPLAY);
   });
 
-  const saveMutation = useSaveEntityPropertyMutation({
-    onSuccess: () => {
-      props.onRefresh?.();
-    },
-  });
+  const saveMutation = useSaveEntityPropertyMutation();
 
   const saveHandler: PropertySaveHandler = {
     saveProperty: (property: Property, value: PropertyApiValues) =>
@@ -90,9 +86,9 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
         entityType={props.entityType}
         canEdit={true}
         properties={displayProperties}
-        onRefresh={props.onRefresh || (() => {})}
-        onPropertyAdded={() => props.onRefresh?.()}
-        onPropertyDeleted={() => props.onRefresh?.()}
+        onRefresh={() => {}}
+        onPropertyAdded={() => {}}
+        onPropertyDeleted={() => {}}
         saveHandler={saveHandler}
       >
         <div class="flex items-center gap-1 justify-start overflow-hidden">
