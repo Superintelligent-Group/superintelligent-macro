@@ -9,7 +9,6 @@ import {
   isLinkProperty,
   isNumberProperty,
   isSelectProperty,
-  isSelectStringProperty,
   isStringProperty,
   PropertyDataTypeIcon,
 } from '@core/component/Properties/utils';
