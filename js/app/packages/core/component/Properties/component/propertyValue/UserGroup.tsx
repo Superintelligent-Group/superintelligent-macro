@@ -24,7 +24,12 @@ export const UserGroup = (props: UserEntityPillProps) => {
       <For each={displayEntities()}>
         {(entity) => (
           <div class="bg-panel rounded-full p-[2px] -mr-2">
-            <UserIcon id={entity.entity_id} isDeleted={false} size="xs" />
+            <UserIcon
+              id={entity.entity_id}
+              isDeleted={false}
+              size="xs"
+              suppressClick
+            />
           </div>
         )}
       </For>

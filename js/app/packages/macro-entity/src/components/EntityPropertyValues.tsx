@@ -8,9 +8,38 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, createMemo } from 'solid-js';
 import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+
+const PROPERTY_SORT_ORDER = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+] as const;
+
+function sortProperties(properties: Property[]): Property[] {
+  return [...properties].sort((a, b) => {
+    const aIndex = PROPERTY_SORT_ORDER.indexOf(
+      a.propertyDefinitionId as (typeof PROPERTY_SORT_ORDER)[number]
+    );
+    const bIndex = PROPERTY_SORT_ORDER.indexOf(
+      b.propertyDefinitionId as (typeof PROPERTY_SORT_ORDER)[number]
+    );
+
+    if (aIndex !== -1 && bIndex !== -1) {
+      return aIndex - bIndex;
+    }
+    if (aIndex !== -1) {
+      return -1;
+    }
+    if (bIndex !== -1) {
+      return 1;
+    }
+    return 0;
+  });
+}
 
 type EntityPropertyValuesProps = {
   properties: Property[];
@@ -24,9 +53,10 @@ type EntityPropertyValuesProps = {
 const MAX_DEFAULT_DISPLAY = 4;
 
 export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
-  const displayProperties = createMemo(() =>
-    props.properties.slice(0, props.maxDisplay ?? MAX_DEFAULT_DISPLAY)
-  );
+  const displayProperties = createMemo(() => {
+    const sorted = sortProperties(props.properties);
+    return sorted.slice(0, props.maxDisplay ?? MAX_DEFAULT_DISPLAY);
+  });
 
   const saveMutation = useSaveEntityPropertyMutation({
     onSuccess: () => {

@@ -56,7 +56,7 @@ export const PropertyDataTypeIcon: Component<{
       .with('LINK', () => LinkIcon)
       .with('SELECT_STRING', () => ListBulletIcon)
       .with('SELECT_NUMBER', () => ListBulletIcon)
-      .exhaustive();
+      .otherwise(() => SimpleTagIcon);
 
   return <Dynamic component={icon()} class={iconClass()} />;
 };
