@@ -604,6 +604,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     hotkeyToken: TOKENS.chat.spotlight.close,
     condition: () => Boolean(bigChatOpen() || isRightPanelOpen()),
     description: 'Close chat',
+    runWithInputFocused: true,
     keyDownHandler: () => {
       if (bigChatOpen()) {
         setBigChatOpen(false);

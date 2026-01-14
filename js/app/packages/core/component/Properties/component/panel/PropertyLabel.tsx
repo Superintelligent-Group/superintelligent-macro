@@ -31,7 +31,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockId = useMaybeBlockId();
+  const maybeBlockId = useMaybeBlockId();
   const blockName = useMaybeBlockAliasedName();
   const isBuiltin =
     blockName &&
@@ -65,12 +65,12 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!blockId) return;
+    if (!maybeBlockId) return;
     try {
       await deleteMutation.mutateAsync({
         entityPropertyId: props.property.propertyId,
         entityType,
-        entityId: blockId,
+        entityId: maybeBlockId,
       });
       setDeleteConfirmVisible(false);
       onPropertyDeleted();
@@ -91,7 +91,10 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
         onMouseLeave={() => setIsHovered(false)}
       >
         <PropertyDataTypeIcon
-          property={props.property}
+          property={{
+            data_type: props.property.valueType,
+            specific_entity_type: props.property.specificEntityType,
+          }}
           class="size-4 shrink-0 opacity-40"
         />
         <span class="truncate flex-shrink min-w-0">
@@ -127,7 +130,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!isBuiltin && props.withDelete && blockId}>
+          <Show when={!isBuiltin && props.withDelete}>
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
