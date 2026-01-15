@@ -201,6 +201,18 @@
       ],
       "@ui/*": [
         "./packages/ui/*"
+      ],
+      "@unified-list": [
+        "./packages/unified-list/src/index.ts"
+      ],
+      "@unified-list/*": [
+        "./packages/unified-list/src/*"
+      ],
+      "@soup": [
+        "./packages/soup/src/index.ts"
+      ],
+      "@soup/*": [
+        "./packages/soup/src/*"
       ]
     },
     "rootDir": ".",

@@ -277,13 +277,23 @@ const selectData: (
           }
 
           if (item.tag === 'channel') {
+            const channel = item.data.channel;
             const out: ChannelEntity = {
-              ...item.data.channel,
-              channelType: item.data.channel.channel_type,
+              ...channel,
+              channelType: channel.channel_type,
               type: 'channel',
-              id: item.data.channel.id,
-              name: item.data.channel.name || 'New Channel',
-              ownerId: item.data.channel.owner_id,
+              id: channel.id,
+              name: channel.name || 'New Channel',
+              ownerId: channel.owner_id,
+              frecencyScore: item.frecency_score,
+              createdAt: new Date(channel.created_at).getTime(),
+              updatedAt: new Date(channel.updated_at).getTime(),
+              viewedAt: item.data.viewed_at
+                ? new Date(item.data.viewed_at).getTime()
+                : undefined,
+              interactedAt: item.data.interacted_at
+                ? new Date(item.data.interacted_at).getTime()
+                : undefined,
             };
             return out;
           }

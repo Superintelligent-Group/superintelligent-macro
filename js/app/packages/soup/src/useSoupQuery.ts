@@ -1,0 +1,551 @@
+/**
+ * Soup Query Hook - Server-side filtering with TanStack Query + Search Service.
+ *
+ * This handles:
+ * - Building PostSoupRequest with proper filter mapping
+ * - Server-side filtering via query params
+ * - Search service integration for content search (>=3 chars)
+ * - Client-side filtering for signal/noise
+ * - Infinite scroll with proper fetch-more
+ */
+
+import { createMemo, type Accessor } from 'solid-js';
+import {
+  createDssInfiniteQuery,
+  createUnifiedSearchInfiniteQuery,
+  type EntityData,
+  type WithSearch,
+} from '@macro-entity';
+import {
+  useNotificationsForEntity,
+  type NotificationSource,
+} from '@notifications';
+import type { PostSoupRequest } from '@service-storage/generated/schemas';
+import type { SearchArgs } from '@service-search/client';
+import type {
+  UnifiedSearchIndex,
+  UnifiedSearchRequestFilters,
+} from '@service-search/generated/models';
+import type { EnhancedEntity } from '@unified-list/components/entity/types';
+import type { EnhancingSearchFilter } from '@unified-list';
+import { SOUP_DEFAULTS, type EmailView } from './defaults';
+import { signalFilter, noiseFilter, explicitNoiseFilter } from './filters';
+
+// NIL UUID used to exclude entity types from query
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/** Re-export EmailView as EmailViewMode for backwards compatibility */
+export type EmailViewMode = EmailView;
+
+export type SoupQueryFilters = {
+  /** Active filter IDs from the filter plugin */
+  activeFilterIds: Accessor<Set<string>>;
+  /** Server-side search text (debounced 300ms) - from search plugin store */
+  serverSearchText?: Accessor<string>;
+  /**
+   * Enhancing search filter from search plugin store.
+   * When provided, applies local fuzzy search with nameHighlight enhancement
+   * to DSS results only (not to search service results which already have highlights).
+   */
+  enhancingSearchFilter?: Accessor<
+    EnhancingSearchFilter<EnhancedEntity> | undefined
+  >;
+  /**
+   * Whether server search is active - from search plugin store.
+   * Should be true when: ≥3 chars AND no signal/noise filter.
+   */
+  isServerSearchActive?: Accessor<boolean>;
+  /** Sort method - defaults to SOUP_DEFAULTS.sortMethod */
+  sortMethod?: Accessor<'frecency' | 'updated_at' | 'created_at' | 'viewed_at'>;
+  /** Email view mode */
+  emailView?: Accessor<EmailViewMode>;
+  /**
+   * Notification source from global app state.
+   * Used to enhance entities with notifications efficiently via the global cache.
+   */
+  notificationSource: NotificationSource;
+};
+
+export type SoupQueryResult = {
+  /** Entities after server + client filtering */
+  entities: Accessor<EnhancedEntity[]>;
+  /** Raw entities from server (before client filtering) */
+  rawEntities: Accessor<EnhancedEntity[]>;
+  /** Loading state */
+  isLoading: Accessor<boolean>;
+  /** Whether there are more pages */
+  hasMore: Accessor<boolean>;
+  /** Fetch next page */
+  fetchNextPage: () => void;
+  /** Is fetching next page */
+  isFetchingNextPage: Accessor<boolean>;
+  /** Refetch */
+  refetch: () => void;
+};
+
+// Type filters that affect server-side query (vs client-side filters like signal/noise/unread)
+const TYPE_FILTERS = new Set([
+  'document',
+  'task',
+  'email',
+  'people',
+  'teams',
+  'agent',
+  'project',
+  'file',
+]);
+
+/**
+ * Build search service include array based on active filters.
+ */
+function buildSearchIncludeArray(
+  activeFilters: Set<string>
+): UnifiedSearchIndex[] {
+  // Extract only type filters
+  const activeTypeFilters = new Set(
+    [...activeFilters].filter((f) => TYPE_FILTERS.has(f))
+  );
+
+  // If no type filters, search all
+  if (activeTypeFilters.size === 0) {
+    return [];
+  }
+
+  const includeArray: UnifiedSearchIndex[] = [];
+
+  if (
+    activeTypeFilters.has('document') ||
+    activeTypeFilters.has('task') ||
+    activeTypeFilters.has('file')
+  ) {
+    includeArray.push('documents');
+  }
+  if (activeTypeFilters.has('agent')) {
+    includeArray.push('chats');
+  }
+  if (activeTypeFilters.has('people') || activeTypeFilters.has('teams')) {
+    includeArray.push('channels');
+  }
+  if (activeTypeFilters.has('email')) {
+    includeArray.push('emails');
+  }
+  if (activeTypeFilters.has('project')) {
+    includeArray.push('projects');
+  }
+
+  return Array.from(new Set(includeArray));
+}
+
+/**
+ * Build search service filters based on active filters.
+ */
+function buildSearchFilters(
+  _activeFilters: Set<string>
+): UnifiedSearchRequestFilters {
+  // For now, just use empty filters - can add project filtering etc later
+  return {
+    document: null,
+    chat: null,
+    channel: null,
+    email: null,
+    project: null,
+  };
+}
+
+/**
+ * Build PostSoupRequest based on active filters.
+ *
+ * IMPORTANT: Only TYPE filters affect the server query.
+ * Focus filters (signal/noise) and notification filters (unread) are client-side only.
+ *
+ * Filters work by:
+ * - Empty array [] = include all of that type
+ * - [NIL_UUID] = exclude all of that type (impossible ID)
+ */
+function buildRequestBody(
+  activeFilters: Set<string>,
+  sortMethod: string,
+  emailView?: string
+): PostSoupRequest {
+  // Extract only type filters (ignore signal/noise/unread which are client-side)
+  const activeTypeFilters = new Set(
+    [...activeFilters].filter((f) => TYPE_FILTERS.has(f))
+  );
+
+  // Determine which entity types to include based on TYPE filters only
+  const includeDocuments =
+    activeTypeFilters.size === 0 ||
+    activeTypeFilters.has('document') ||
+    activeTypeFilters.has('task') ||
+    activeTypeFilters.has('file');
+
+  const includeEmails =
+    activeTypeFilters.size === 0 || activeTypeFilters.has('email');
+
+  const includeChannels =
+    activeTypeFilters.size === 0 ||
+    activeTypeFilters.has('people') ||
+    activeTypeFilters.has('teams');
+
+  const includeChats =
+    activeTypeFilters.size === 0 || activeTypeFilters.has('agent');
+
+  const includeProjects =
+    activeTypeFilters.size === 0 || activeTypeFilters.has('project');
+
+  // Build file type filter for documents
+  let fileTypes: string[] | undefined;
+  if (
+    activeTypeFilters.has('document') &&
+    !activeTypeFilters.has('task') &&
+    !activeTypeFilters.has('file')
+  ) {
+    fileTypes = ['md', 'canvas'];
+  } else if (
+    activeTypeFilters.has('file') &&
+    !activeTypeFilters.has('document')
+  ) {
+    // Non-md/canvas files
+    fileTypes = undefined; // Will filter client-side
+  }
+
+  return {
+    limit: 100,
+    sort_method: sortMethod as PostSoupRequest['sort_method'],
+    emailView: emailView as PostSoupRequest['emailView'],
+    document_filters: {
+      document_ids: includeDocuments ? [] : [NIL_UUID],
+      file_types: fileTypes,
+    },
+    email_filters: {
+      recipients: includeEmails ? [] : [NIL_UUID],
+    },
+    channel_filters: {
+      channel_ids: includeChannels ? [] : [NIL_UUID],
+    },
+    chat_filters: {
+      chat_ids: includeChats ? [] : [NIL_UUID],
+    },
+    project_filters: {
+      project_ids: includeProjects ? [] : [NIL_UUID],
+    },
+  };
+}
+
+// ============================================================================
+// Client-side filter predicates (imported from @soup/filters)
+// ============================================================================
+
+/** Unread filter - entity has unread content */
+function unreadFilter(entity: EnhancedEntity): boolean {
+  if (entity.type === 'email') {
+    return !entity.isRead;
+  }
+  return entity.notifications?.()?.some((n) => !n.viewedAt) ?? false;
+}
+
+/** NotDone filter - entity has outstanding items */
+function notDoneFilter(entity: EnhancedEntity): boolean {
+  if (entity.type === 'email') {
+    return !entity.done;
+  }
+  return !!entity.notifications && entity.notifications().some((n) => !n.done);
+}
+
+// ============================================================================
+// Entity type filters (client-side for precise filtering)
+// ============================================================================
+
+function documentFilter(entity: EntityData): boolean {
+  if (entity.type !== 'document') return false;
+  if (entity.subType?.type === 'task') return false;
+  const fileType = entity.fileType ?? '';
+  return fileType === 'md' || fileType === 'canvas';
+}
+
+function taskFilter(entity: EntityData): boolean {
+  return entity.type === 'document' && entity.subType?.type === 'task';
+}
+
+function emailFilter(entity: EntityData): boolean {
+  return entity.type === 'email';
+}
+
+function peopleFilter(entity: EntityData): boolean {
+  return entity.type === 'channel' && entity.channelType === 'direct_message';
+}
+
+function teamsFilter(entity: EntityData): boolean {
+  return entity.type === 'channel' && entity.channelType !== 'direct_message';
+}
+
+function agentFilter(entity: EntityData): boolean {
+  return entity.type === 'chat';
+}
+
+function projectFilter(entity: EntityData): boolean {
+  return entity.type === 'project';
+}
+
+function fileFilter(entity: EntityData): boolean {
+  if (entity.type !== 'document') return false;
+  const fileType = entity.fileType ?? '';
+  return !['md', 'canvas'].includes(fileType);
+}
+
+/**
+ * Get client-side filter function based on active filters.
+ *
+ * Some filters must be applied client-side:
+ * - Signal/Noise (requires email label inspection)
+ * - Unread (requires notification data)
+ * - People vs Teams (requires channelType)
+ * - Tasks vs Documents (requires subType)
+ *
+ * Focus filter logic:
+ * - signal active && !noise: show only signal items
+ * - noise active && !signal: show only noise items
+ * - neither active: hide explicit noise items (emails with depriority indicators)
+ * - both active: show all items (unusual but supported)
+ */
+function getClientFilterFn(
+  activeFilters: Set<string>
+): (entity: EnhancedEntity) => boolean {
+  const predicates: ((entity: EnhancedEntity) => boolean)[] = [];
+
+  // Signal/Noise filters
+  const hasSignalFilter = activeFilters.has('signal');
+  const hasNoiseFilter = activeFilters.has('noise');
+
+  if (hasSignalFilter && !hasNoiseFilter) {
+    // Only signal active: show signal items that are not done
+    predicates.push(signalFilter);
+    predicates.push(notDoneFilter);
+  } else if (hasNoiseFilter && !hasSignalFilter) {
+    // Only noise active: show noise items that are not done
+    predicates.push(noiseFilter);
+    predicates.push(notDoneFilter);
+  } else if (!hasSignalFilter && !hasNoiseFilter) {
+    // Neither active: hide explicit noise items (emails with depriority indicators)
+    predicates.push((entity) => !explicitNoiseFilter(entity));
+  }
+  // If both are active, show all items (unusual but supported)
+
+  // Unread filter
+  if (activeFilters.has('unread')) {
+    predicates.push(unreadFilter);
+  }
+
+  // Type-specific filters (for more precise filtering)
+  const hasTypeFilter =
+    activeFilters.has('document') ||
+    activeFilters.has('task') ||
+    activeFilters.has('email') ||
+    activeFilters.has('people') ||
+    activeFilters.has('teams') ||
+    activeFilters.has('agent') ||
+    activeFilters.has('project') ||
+    activeFilters.has('file');
+
+  if (hasTypeFilter) {
+    predicates.push((entity) => {
+      // Document filter (excludes tasks)
+      if (activeFilters.has('document') && documentFilter(entity)) return true;
+      // Task filter
+      if (activeFilters.has('task') && taskFilter(entity)) return true;
+      // Email filter
+      if (activeFilters.has('email') && emailFilter(entity)) return true;
+      // People filter (DMs)
+      if (activeFilters.has('people') && peopleFilter(entity)) return true;
+      // Teams filter (group channels)
+      if (activeFilters.has('teams') && teamsFilter(entity)) return true;
+      // Agent filter (chats)
+      if (activeFilters.has('agent') && agentFilter(entity)) return true;
+      // Project filter
+      if (activeFilters.has('project') && projectFilter(entity)) return true;
+      // File filter
+      if (activeFilters.has('file') && fileFilter(entity)) return true;
+
+      return false;
+    });
+  }
+
+  if (predicates.length === 0) {
+    return () => true;
+  }
+
+  return (entity) => predicates.every((pred) => pred(entity));
+}
+
+/**
+ * Hook to fetch soup data with proper server + client filtering.
+ *
+ * Search behavior:
+ * - When isServerSearchActive() is true (from search plugin store):
+ *   - Search service is called for content search results
+ *   - Results are merged with DSS results (search results take precedence for same entity)
+ * - enhancingSearchFilter is applied to DSS results only (not search service results)
+ */
+export function useSoupQuery(filters: SoupQueryFilters): SoupQueryResult {
+  const activeFilters = filters.activeFilterIds;
+  const sortMethod = filters.sortMethod ?? (() => SOUP_DEFAULTS.sortMethod);
+  const emailView = filters.emailView;
+  const serverSearchText = filters.serverSearchText;
+  const enhancingSearchFilter = filters.enhancingSearchFilter;
+  const notificationSource = filters.notificationSource;
+
+  // Server search active: provided by search plugin store (considers focus filters)
+  const isServerSearchActive = filters.isServerSearchActive ?? (() => false);
+
+  // Build DSS request body reactively
+  // Default emailView to SOUP_DEFAULTS.emailView ('all') if not provided
+  const requestBody = createMemo<PostSoupRequest>(() =>
+    buildRequestBody(
+      activeFilters(),
+      sortMethod(),
+      emailView?.() ?? SOUP_DEFAULTS.emailView
+    )
+  );
+
+  // Build search query params
+  const searchQueryParams = createMemo(
+    (): SearchArgs => ({
+      params: {
+        cursor: null,
+        page_size: 100,
+      },
+      request: {
+        search_on: 'name_content',
+        match_type: 'partial',
+        terms:
+          (serverSearchText?.() ?? '').length > 0
+            ? [serverSearchText?.() ?? '']
+            : undefined,
+        filters: buildSearchFilters(activeFilters()),
+        include: buildSearchIncludeArray(activeFilters()),
+      },
+    })
+  );
+
+  // Create DSS query
+  const dssQuery = createDssInfiniteQuery(undefined, requestBody);
+
+  // Create search query (disabled when not needed)
+  const searchQuery = createUnifiedSearchInfiniteQuery(searchQueryParams, {
+    disabled: createMemo(() => !isServerSearchActive()),
+  });
+
+  // Raw entities from server (with notification enhancement)
+  // Merges DSS results with search results when search is active
+  // Applies enhancingSearchFilter to DSS results only (search results already have highlights)
+  const rawEntities = createMemo<EnhancedEntity[]>(() => {
+    // Guard against suspense - only access data when not loading
+    const dssLoading = dssQuery.isLoading || dssQuery.isPending;
+    const searchLoading =
+      isServerSearchActive() &&
+      (searchQuery.isLoading || searchQuery.isPending);
+
+    if (dssLoading) return [];
+
+    const dssData = dssQuery.data ?? [];
+
+    // Get the enhancing filter (may be undefined if no search text)
+    const searchFilter = enhancingSearchFilter?.();
+
+    // Helper to enhance entity with notifications
+    const enhanceWithNotifications = (
+      entity: EntityData | WithSearch<EntityData>
+    ): EnhancedEntity => ({
+      ...entity,
+      notifications: useNotificationsForEntity(
+        notificationSource,
+        entity as EntityData
+      ),
+    });
+
+    // If search is active and has results, merge them
+    if (isServerSearchActive() && !searchLoading && searchQuery.data) {
+      const searchData = searchQuery.data as WithSearch<EntityData>[];
+
+      // Create a map of search results by ID (they include search highlight data)
+      const searchMap = new Map<string, WithSearch<EntityData>>();
+      for (const entity of searchData) {
+        searchMap.set(entity.id, entity);
+      }
+
+      // Apply local fuzzy search to DSS entities that are NOT in search results
+      // (Search results already have nameHighlight from server)
+      const dssEntitiesNotInSearch = dssData.filter(
+        (entity: EntityData) => !searchMap.has(entity.id)
+      );
+
+      // Apply enhancing filter to DSS-only entities if available
+      const enhancedDssEntities = searchFilter
+        ? searchFilter(
+            dssEntitiesNotInSearch as unknown as EnhancedEntity[]
+          ).map(enhanceWithNotifications)
+        : dssEntitiesNotInSearch.map(enhanceWithNotifications);
+
+      // Merge: search entities (have server highlights) + enhanced DSS entities
+      const merged: EnhancedEntity[] = [
+        // Search results with notifications
+        ...searchData.map(enhanceWithNotifications),
+        // DSS entities not in search (with local fuzzy highlights if filter active)
+        ...enhancedDssEntities,
+      ];
+
+      return merged;
+    }
+
+    // No server search active - apply local fuzzy search filter to all DSS entities
+    if (searchFilter) {
+      return searchFilter(dssData as unknown as EnhancedEntity[]).map(
+        enhanceWithNotifications
+      );
+    }
+
+    // No search at all - just return DSS entities with notifications
+    return dssData.map(enhanceWithNotifications);
+  });
+
+  // Get client filter function
+  const clientFilterFn = createMemo(() => getClientFilterFn(activeFilters()));
+
+  // Apply client-side filtering
+  const entities = createMemo<EnhancedEntity[]>(() => {
+    const raw = rawEntities();
+    const filterFn = clientFilterFn();
+    return raw.filter(filterFn);
+  });
+
+  // Query state accessors
+  const isLoading = createMemo(
+    () =>
+      dssQuery.isLoading || (isServerSearchActive() && searchQuery.isLoading)
+  );
+  const hasMore = createMemo(() => dssQuery.hasNextPage ?? false);
+  const isFetchingNextPage = createMemo(() => dssQuery.isFetchingNextPage);
+
+  const fetchNextPage = () => {
+    if (dssQuery.hasNextPage && !dssQuery.isFetchingNextPage) {
+      dssQuery.fetchNextPage();
+    }
+  };
+
+  const refetch = () => {
+    dssQuery.refetch();
+    if (isServerSearchActive()) {
+      searchQuery.refetch();
+    }
+  };
+
+  return {
+    entities,
+    rawEntities,
+    isLoading,
+    hasMore,
+    fetchNextPage,
+    isFetchingNextPage,
+    refetch,
+  };
+}

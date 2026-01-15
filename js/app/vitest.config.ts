@@ -65,6 +65,13 @@ export default defineConfig({
           name: 'notifications',
         },
       },
+      {
+        extends: './packages/unified-list/vitest.config.ts',
+        test: {
+          include: ['packages/unified-list/**/*.{test,spec}.{ts,tsx}'],
+          name: 'unified-list',
+        },
+      },
     ],
   },
 });
