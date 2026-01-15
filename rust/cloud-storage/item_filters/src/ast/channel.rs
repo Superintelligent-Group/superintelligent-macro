@@ -1,9 +1,60 @@
+use std::str::FromStr;
+
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{ChannelFilters, ast::ExpandErr};
+
+/// Channel type filter
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(missing_docs)]
+pub enum ChannelTypeFilter {
+    Public,
+    Organization,
+    Private,
+    DirectMessage,
+}
+
+impl ChannelTypeFilter {
+    /// String representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Organization => "organization",
+            Self::Private => "private",
+            Self::DirectMessage => "direct_message",
+        }
+    }
+}
+
+impl FromStr for ChannelTypeFilter {
+    type Err = InvalidChannelType;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "public" => Ok(Self::Public),
+            "organization" => Ok(Self::Organization),
+            "private" => Ok(Self::Private),
+            "direct_message" => Ok(Self::DirectMessage),
+            _ => Err(InvalidChannelType(s.to_owned())),
+        }
+    }
+}
+
+/// Invalid channel type error
+#[derive(Debug, Clone)]
+pub struct InvalidChannelType(pub String);
+
+impl std::fmt::Display for InvalidChannelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid channel type '{}'", self.0)
+    }
+}
+
+impl std::error::Error for InvalidChannelType {}
 
 /// the possible literal values in a channel filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -18,6 +69,8 @@ pub enum ChannelLiteral {
     ChannelId(Uuid),
     /// the message comes from some sender x
     Sender(MacroUserIdStr<'static>),
+    /// the channel is of a specific type
+    ChannelType(ChannelTypeFilter),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -32,6 +85,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            channel_types,
         } = filter_request;
 
         let thread_ids = thread_ids
@@ -58,10 +112,20 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChannelLiteral::Sender), Expr::or)?;
 
-        Ok(
-            [thread_ids, mentions, organizations, channel_ids, sender_ids]
-                .into_iter()
-                .fold_with(Expr::and),
-        )
+        let channel_types = channel_types
+            .iter()
+            .map(|s| ChannelTypeFilter::from_str(s))
+            .try_expand(|r| r.map(ChannelLiteral::ChannelType), Expr::or)?;
+
+        Ok([
+            thread_ids,
+            mentions,
+            organizations,
+            channel_ids,
+            sender_ids,
+            channel_types,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

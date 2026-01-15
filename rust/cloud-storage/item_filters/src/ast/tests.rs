@@ -181,3 +181,52 @@ fn it_expands_other_association() {
 
     assert_eq!(json.trim(), include_str!("tests/other.json").trim());
 }
+
+#[test]
+fn it_expands_channel_filters() {
+    let channel_id = Uuid::new_v4();
+    let f = EntityFilters {
+        channel_filters: ChannelFilters {
+            channel_ids: vec![channel_id.to_string()],
+            channel_types: vec!["public".to_string(), "direct_message".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .channel_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "&": [
+            {
+                "l": {
+                    "ChannelId": channel_id
+                }
+            },
+            {
+                "|": [
+                    {
+                        "l": {
+                            "ChannelType": "public"
+                        }
+                    },
+                    {
+                        "l": {
+                            "ChannelType": "direct_message"
+                        }
+                    }
+                ]
+            }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}

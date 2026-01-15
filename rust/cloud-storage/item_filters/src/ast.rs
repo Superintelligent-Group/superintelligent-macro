@@ -4,7 +4,7 @@
 use crate::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, ProjectFilters,
     ast::{
-        channel::ChannelLiteral,
+        channel::{ChannelLiteral, InvalidChannelType},
         chat::{ChatLiteral, ChatRole},
         email::EmailLiteral,
         project::ProjectLiteral,
@@ -55,6 +55,9 @@ pub enum ExpandErr {
     /// invalid macro user id
     #[error(transparent)]
     MacroIdErr(#[from] macro_user_id::error::ParseErr),
+    /// invalid channel type
+    #[error(transparent)]
+    ChannelTypeErr(#[from] InvalidChannelType),
 }
 
 /// type alias for a maybe empty, cheaply cloneable ast literal tree
