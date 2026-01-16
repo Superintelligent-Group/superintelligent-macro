@@ -235,19 +235,6 @@ export {
 } from './plugins/actionPlugin';
 
 export {
-  // Data pipeline plugin
-  createDataPipelinePlugin,
-  createFilterStage,
-  createSortStage,
-  createDedupeStage,
-  createEnhanceStage,
-  composePipeline,
-  type QuerySource,
-  type PipelineStage,
-  type DataPipelinePluginConfig,
-} from './plugins/dataPipelinePlugin';
-
-export {
   // GroupBy plugin
   createGroupByPlugin,
   createGroupStore,
@@ -284,22 +271,6 @@ export {
   createMinimalGroupHeader,
   createStickyGroupHeader,
 } from './components/GroupHeader';
-
-export {
-  // Virtualization plugin
-  createVirtualizationPlugin,
-  getCachedScrollPosition,
-  setCachedScrollPosition,
-  clearCachedScrollPosition,
-  calculateOverscan,
-  createVirtualizerConfig,
-  type ScrollCacheEntry,
-  type VirtualizationPluginConfig,
-} from './plugins/virtualizationPlugin';
-
-// ============================================================================
-// Components
-// ============================================================================
 
 export {
   EntityRow,

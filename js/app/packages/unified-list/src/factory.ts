@@ -44,14 +44,6 @@ import {
   type ActionPluginConfig,
   type ActionRegistry,
 } from './plugins/actionPlugin';
-import {
-  createDataPipelinePlugin,
-  type DataPipelinePluginConfig,
-} from './plugins/dataPipelinePlugin';
-import {
-  createVirtualizationPlugin,
-  type VirtualizationPluginConfig,
-} from './plugins/virtualizationPlugin';
 
 // ============================================================================
 // Factory Types
@@ -93,10 +85,6 @@ export type UnifiedListFactoryConfig<T extends { id: string }> = {
   search?: SearchPluginConfig<T>;
   /** Action plugin config */
   actions?: ActionPluginConfig<T>;
-  /** Data pipeline config */
-  dataPipeline?: DataPipelinePluginConfig<T>;
-  /** Virtualization config */
-  virtualization?: VirtualizationPluginConfig;
   /** Additional plugins */
   plugins?: Plugin<T, ListController<T>>[];
 };
@@ -172,23 +160,6 @@ export function createUnifiedList<T extends { id: string }>(
     plugins.use(actionPlugin);
   }
 
-  // Register data pipeline plugin
-  if (config.dataPipeline) {
-    plugins.use(
-      createDataPipelinePlugin<T>({
-        ...config.dataPipeline,
-        filterStore,
-        sortStore,
-        searchStore,
-      })
-    );
-  }
-
-  // Register virtualization plugin
-  if (config.virtualization) {
-    plugins.use(createVirtualizationPlugin(config.virtualization));
-  }
-
   // Register additional plugins
   if (config.plugins) {
     plugins.useAll(config.plugins);
@@ -235,14 +206,6 @@ export type UnifiedListBuilder<T extends { id: string }> = {
   withSearch: (config: SearchPluginConfig<T>) => UnifiedListBuilder<T>;
   /** Add action plugin */
   withActions: (config: ActionPluginConfig<T>) => UnifiedListBuilder<T>;
-  /** Add data pipeline */
-  withDataPipeline: (
-    config: DataPipelinePluginConfig<T>
-  ) => UnifiedListBuilder<T>;
-  /** Add virtualization */
-  withVirtualization: (
-    config?: VirtualizationPluginConfig
-  ) => UnifiedListBuilder<T>;
   /** Add custom plugin */
   withPlugin: (plugin: Plugin<T, ListController<T>>) => UnifiedListBuilder<T>;
   /** Build the list instance */
@@ -296,16 +259,6 @@ export function createUnifiedListBuilder<T extends { id: string }>(
 
     withActions(actionConfig) {
       config.actions = actionConfig;
-      return builder;
-    },
-
-    withDataPipeline(pipelineConfig) {
-      config.dataPipeline = pipelineConfig;
-      return builder;
-    },
-
-    withVirtualization(virtConfig) {
-      config.virtualization = virtConfig ?? {};
       return builder;
     },
 
