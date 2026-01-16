@@ -205,6 +205,9 @@ export function createReactiveListState<T>(
   const [scrollOffset, setScrollOffset] = createSignal<number>(
     initial.scrollOffset
   );
+  const [visibleEntityIds, setVisibleEntityIds] = createSignal<string[] | null>(
+    null
+  );
 
   const state: ReactiveListState<T> = {
     entities,
@@ -213,6 +216,7 @@ export function createReactiveListState<T>(
     isLoading,
     hasMore,
     scrollOffset,
+    visibleEntityIds,
   };
 
   const setters: ListStateSetters<T> = {
@@ -222,6 +226,7 @@ export function createReactiveListState<T>(
     setIsLoading,
     setHasMore,
     setScrollOffset,
+    setVisibleEntityIds,
   };
 
   /** Get current state as plain object */

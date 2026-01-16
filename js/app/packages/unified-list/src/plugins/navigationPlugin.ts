@@ -50,29 +50,44 @@ export function createNavigationPlugin<T extends { id: string }>(
   return (controller: ListController<T>): CleanupFn => {
     const cleanups: CleanupFn[] = [];
 
+    /**
+     * Get visible entity IDs in display order.
+     * Uses visibleEntityIds if set (for grouping), otherwise falls back to entities.
+     */
+    const getVisibleIds = (): string[] => {
+      const visibleIds = controller.state.visibleEntityIds();
+      if (visibleIds) return visibleIds;
+      return controller.state.entities().map((e) => e.id);
+    };
+
+    /** Get index of an entity in the visible order */
+    const getVisibleIndex = (entityId: string): number => {
+      return getVisibleIds().indexOf(entityId);
+    };
+
     /** Navigate up one item */
     cleanups.push(
       controller.commands.register(
         ListCommands.NAVIGATE_UP,
         () => {
-          const entities = controller.state.entities();
+          const visibleIds = getVisibleIds();
           const currentId = controller.state.focusedId();
 
-          if (entities.length === 0) return false;
+          if (visibleIds.length === 0) return false;
 
           const currentIndex = currentId
-            ? controller.getEntityIndex(currentId)
-            : entities.length;
+            ? getVisibleIndex(currentId)
+            : visibleIds.length;
 
           const prevIndex = Math.max(currentIndex - 1, 0);
-          const prevEntity = entities[prevIndex];
-          if (!prevEntity) return false;
+          const prevId = visibleIds[prevIndex];
+          if (!prevId) return false;
 
-          controller.setters.setFocusedId(prevEntity.id);
-          onNavigate?.(prevEntity.id);
+          controller.setters.setFocusedId(prevId);
+          onNavigate?.(prevId);
 
           if (autoScroll) {
-            controller.scrollToEntity(prevEntity.id);
+            controller.scrollToEntity(prevId);
           }
 
           return true;
@@ -86,24 +101,22 @@ export function createNavigationPlugin<T extends { id: string }>(
       controller.commands.register(
         ListCommands.NAVIGATE_DOWN,
         () => {
-          const entities = controller.state.entities();
+          const visibleIds = getVisibleIds();
           const currentId = controller.state.focusedId();
 
-          if (entities.length === 0) return false;
+          if (visibleIds.length === 0) return false;
 
-          const currentIndex = currentId
-            ? controller.getEntityIndex(currentId)
-            : -1;
+          const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
 
-          const nextIndex = Math.min(currentIndex + 1, entities.length - 1);
-          const nextEntity = entities[nextIndex];
-          if (!nextEntity) return false;
+          const nextIndex = Math.min(currentIndex + 1, visibleIds.length - 1);
+          const nextId = visibleIds[nextIndex];
+          if (!nextId) return false;
 
-          controller.setters.setFocusedId(nextEntity.id);
-          onNavigate?.(nextEntity.id);
+          controller.setters.setFocusedId(nextId);
+          onNavigate?.(nextId);
 
           if (autoScroll) {
-            controller.scrollToEntity(nextEntity.id);
+            controller.scrollToEntity(nextId);
           }
 
           return true;
@@ -117,15 +130,15 @@ export function createNavigationPlugin<T extends { id: string }>(
       controller.commands.register(
         ListCommands.NAVIGATE_START,
         () => {
-          const entities = controller.state.entities();
-          const firstEntity = entities[0];
-          if (!firstEntity) return false;
+          const visibleIds = getVisibleIds();
+          const firstId = visibleIds[0];
+          if (!firstId) return false;
 
-          controller.setters.setFocusedId(firstEntity.id);
-          onNavigate?.(firstEntity.id);
+          controller.setters.setFocusedId(firstId);
+          onNavigate?.(firstId);
 
           if (autoScroll) {
-            controller.scrollToEntity(firstEntity.id);
+            controller.scrollToEntity(firstId);
           }
 
           return true;
@@ -139,15 +152,15 @@ export function createNavigationPlugin<T extends { id: string }>(
       controller.commands.register(
         ListCommands.NAVIGATE_END,
         () => {
-          const entities = controller.state.entities();
-          const lastEntity = entities[entities.length - 1];
-          if (!lastEntity) return false;
+          const visibleIds = getVisibleIds();
+          const lastId = visibleIds[visibleIds.length - 1];
+          if (!lastId) return false;
 
-          controller.setters.setFocusedId(lastEntity.id);
-          onNavigate?.(lastEntity.id);
+          controller.setters.setFocusedId(lastId);
+          onNavigate?.(lastId);
 
           if (autoScroll) {
-            controller.scrollToEntity(lastEntity.id);
+            controller.scrollToEntity(lastId);
           }
 
           return true;
@@ -161,24 +174,24 @@ export function createNavigationPlugin<T extends { id: string }>(
       controller.commands.register(
         ListCommands.NAVIGATE_PAGE_UP,
         () => {
-          const entities = controller.state.entities();
+          const visibleIds = getVisibleIds();
           const currentId = controller.state.focusedId();
 
-          if (entities.length === 0) return false;
+          if (visibleIds.length === 0) return false;
 
           const currentIndex = currentId
-            ? controller.getEntityIndex(currentId)
-            : entities.length;
+            ? getVisibleIndex(currentId)
+            : visibleIds.length;
 
           const targetIndex = Math.max(currentIndex - pageSize, 0);
-          const targetEntity = entities[targetIndex];
-          if (!targetEntity) return false;
+          const targetId = visibleIds[targetIndex];
+          if (!targetId) return false;
 
-          controller.setters.setFocusedId(targetEntity.id);
-          onNavigate?.(targetEntity.id);
+          controller.setters.setFocusedId(targetId);
+          onNavigate?.(targetId);
 
           if (autoScroll) {
-            controller.scrollToEntity(targetEntity.id);
+            controller.scrollToEntity(targetId);
           }
 
           return true;
@@ -192,27 +205,25 @@ export function createNavigationPlugin<T extends { id: string }>(
       controller.commands.register(
         ListCommands.NAVIGATE_PAGE_DOWN,
         () => {
-          const entities = controller.state.entities();
+          const visibleIds = getVisibleIds();
           const currentId = controller.state.focusedId();
 
-          if (entities.length === 0) return false;
+          if (visibleIds.length === 0) return false;
 
-          const currentIndex = currentId
-            ? controller.getEntityIndex(currentId)
-            : -1;
+          const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
 
           const targetIndex = Math.min(
             currentIndex + pageSize,
-            entities.length - 1
+            visibleIds.length - 1
           );
-          const targetEntity = entities[targetIndex];
-          if (!targetEntity) return false;
+          const targetId = visibleIds[targetIndex];
+          if (!targetId) return false;
 
-          controller.setters.setFocusedId(targetEntity.id);
-          onNavigate?.(targetEntity.id);
+          controller.setters.setFocusedId(targetId);
+          onNavigate?.(targetId);
 
           if (autoScroll) {
-            controller.scrollToEntity(targetEntity.id);
+            controller.scrollToEntity(targetId);
           }
 
           return true;

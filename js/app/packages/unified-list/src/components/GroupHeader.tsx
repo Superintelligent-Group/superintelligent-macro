@@ -22,12 +22,15 @@ export const GROUP_HEADER_HEIGHT = 36;
 function ChevronIcon(props: { collapsed: boolean }): JSX.Element {
   return (
     <svg
-      class="size-4 text-ink-muted transition-transform duration-150"
-      classList={{ '-rotate-90': props.collapsed }}
+      class="size-3.5 text-ink-muted/70 transition-transform duration-150 ease-out"
+      classList={{
+        '-rotate-90': props.collapsed,
+        'rotate-90': !props.collapsed,
+      }}
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.5"
+      stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
     >
@@ -56,7 +59,7 @@ export function GroupHeader(props: GroupHeaderProps): JSX.Element {
 
   return (
     <div
-      class="group-header flex items-center gap-2 px-3 h-9 bg-panel border-b border-edge cursor-pointer select-none transition-colors hover:bg-hover"
+      class="group-header flex items-center gap-1.5 px-3 h-9 bg-accent/[0.03] border-y border-ink/[0.04] cursor-pointer select-none transition-colors hover:bg-accent/[0.06]"
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       role="button"
@@ -71,17 +74,19 @@ export function GroupHeader(props: GroupHeaderProps): JSX.Element {
       {/* Icon */}
       <Show when={props.icon}>
         {(icon) => (
-          <span class="flex size-4 items-center justify-center shrink-0 text-ink-muted">
+          <span class="flex size-4 items-center justify-center shrink-0 text-accent">
             {icon()()}
           </span>
         )}
       </Show>
 
       {/* Label */}
-      <span class="text-sm font-medium text-ink truncate">{props.label}</span>
+      <span class="text-[13px] font-medium text-ink/90 truncate">
+        {props.label}
+      </span>
 
       {/* Count badge */}
-      <span class="ml-auto text-xs text-ink-muted tabular-nums font-mono">
+      <span class="ml-1 px-1.5 py-0.5 rounded text-[11px] text-ink-muted bg-ink/[0.06] tabular-nums">
         {props.count}
       </span>
     </div>
@@ -121,7 +126,7 @@ export function createMinimalGroupHeader(): GroupHeaderRenderer {
 export function createStickyGroupHeader(): GroupHeaderRenderer {
   return (props) => (
     <div
-      class="group-header flex items-center gap-2 px-3 h-9 bg-panel border-b border-edge cursor-pointer select-none sticky top-0 z-10 shadow-sm"
+      class="group-header flex items-center gap-1.5 px-3 h-9 bg-accent/[0.03] border-y border-ink/[0.04] cursor-pointer select-none sticky top-0 z-10 shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/[0.06]"
       onClick={() => props.onToggle(props.groupId)}
       role="button"
       tabIndex={-1}
@@ -132,13 +137,15 @@ export function createStickyGroupHeader(): GroupHeaderRenderer {
       <ChevronIcon collapsed={props.collapsed} />
       <Show when={props.icon}>
         {(icon) => (
-          <span class="flex size-4 items-center justify-center shrink-0 text-ink-muted">
+          <span class="flex size-4 items-center justify-center shrink-0 text-accent">
             {icon()()}
           </span>
         )}
       </Show>
-      <span class="text-sm font-medium text-ink truncate">{props.label}</span>
-      <span class="ml-auto text-xs text-ink-muted tabular-nums font-mono">
+      <span class="text-[13px] font-medium text-ink/90 truncate">
+        {props.label}
+      </span>
+      <span class="ml-1 px-1.5 py-0.5 rounded text-[11px] text-ink-muted bg-ink/[0.06] tabular-nums">
         {props.count}
       </span>
     </div>

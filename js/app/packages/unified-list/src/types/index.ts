@@ -60,6 +60,8 @@ export type ReactiveListState<T> = {
   isLoading: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   scrollOffset: Accessor<number>;
+  /** Visible entity IDs in display order (when grouping is active) */
+  visibleEntityIds: Accessor<string[] | null>;
 };
 
 /** Setters for list state */
@@ -70,6 +72,8 @@ export type ListStateSetters<T> = {
   setIsLoading: Setter<boolean>;
   setHasMore: Setter<boolean>;
   setScrollOffset: Setter<number>;
+  /** Set visible entity IDs (for grouped/filtered display order) */
+  setVisibleEntityIds: Setter<string[] | null>;
 };
 
 // ============================================================================

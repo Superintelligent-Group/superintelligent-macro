@@ -250,6 +250,28 @@ export function UnifiedListView<T extends { id: string }>(
     return groupStore.createDisplayItems(entities);
   });
 
+  // Update visible entity IDs for navigation when grouping changes
+  createEffect(() => {
+    const items = displayItems();
+    const groupStore = props.groupStore;
+
+    // If no grouping active, clear visible entity IDs (navigation uses entities directly)
+    if (!groupStore || !groupStore.enabled()) {
+      controller.setters.setVisibleEntityIds(null);
+      return;
+    }
+
+    // Extract entity IDs from display items (excluding headers)
+    const visibleIds = items
+      .filter(
+        (item): item is typeof item & { type: 'entity' } =>
+          item.type === 'entity'
+      )
+      .map((item) => item.entity.id);
+
+    controller.setters.setVisibleEntityIds(visibleIds);
+  });
+
   // Container ref and size tracking
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement | null>(
     null

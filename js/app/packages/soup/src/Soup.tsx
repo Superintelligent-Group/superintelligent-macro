@@ -41,13 +41,20 @@ import {
   SoupEntityRow as EntityRow,
   ENTITY_HEIGHT,
   createDefaultEntityRowConfig,
+  createGroupStore,
   type RowRenderState,
   type EnhancedEntity,
   type FilterGroup,
   type UnifiedListBuildResult,
   type GroupConfig,
   type GroupRegistry,
+  type GroupStore,
 } from '@unified-list';
+import {
+  SYSTEM_PROPERTY_IDS,
+  PROPERTY_OPTION_IDS,
+} from '@core/component/Properties/constants';
+import type { Property } from '@core/component/Properties/types';
 
 // Soup-specific imports
 import { useSoupQuery } from './useSoupQuery';
@@ -61,6 +68,9 @@ const SERVER_SEARCH_DEBOUNCE_MS = 300;
 // ============================================================================
 // Group By Configuration
 // ============================================================================
+
+/** Grouping mode options */
+export type GroupMode = 'none' | 'type' | 'status';
 
 /** Get the group key for an entity (task is distinct from document) */
 function getEntityTypeGroup(entity: EnhancedEntity): string {
@@ -77,6 +87,55 @@ const ENTITY_TYPE_GROUP_REGISTRY: GroupRegistry = new Map<string, GroupConfig>([
   ['project', { id: 'project', label: 'Projects', order: 5 }],
   ['chat', { id: 'chat', label: 'Agents', order: 6 }],
 ]);
+
+/** Registry of task status groups for grouping */
+const STATUS_GROUP_REGISTRY: GroupRegistry = new Map<string, GroupConfig>([
+  ['not-started', { id: 'not-started', label: 'To Do', order: 1 }],
+  ['in-progress', { id: 'in-progress', label: 'In Progress', order: 2 }],
+  ['in-review', { id: 'in-review', label: 'In Review', order: 3 }],
+  ['completed', { id: 'completed', label: 'Done', order: 4 }],
+  ['canceled', { id: 'canceled', label: 'Canceled', order: 5 }],
+  ['no-status', { id: 'no-status', label: 'No Status', order: 6 }],
+  ['non-task', { id: 'non-task', label: 'Other', order: 7 }],
+]);
+
+/** Map status option ID to group key */
+const STATUS_OPTION_TO_GROUP: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]: 'not-started',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]: 'in-progress',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]: 'in-review',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]: 'completed',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]: 'canceled',
+};
+
+/** Create a status group key function with access to task properties */
+function createStatusGroupKeyFn(
+  getTaskProperties: () => Record<string, Property[]>
+): (entity: EnhancedEntity) => string {
+  return (entity: EnhancedEntity): string => {
+    // Non-tasks go to "other" group
+    if (!isTaskEntity(entity)) return 'non-task';
+
+    const properties = getTaskProperties()[entity.id];
+    if (!properties) return 'no-status';
+
+    // Find the status property
+    const statusProp = properties.find(
+      (p: Property) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+    );
+
+    if (!statusProp || statusProp.valueType !== 'SELECT_STRING') {
+      return 'no-status';
+    }
+
+    const statusValue = statusProp.value;
+    if (!statusValue || statusValue.length === 0) return 'no-status';
+
+    // Map the option ID to our group key
+    const statusOptionId = statusValue[0];
+    return STATUS_OPTION_TO_GROUP[statusOptionId] ?? 'no-status';
+  };
+}
 
 // ============================================================================
 // Types
@@ -170,8 +229,8 @@ export function Soup(props: SoupProps): JSX.Element {
   // Unroll notifications state
   const [unrollNotifications, setUnrollNotifications] = createSignal(false);
 
-  // Group by state
-  const [groupByEnabled, setGroupByEnabled] = createSignal(false);
+  // Group by mode state
+  const [groupMode, setGroupMode] = createSignal<GroupMode>('none');
 
   // Search text state - managed by search plugin via stores.search
   // The plugin handles dual debouncing (20ms local, 300ms server) internally
@@ -254,12 +313,6 @@ export function Soup(props: SoupProps): JSX.Element {
         props.onEntityClick?.(entity);
       },
     })
-    .withGroupBy({
-      groupKeyFn: getEntityTypeGroup,
-      groupRegistry: ENTITY_TYPE_GROUP_REGISTRY,
-      initialEnabled: false,
-      onEnabledChange: setGroupByEnabled,
-    })
     .build();
 
   // ---------------------------------------------------------------------------
@@ -320,6 +373,36 @@ export function Soup(props: SoupProps): JSX.Element {
   const taskPropertiesStore = useTaskProperties(processedEntities);
 
   // ---------------------------------------------------------------------------
+  // Group By Stores
+  // ---------------------------------------------------------------------------
+
+  // Create group store for entity type grouping
+  const typeGroupStore = createGroupStore<EnhancedEntity>(
+    getEntityTypeGroup,
+    ENTITY_TYPE_GROUP_REGISTRY,
+    new Set(),
+    true // enabled by default when this store is active
+  );
+
+  // Create group store for status grouping (needs task properties)
+  const statusGroupStore = createGroupStore<EnhancedEntity>(
+    createStatusGroupKeyFn(taskPropertiesStore),
+    STATUS_GROUP_REGISTRY,
+    new Set(),
+    true // enabled by default when this store is active
+  );
+
+  // Get the active group store based on mode
+  const activeGroupStore = createMemo(
+    (): GroupStore<EnhancedEntity> | undefined => {
+      const mode = groupMode();
+      if (mode === 'type') return typeGroupStore;
+      if (mode === 'status') return statusGroupStore;
+      return undefined;
+    }
+  );
+
+  // ---------------------------------------------------------------------------
   // Row Rendering
   // ---------------------------------------------------------------------------
 
@@ -371,7 +454,7 @@ export function Soup(props: SoupProps): JSX.Element {
         isFetchingNextPage={isFetchingNextPage}
         onFetchMore={fetchNextPage}
         plugins={plugins}
-        groupStore={stores.groupBy}
+        groupStore={activeGroupStore()}
         rowHeight={ENTITY_HEIGHT}
         measurementKey={`${unrollNotifications()}-${stores.search?.isServerSearchActive() ?? false}`}
         renderRow={renderRow}
@@ -392,8 +475,8 @@ export function Soup(props: SoupProps): JSX.Element {
           setPreviewEnabled={setPreviewEnabled}
           unrollNotifications={unrollNotifications}
           setUnrollNotifications={setUnrollNotifications}
-          groupByEnabled={groupByEnabled}
-          setGroupByEnabled={setGroupByEnabled}
+          groupMode={groupMode}
+          setGroupMode={setGroupMode}
           onFilterChange={setActiveFilterIds}
         />
 
@@ -446,15 +529,14 @@ type SoupToolbarProps = {
   setPreviewEnabled: Setter<boolean>;
   unrollNotifications: Accessor<boolean>;
   setUnrollNotifications: Setter<boolean>;
-  groupByEnabled: Accessor<boolean>;
-  setGroupByEnabled: Setter<boolean>;
+  groupMode: Accessor<GroupMode>;
+  setGroupMode: Setter<GroupMode>;
   onFilterChange: Setter<Set<string>>;
 };
 
 function SoupToolbar(props: SoupToolbarProps): JSX.Element {
   const filterStore = () => props.stores.filter;
   const searchStore = () => props.stores.search;
-  const groupByStore = () => props.stores.groupBy;
   const activeFilters = () => filterStore()?.activeFilterIds() ?? new Set();
 
   const toggleFilter = (filterId: string) => {
@@ -605,19 +687,21 @@ function SoupToolbar(props: SoupToolbarProps): JSX.Element {
           <span>Unroll Notifications</span>
         </label>
 
-        {/* Group By Toggle */}
-        <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            class="rounded"
-            checked={groupByStore()?.enabled() ?? false}
-            onChange={(e) => {
-              groupByStore()?.setEnabled(e.currentTarget.checked);
-              props.setGroupByEnabled(e.currentTarget.checked);
-            }}
-          />
-          <span>Group By Type</span>
-        </label>
+        {/* Group By Dropdown */}
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-ink-muted">Group:</span>
+          <select
+            class="px-2 py-1 rounded border border-divider bg-panel text-sm"
+            value={props.groupMode()}
+            onChange={(e) =>
+              props.setGroupMode(e.currentTarget.value as GroupMode)
+            }
+          >
+            <option value="none">None</option>
+            <option value="type">By Type</option>
+            <option value="status">By Status</option>
+          </select>
+        </div>
       </div>
     </UnifiedListView.Toolbar>
   );
