@@ -45,6 +45,8 @@ import {
   type EnhancedEntity,
   type FilterGroup,
   type UnifiedListBuildResult,
+  type GroupConfig,
+  type GroupRegistry,
 } from '@unified-list';
 
 // Soup-specific imports
@@ -55,6 +57,26 @@ import { createSoupFilterConfigs } from './filterConfigs';
 // Debounce constants
 const LOCAL_SEARCH_DEBOUNCE_MS = 20;
 const SERVER_SEARCH_DEBOUNCE_MS = 300;
+
+// ============================================================================
+// Group By Configuration
+// ============================================================================
+
+/** Get the group key for an entity (task is distinct from document) */
+function getEntityTypeGroup(entity: EnhancedEntity): string {
+  if (isTaskEntity(entity)) return 'task';
+  return entity.type;
+}
+
+/** Registry of entity type groups for grouping */
+const ENTITY_TYPE_GROUP_REGISTRY: GroupRegistry = new Map<string, GroupConfig>([
+  ['task', { id: 'task', label: 'Tasks', order: 1 }],
+  ['email', { id: 'email', label: 'Mail', order: 2 }],
+  ['document', { id: 'document', label: 'Documents', order: 3 }],
+  ['channel', { id: 'channel', label: 'Channels', order: 4 }],
+  ['project', { id: 'project', label: 'Projects', order: 5 }],
+  ['chat', { id: 'chat', label: 'Agents', order: 6 }],
+]);
 
 // ============================================================================
 // Types
@@ -148,6 +170,9 @@ export function Soup(props: SoupProps): JSX.Element {
   // Unroll notifications state
   const [unrollNotifications, setUnrollNotifications] = createSignal(false);
 
+  // Group by state
+  const [groupByEnabled, setGroupByEnabled] = createSignal(false);
+
   // Search text state - managed by search plugin via stores.search
   // The plugin handles dual debouncing (20ms local, 300ms server) internally
 
@@ -228,6 +253,12 @@ export function Soup(props: SoupProps): JSX.Element {
         }
         props.onEntityClick?.(entity);
       },
+    })
+    .withGroupBy({
+      groupKeyFn: getEntityTypeGroup,
+      groupRegistry: ENTITY_TYPE_GROUP_REGISTRY,
+      initialEnabled: false,
+      onEnabledChange: setGroupByEnabled,
     })
     .build();
 
@@ -340,6 +371,7 @@ export function Soup(props: SoupProps): JSX.Element {
         isFetchingNextPage={isFetchingNextPage}
         onFetchMore={fetchNextPage}
         plugins={plugins}
+        groupStore={stores.groupBy}
         rowHeight={ENTITY_HEIGHT}
         measurementKey={`${unrollNotifications()}-${stores.search?.isServerSearchActive() ?? false}`}
         renderRow={renderRow}
@@ -360,6 +392,8 @@ export function Soup(props: SoupProps): JSX.Element {
           setPreviewEnabled={setPreviewEnabled}
           unrollNotifications={unrollNotifications}
           setUnrollNotifications={setUnrollNotifications}
+          groupByEnabled={groupByEnabled}
+          setGroupByEnabled={setGroupByEnabled}
           onFilterChange={setActiveFilterIds}
         />
 
@@ -412,12 +446,15 @@ type SoupToolbarProps = {
   setPreviewEnabled: Setter<boolean>;
   unrollNotifications: Accessor<boolean>;
   setUnrollNotifications: Setter<boolean>;
+  groupByEnabled: Accessor<boolean>;
+  setGroupByEnabled: Setter<boolean>;
   onFilterChange: Setter<Set<string>>;
 };
 
 function SoupToolbar(props: SoupToolbarProps): JSX.Element {
   const filterStore = () => props.stores.filter;
   const searchStore = () => props.stores.search;
+  const groupByStore = () => props.stores.groupBy;
   const activeFilters = () => filterStore()?.activeFilterIds() ?? new Set();
 
   const toggleFilter = (filterId: string) => {
@@ -566,6 +603,20 @@ function SoupToolbar(props: SoupToolbarProps): JSX.Element {
             }
           />
           <span>Unroll Notifications</span>
+        </label>
+
+        {/* Group By Toggle */}
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            class="rounded"
+            checked={groupByStore()?.enabled() ?? false}
+            onChange={(e) => {
+              groupByStore()?.setEnabled(e.currentTarget.checked);
+              props.setGroupByEnabled(e.currentTarget.checked);
+            }}
+          />
+          <span>Group By Type</span>
         </label>
       </div>
     </UnifiedListView.Toolbar>

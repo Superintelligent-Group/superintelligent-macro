@@ -47,12 +47,15 @@ import {
   type SelectionStore,
 } from './plugins/selectionPlugin';
 import { createHotkeyPlugin } from './plugins/hotkeyPlugin';
-import {
-  createSearchPlugin,
-  type SearchStore,
-  type EnhancingSearchFilter,
-} from './plugins/searchPlugin';
+import { createSearchPlugin, type SearchStore } from './plugins/searchPlugin';
 import { createActionPlugin } from './plugins/actionPlugin';
+import { createGroupByPlugin } from './plugins/groupByPlugin';
+import type {
+  GroupId,
+  GroupKeyFn,
+  GroupRegistry,
+  GroupStore,
+} from './types/groupBy';
 
 // ============================================================================
 // Types
@@ -121,6 +124,22 @@ export type UnifiedListConfig<T extends { id: string }> = {
       options?: { preview?: boolean; newSplit?: boolean }
     ) => void;
   };
+
+  /** GroupBy configuration */
+  groupBy?: {
+    /** Function to extract group key from entity */
+    groupKeyFn: GroupKeyFn<T>;
+    /** Registry mapping group IDs to their configuration */
+    groupRegistry: GroupRegistry;
+    /** Initially collapsed group IDs */
+    initialCollapsed?: Set<GroupId>;
+    /** Whether grouping starts enabled (default: true) */
+    initialEnabled?: boolean;
+    /** Callback when collapse state changes */
+    onCollapseChange?: (collapsedGroups: Set<GroupId>) => void;
+    /** Callback when enabled state changes */
+    onEnabledChange?: (enabled: boolean) => void;
+  };
 };
 
 /** Result of building a unified list */
@@ -134,6 +153,7 @@ export type UnifiedListBuildResult<T extends { id: string }> = {
     sort?: SortStore<T>;
     selection?: SelectionStore;
     search?: SearchStore<T>;
+    groupBy?: GroupStore<T>;
   };
 };
 
@@ -175,6 +195,11 @@ export type UnifiedListBuilder<T extends { id: string }> = {
     config: UnifiedListConfig<T>['actions']
   ) => UnifiedListBuilder<T>;
 
+  /** Add group-by support */
+  withGroupBy: (
+    config: UnifiedListConfig<T>['groupBy']
+  ) => UnifiedListBuilder<T>;
+
   /** Build the final configuration */
   build: () => UnifiedListBuildResult<T>;
 };
@@ -190,6 +215,7 @@ export function createUnifiedList<
   let sortStore: SortStore<T> | undefined;
   let selectionStore: SelectionStore | undefined;
   let searchStore: SearchStore<T> | undefined;
+  let groupByStore: GroupStore<T> | undefined;
 
   const builder: UnifiedListBuilder<T> = {
     withFilters(filterConfig) {
@@ -224,6 +250,11 @@ export function createUnifiedList<
 
     withActions(actionConfig) {
       config.actions = actionConfig;
+      return builder;
+    },
+
+    withGroupBy(groupByConfig) {
+      config.groupBy = groupByConfig;
       return builder;
     },
 
@@ -312,6 +343,20 @@ export function createUnifiedList<
         );
       }
 
+      // GroupBy plugin
+      if (config.groupBy) {
+        const groupByPlugin = createGroupByPlugin<T>({
+          groupKeyFn: config.groupBy.groupKeyFn,
+          groupRegistry: config.groupBy.groupRegistry,
+          initialCollapsed: config.groupBy.initialCollapsed,
+          initialEnabled: config.groupBy.initialEnabled,
+          onCollapseChange: config.groupBy.onCollapseChange,
+          onEnabledChange: config.groupBy.onEnabledChange,
+        });
+        plugins.push(groupByPlugin);
+        groupByStore = groupByPlugin.store;
+      }
+
       return {
         plugins,
         stores: {
@@ -319,6 +364,7 @@ export function createUnifiedList<
           sort: sortStore,
           selection: selectionStore,
           search: searchStore,
+          groupBy: groupByStore,
         },
       };
     },

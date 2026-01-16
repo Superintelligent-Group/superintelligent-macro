@@ -248,6 +248,44 @@ export {
 } from './plugins/dataPipelinePlugin';
 
 export {
+  // GroupBy plugin
+  createGroupByPlugin,
+  createGroupStore,
+  GroupByCommands,
+  getEntityFromDisplayItem,
+  findEntityDisplayIndex,
+  getEntitiesFromDisplayItems,
+  findNextEntityIndex,
+  findPrevEntityIndex,
+} from './plugins/groupByPlugin';
+
+// GroupBy types
+export type {
+  GroupId,
+  GroupKeyFn,
+  GroupConfig,
+  GroupRegistry,
+  HeaderDisplayItem,
+  EntityDisplayItem,
+  DisplayItem,
+  GroupStore,
+  GroupByPluginConfig,
+  GroupHeaderProps,
+  GroupHeaderRenderer,
+} from './types/groupBy';
+
+export { isEntityItem, isHeaderItem, getDisplayItemKey } from './types/groupBy';
+
+// GroupBy components
+export {
+  GroupHeader,
+  GROUP_HEADER_HEIGHT,
+  createGroupHeaderRenderer,
+  createMinimalGroupHeader,
+  createStickyGroupHeader,
+} from './components/GroupHeader';
+
+export {
   // Virtualization plugin
   createVirtualizationPlugin,
   getCachedScrollPosition,

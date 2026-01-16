@@ -56,6 +56,13 @@ import type {
 } from '../types';
 import { createListController } from '../core/controller';
 import { createPluginManager } from '../core/pluginManager';
+import type {
+  GroupStore,
+  DisplayItem,
+  GroupHeaderRenderer,
+} from '../types/groupBy';
+import { isHeaderItem } from '../types/groupBy';
+import { GroupHeader, GROUP_HEADER_HEIGHT } from './GroupHeader';
 
 // ============================================================================
 // Types
@@ -123,6 +130,15 @@ export type UnifiedListViewProps<T extends { id: string }> = {
 
   /** Key that triggers re-measurement when changed (e.g., when row content expands/collapses) */
   measurementKey?: string | number | boolean;
+
+  /** Group store from GroupByPlugin (enables grouping when provided + enabled) */
+  groupStore?: GroupStore<T>;
+
+  /** Custom group header renderer (optional, defaults to GroupHeader) */
+  renderGroupHeader?: GroupHeaderRenderer;
+
+  /** Group header row height (default: 36) */
+  groupHeaderHeight?: number;
 };
 
 // ============================================================================
@@ -212,6 +228,28 @@ export function UnifiedListView<T extends { id: string }>(
     controller.setters.setHasMore(hasMore());
   });
 
+  // Grouping support
+  const groupHeaderHeight = () =>
+    props.groupHeaderHeight ?? GROUP_HEADER_HEIGHT;
+
+  // Compute display items - either grouped (headers + entities) or plain entities
+  const displayItems = createMemo((): DisplayItem<T>[] => {
+    const entities = controller.state.entities();
+    const groupStore = props.groupStore;
+
+    // No grouping or grouping disabled - wrap entities
+    if (!groupStore || !groupStore.enabled()) {
+      return entities.map((entity) => ({
+        type: 'entity' as const,
+        entity,
+        groupId: '',
+      }));
+    }
+
+    // Grouping enabled - use plugin's transform
+    return groupStore.createDisplayItems(entities);
+  });
+
   // Container ref and size tracking
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement | null>(
     null
@@ -250,10 +288,16 @@ export function UnifiedListView<T extends { id: string }>(
     const container = containerRef();
     if (!container) return null;
 
+    const items = displayItems();
+
     return createVirtualizer({
-      count: controller.state.entities().length,
+      count: items.length,
       getScrollElement: () => container,
-      estimateSize: () => rowHeight(),
+      estimateSize: (index) => {
+        const item = items[index];
+        // Headers have different height than entity rows
+        return item?.type === 'header' ? groupHeaderHeight() : rowHeight();
+      },
       overscan: computedOverscan(),
       // Enable dynamic row height measurement
       measureElement: (element) => element.getBoundingClientRect().height,
@@ -390,7 +434,7 @@ export function UnifiedListView<T extends { id: string }>(
           </Show>
 
           {/* Virtualized list */}
-          <Show when={controller.state.entities().length > 0}>
+          <Show when={displayItems().length > 0}>
             <div
               style={{
                 height: `${virtualizer()?.getTotalSize() ?? 0}px`,
@@ -399,42 +443,85 @@ export function UnifiedListView<T extends { id: string }>(
             >
               <For each={virtualizer()?.getVirtualItems() ?? []}>
                 {(virtualRow) => {
-                  const entity = () =>
-                    controller.state.entities()[virtualRow.index];
-                  const isFocused = () =>
-                    controller.state.focusedId() === entity()?.id;
-                  const isSelected = () =>
-                    controller.state.selectedIds().has(entity()?.id ?? '');
+                  const item = () => displayItems()[virtualRow.index];
 
                   return (
-                    <Show when={entity()}>
-                      {(e) => (
-                        <div
-                          ref={(el) => {
-                            // Delay measurement to ensure DOM has rendered content
-                            queueMicrotask(() =>
-                              virtualizer()?.measureElement(el)
-                            );
-                          }}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                          data-index={virtualRow.index}
-                          data-entity-id={e().id}
-                        >
-                          {props.renderRow(e(), {
-                            index: virtualRow.index,
-                            focused: isFocused(),
-                            selected: isFocused(), // For visual "active" state
-                            checked: isSelected(), // For multi-select checkbox state
-                            triggerMeasure,
-                          })}
-                        </div>
-                      )}
+                    <Show when={item()}>
+                      {(displayItem) => {
+                        // Handle header items
+                        if (isHeaderItem(displayItem())) {
+                          const header = displayItem() as ReturnType<
+                            typeof displayItems
+                          >[number] & { type: 'header' };
+                          const HeaderComponent =
+                            props.renderGroupHeader ?? GroupHeader;
+
+                          return (
+                            <div
+                              ref={(el) => {
+                                queueMicrotask(() =>
+                                  virtualizer()?.measureElement(el)
+                                );
+                              }}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                              data-index={virtualRow.index}
+                              data-group-header={header.groupId}
+                            >
+                              <HeaderComponent
+                                groupId={header.groupId}
+                                label={header.label}
+                                icon={header.icon}
+                                count={header.count}
+                                collapsed={header.collapsed}
+                                onToggle={props.groupStore!.toggleGroup}
+                              />
+                            </div>
+                          );
+                        }
+
+                        // Handle entity items
+                        const entityItem = displayItem() as ReturnType<
+                          typeof displayItems
+                        >[number] & { type: 'entity' };
+                        const entity = entityItem.entity;
+                        const isFocused = () =>
+                          controller.state.focusedId() === entity.id;
+                        const isSelected = () =>
+                          controller.state.selectedIds().has(entity.id);
+
+                        return (
+                          <div
+                            ref={(el) => {
+                              queueMicrotask(() =>
+                                virtualizer()?.measureElement(el)
+                              );
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                            data-index={virtualRow.index}
+                            data-entity-id={entity.id}
+                          >
+                            {props.renderRow(entity, {
+                              index: virtualRow.index,
+                              focused: isFocused(),
+                              selected: isFocused(),
+                              checked: isSelected(),
+                              triggerMeasure,
+                            })}
+                          </div>
+                        );
+                      }}
                     </Show>
                   );
                 }}
