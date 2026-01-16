@@ -2,15 +2,15 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderControls,
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -24,7 +24,7 @@ import { refetchHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { onCleanup, onMount } from 'solid-js';
 
-export function TopBar() {
+export function HeaderControls() {
   const blockId = useBlockId();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
@@ -64,18 +64,16 @@ export function TopBar() {
           lockRename={false}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="chat"
-            name={chatName()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1 h-full">
+      <SplitHeaderControls>
+        <SplitFileMenu
+          id={blockId}
+          itemType="chat"
+          name={chatName()}
+          ops={ops}
+        />
+      </SplitHeaderControls>
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
           <DeprecatedIconButton
             icon={Notepad}
             size="sm"
@@ -88,17 +86,15 @@ export function TopBar() {
             documentName={chatName()}
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={chatName()}
-              userPermissions={userPermissions()}
-              itemType="chat"
-            />
-          </div>
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={chatName()}
+            userPermissions={userPermissions()}
+            itemType="chat"
+          />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

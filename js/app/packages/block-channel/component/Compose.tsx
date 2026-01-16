@@ -3,7 +3,6 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { isInBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -110,9 +109,6 @@ export function ChannelCompose() {
           ]}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="h-full items-center flex" p-1></div>
-      </SplitToolbarLeft>
       <div
         class="relative flex flex-col w-full h-full panel"
         use:fileFolderDrop={{

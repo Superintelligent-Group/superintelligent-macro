@@ -2,15 +2,15 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderControls,
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
@@ -21,14 +21,14 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import DownloadSimple from '@icon/regular/download-simple.svg';
+import Download from '@icon/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { useGetFileBlob } from '../signal/blockData';
 
-export function TopBar() {
+export function HeaderControls() {
   const blockId = useBlockId();
-  const fileName = useBlockDocumentName();
+  const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
   const userPermissions = useGetPermissions();
@@ -50,7 +50,7 @@ export function TopBar() {
     { op: 'moveToProject' },
     {
       label: 'Download',
-      icon: DownloadSimple,
+      icon: Download,
       action: downloadDocument,
       divideAbove: true,
     },
@@ -62,35 +62,31 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="document"
-            name={fileName()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+      <SplitHeaderControls>
+        <SplitFileMenu
+          id={blockId}
+          itemType="document"
+          name={name()}
+          ops={ops}
+        />
+      </SplitHeaderControls>
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
           <ReferencesModal
             documentId={blockId}
-            documentName={fileName()}
+            documentName={name()}
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={fileName()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={name()}
+            userPermissions={userPermissions()}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
+          />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

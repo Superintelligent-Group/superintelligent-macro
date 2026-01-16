@@ -3,6 +3,7 @@ import {
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
 import {
+  SplitHeaderControls,
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
@@ -10,10 +11,6 @@ import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
@@ -45,7 +42,7 @@ import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
 
-export function TopBar() {
+export function HeaderControls() {
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
   const hasModificationData = useHasModificationData();
@@ -172,27 +169,23 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-      <SplitToolbarLeft>
+      <SplitHeaderControls>
         <Show when={pdfDocumentProxy()}>
-          <div class="flex items-center p-1">
+          <div class="flex items-center gap-2">
             <SplitFileMenu
               id={documentId}
               itemType="document"
               name={fileName()}
               ops={ops}
             />
-            <div class="w-5" />
             <PageNumberInput />
-            <div class="w-5" />
             {ENABLE_PDF_MARKUP && <MarkupToolbar />}
           </div>
         </Show>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+      </SplitHeaderControls>
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
+          <BlockLiveIndicators />
           <Show when={ENABLE_REFERENCES_MODAL}>
             <ReferencesModal
               documentId={documentId}
@@ -205,19 +198,17 @@ export function TopBar() {
             blockType="pdf"
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={documentId}
-              name={fileName()}
-              userPermissions={userPermissions()}
-              copyLink={copyLink}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={documentId}
+            name={fileName()}
+            userPermissions={userPermissions()}
+            copyLink={copyLink}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
+          />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

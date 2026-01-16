@@ -2,19 +2,19 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderControls,
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { ReferencesModal } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal } from '@core/signal/load';
+import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
@@ -23,24 +23,18 @@ import {
 import { downloadFile } from '@filesystem/download';
 import Download from '@icon/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { toast } from 'core/component/Toast/Toast';
-import { useGetFileBlob } from '../signal/blockData';
 
-export function TopBar() {
+export function HeaderControls() {
   const blockId = useBlockId();
+  const imageFile = blockFileSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const getBlob = useGetFileBlob();
   const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(async () => {
-    try {
-      const blob = await getBlob();
-      downloadFile(blob, downloadName());
-    } catch (e) {
-      console.error('error downloading file', e);
-      toast.failure('Error downloading file');
-    }
+    const file = imageFile();
+    if (!file) return;
+    downloadFile(file, downloadName());
   });
 
   const ops: FileOperation[] = [
@@ -62,35 +56,31 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={blockId}
-            itemType="document"
-            name={name()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+      <SplitHeaderControls>
+        <SplitFileMenu
+          id={blockId}
+          itemType="document"
+          name={name()}
+          ops={ops}
+        />
+      </SplitHeaderControls>
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
           <ReferencesModal
             documentId={blockId}
             documentName={name()}
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={name()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={name()}
+            userPermissions={userPermissions()}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
+          />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

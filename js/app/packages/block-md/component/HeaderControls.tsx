@@ -4,6 +4,7 @@ import {
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
 import {
+  SplitHeaderControls,
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
@@ -12,10 +13,6 @@ import {
   SplitPermissionsBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import {
   setShowCommentsPreference,
   showCommentsPreference,
@@ -42,7 +39,7 @@ import { Show } from 'solid-js';
 import { HistoryModal } from './History';
 import { MarkdownPropertiesModal } from './MarkdownPropertiesModal';
 
-export function TopBar() {
+export function HeaderControls() {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -74,19 +71,17 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-      <SplitToolbarLeft>
+      <SplitHeaderControls>
         <SplitFileMenu
           id={blockId}
           itemType={itemType}
           name={name()}
           ops={ops}
         />
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+      </SplitHeaderControls>
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
+          <BlockLiveIndicators />
           <Show
             when={
               ENABLE_MARKDOWN_LIVE_COLLABORATION &&
@@ -116,22 +111,20 @@ export function TopBar() {
             }}
           />
           <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={name()}
-              userPermissions={permissions()}
-              itemType={itemType}
-            />
-          </div>
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={name()}
+            userPermissions={permissions()}
+            itemType={itemType}
+          />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }
 
-export function InstructionsTopBar() {
+export function InstructionsHeaderControls() {
   const canEdit = useCanEdit();
   const blockId = useBlockId();
   return (
@@ -139,8 +132,8 @@ export function InstructionsTopBar() {
       <SplitHeaderLeft>
         <StaticSplitLabel label="AI Instructions" iconType="md" />
       </SplitHeaderLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+      <SplitHeaderRight>
+        <div class="flex items-center gap-1">
           <Show
             when={
               ENABLE_MARKDOWN_LIVE_COLLABORATION &&
@@ -151,7 +144,7 @@ export function InstructionsTopBar() {
             <HistoryModal documentId={blockId} />
           </Show>
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

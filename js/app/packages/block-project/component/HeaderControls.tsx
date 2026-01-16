@@ -2,15 +2,15 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
+import {
+  SplitHeaderControls,
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
@@ -34,7 +34,7 @@ import { ProjectPropertiesModal } from './ProjectPropertiesModal';
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
 
-export function TopBar() {
+export function HeaderControls() {
   const splitPanelContext = useSplitPanelOrThrow();
   const [preview] = splitPanelContext.previewState;
   const id = useBlockId();
@@ -68,7 +68,7 @@ export function TopBar() {
       : []),
   ]);
 
-  const showToolbarRight = () => {
+  const showHeaderRight = () => {
     if (!ENABLE_PROJECT_VIEW_PREVIEW) return true;
     return !preview();
   };
@@ -78,8 +78,8 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <SplitToolbarLeft class="flex-0">
-        <div class="flex gap-2 p-1">
+      <SplitHeaderControls>
+        <div class="flex gap-2 flex-shrink-0">
           <Show when={ops().length > 0}>
             <SplitFileMenu
               id={id}
@@ -92,28 +92,26 @@ export function TopBar() {
             </Show>
           </Show>
         </div>
-      </SplitToolbarLeft>
-      <Show when={showToolbarRight()}>
-        <SplitToolbarRight>
-          <div class="flex items-center p-1">
-            <div class="flex items-center">
-              <Show when={!isSpecialProject}>
-                <ProjectPropertiesModal buttonSize="sm" name={name()} />
-              </Show>
-              <SplitPermissionsBadge />
-              <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-                <ShareButton
-                  id={id}
-                  name={name()}
-                  userPermissions={permissions()}
-                  copyLink={handleCopyLink}
-                  itemType="project"
-                  owner={owner()}
-                />
-              </Show>
-            </div>
+      </SplitHeaderControls>
+      <Show when={showHeaderRight()}>
+        <SplitHeaderRight>
+          <div class="flex items-center gap-1">
+            <Show when={!isSpecialProject}>
+              <ProjectPropertiesModal buttonSize="sm" name={name()} />
+            </Show>
+            <SplitPermissionsBadge />
+            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
+              <ShareButton
+                id={id}
+                name={name()}
+                userPermissions={permissions()}
+                copyLink={handleCopyLink}
+                itemType="project"
+                owner={owner()}
+              />
+            </Show>
           </div>
-        </SplitToolbarRight>
+        </SplitHeaderRight>
       </Show>
     </>
   );

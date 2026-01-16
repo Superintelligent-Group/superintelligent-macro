@@ -30,9 +30,8 @@ export type SplitPanelContextType = {
   previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
+    headerControls?: HTMLDivElement;
     headerRight?: HTMLDivElement;
-    toolbarLeft?: HTMLDivElement;
-    toolbarRight?: HTMLDivElement;
   };
 };
 

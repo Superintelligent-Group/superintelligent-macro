@@ -232,13 +232,19 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             ctx.layoutRefs.headerLeft = ref;
           }}
         />
+        <div
+          class="flex items-center h-full shrink-0"
+          ref={(ref) => {
+            ctx.layoutRefs.headerControls = ref;
+          }}
+        />
 
         {/* space filler */}
         <div class="h-full grow-1" />
 
         <Show when={!isTouchDevice() || !isMobileWidth()}>
           <div
-            class="min-w-4 h-full shrink-0"
+            class="flex items-center h-full shrink-0"
             ref={(ref) => {
               ctx.layoutRefs.headerRight = ref;
             }}
@@ -297,6 +303,33 @@ export function SplitHeaderRight(props: ParentProps<{ order?: number }>) {
     <Show when={ctx.layoutRefs.headerRight}>
       <Portal
         mount={ctx.layoutRefs.headerRight}
+        ref={(div) => {
+          setPortalRef(div);
+          div.style.display = 'contents';
+        }}
+      >
+        {props.children}
+      </Portal>
+    </Show>
+  );
+}
+
+export function SplitHeaderControls(props: ParentProps<{ order?: number }>) {
+  const ctx = useContext(SplitPanelContext);
+  if (!ctx)
+    throw new Error(
+      '<SplitHeaderControls> must be used within a <SplitLayout>'
+    );
+  const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
+  createEffect(() => {
+    const ref = portalRef();
+    if (!ref) return;
+    ref.style.order = props.order?.toString() ?? '0';
+  });
+  return (
+    <Show when={ctx.layoutRefs.headerControls}>
+      <Portal
+        mount={ctx.layoutRefs.headerControls}
         ref={(div) => {
           setPortalRef(div);
           div.style.display = 'contents';

@@ -3,6 +3,7 @@ import {
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
 import {
+  SplitHeaderControls,
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
@@ -10,10 +11,6 @@ import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
 import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
@@ -42,7 +39,7 @@ const { track, TrackingEvents } = withAnalytics();
 
 export const connectorTypeMenuTriggerSignal = createBlockSignal(false);
 
-export function TopBar() {
+export function HeaderControls() {
   const toolManager = useToolManager();
   const { getLocation } = useRenderState();
   const getCurrentSavedFile = currentSavedFile.get;
@@ -107,21 +104,17 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
+      <SplitHeaderControls>
+        <SplitFileMenu
+          id={documentId}
+          itemType="document"
+          name={fileName()}
+          ops={ops}
+        />
+      </SplitHeaderControls>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-      <SplitToolbarLeft>
-        <div class="p-1">
-          <SplitFileMenu
-            id={documentId}
-            itemType="document"
-            name={fileName()}
-            ops={ops}
-          />
-        </div>
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <div class="flex items-center p-1">
+        <div class="flex items-center gap-1">
+          <BlockLiveIndicators />
           <Show when={ENABLE_REFERENCES_MODAL}>
             <ReferencesModal
               documentId={documentId}
@@ -134,21 +127,19 @@ export function TopBar() {
             blockType="canvas"
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <Show when={canvasFile()} keyed>
-              <ShareButton
-                id={documentId}
-                name={fileName()}
-                userPermissions={userPermissions()}
-                copyLink={copyLink}
-                itemType="document"
-                owner={blockMetadataSignal()?.owner}
-              />
-            </Show>
-          </div>
+          <SplitPermissionsBadge />
+          <Show when={canvasFile()} keyed>
+            <ShareButton
+              id={documentId}
+              name={fileName()}
+              userPermissions={userPermissions()}
+              copyLink={copyLink}
+              itemType="document"
+              owner={blockMetadataSignal()?.owner}
+            />
+          </Show>
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </div>
   );
 }

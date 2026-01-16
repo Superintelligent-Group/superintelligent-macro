@@ -145,9 +145,9 @@ import type { PropertyFilter } from './PropertyFilterTypes';
 import { useUpsertSavedViewMutation } from './Soup';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
+  SplitHeaderControls,
+  SplitHeaderRight,
+} from './split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   type DisplayOptions,
@@ -1579,7 +1579,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   return (
     <>
       <Show when={!props.hideToolbar}>
-        <SplitToolbarRight order={5}>
+        <SplitHeaderRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
               <Show when={preview()}>
@@ -1808,7 +1808,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               </div>
             </DropdownMenu>
           </div>
-        </SplitToolbarRight>
+        </SplitHeaderRight>
       </Show>
       <ContextMenu
         forceMount={contextAndModalState.contextMenuOpen}
@@ -2202,9 +2202,9 @@ function _SearchBar(props: {
       }
     });
 
-    const toolbarLeft = splitContext.layoutRefs.toolbarLeft;
-    if (toolbarLeft) {
-      mutationObserver.observe(toolbarLeft, {
+    const headerControls = splitContext.layoutRefs.headerControls;
+    if (headerControls) {
+      mutationObserver.observe(headerControls, {
         childList: true,
         subtree: true,
       });
@@ -2249,7 +2249,7 @@ function _SearchBar(props: {
   });
 
   return (
-    <SplitToolbarLeft class="min-w-0">
+    <SplitHeaderControls class="min-w-0">
       <div class="flex ml-2 h-full items-center gap-1">
         <Show
           when={props.isLoading() && searchText()}
@@ -2321,6 +2321,6 @@ function _SearchBar(props: {
           class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate min-w-0"
         />
       </div>
-    </SplitToolbarLeft>
+    </SplitHeaderControls>
   );
 }

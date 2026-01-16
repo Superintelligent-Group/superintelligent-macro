@@ -42,9 +42,8 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     ...props.splitPanelContext.layoutRefs,
   };
   // In preview we intentionally do NOT render the split header/title row.
-  // We only provide toolbar slots (Share, etc).
+  // We provide headerControls and headerRight slots for block controls.
   scopedLayoutRefs.headerLeft = undefined;
-  scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
     const { getSplitCount } = useSplitLayout();
@@ -108,8 +107,8 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   }, props.selectedEntity.id);
 
   createRenderEffect(() => {
-    // noop: previously we constrained toolbarLeft width based on the main split's
-    // halfSplitState. This caused preview topbars (e.g. the hamburger menu) to
+    // noop: previously we constrained header controls width based on the main split's
+    // halfSplitState. This caused preview headers (e.g. the hamburger menu) to
     // appear "hung" from the middle in preview mode.
     // Keeping this effect slot in case we need future layout hacks.
   });
@@ -140,7 +139,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       tabIndex={-1}
       ref={setContainerRef}
     >
-      {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
+      {/* Preview-specific header slots so blocks can render controls (via SplitHeaderControls/Right) */}
       <div
         class="relative w-full flex items-center justify-between shrink-0 h-10 pr-1 border-b border-edge-muted/50 bg-panel"
         classList={{
@@ -153,15 +152,15 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
         <div
           // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
           // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
-          class="flex h-full items-start pt-1 flex-1"
+          class="flex h-full items-center pt-1 flex-1"
           ref={(ref) => {
-            scopedLayoutRefs.toolbarLeft = ref;
+            scopedLayoutRefs.headerControls = ref;
           }}
         />
         <div
           class="flex h-full items-center"
           ref={(ref) => {
-            scopedLayoutRefs.toolbarRight = ref;
+            scopedLayoutRefs.headerRight = ref;
           }}
         />
       </div>

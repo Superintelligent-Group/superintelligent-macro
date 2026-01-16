@@ -4,7 +4,6 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -96,10 +95,8 @@ export function Top(props: { channelID: string }) {
         </div>
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
-      </SplitHeaderRight>
-      <SplitToolbarRight>
-        <div class="p-1 flex flex-row gap-1 items-center h-full">
+        <div class="flex flex-row gap-1 items-center">
+          <BlockLiveIndicators />
           <Show when={channelType() === 'public'}>
             <DeprecatedIconButton
               theme="clear"
@@ -119,7 +116,7 @@ export function Top(props: { channelID: string }) {
             <ParticipantManager participantCount={participantCount()} />
           </Show>
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }

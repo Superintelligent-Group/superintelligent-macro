@@ -60,7 +60,6 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -787,8 +786,8 @@ function EmailView() {
   return (
     <>
       <UnifiedListView hideToolbar />
-      <SplitToolbarRight>
-        <div class="flex flex-row items-center pr-2">
+      <SplitHeaderRight>
+        <div class="flex flex-row items-center">
           <SegmentedControl
             disabled={!!viewData().searchText}
             size="SM"
@@ -798,7 +797,7 @@ function EmailView() {
             onChange={setEmailView}
           />
         </div>
-      </SplitToolbarRight>
+      </SplitHeaderRight>
     </>
   );
 }
