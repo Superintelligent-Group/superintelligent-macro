@@ -2249,8 +2249,8 @@ function _SearchBar(props: {
   });
 
   return (
-    <SplitHeaderControls class="min-w-0">
-      <div class="flex ml-2 h-full items-center gap-1">
+    <SplitHeaderControls>
+      <div class="flex ml-2 h-full items-center gap-1 min-w-0">
         <Show
           when={props.isLoading() && searchText()}
           fallback={

@@ -9,10 +9,7 @@ import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';
-import {
-  HeaderControls,
-  InstructionsHeaderControls,
-} from './HeaderControls';
+import { HeaderControls, InstructionsHeaderControls } from './HeaderControls';
 
 const { track, TrackingEvents } = withAnalytics();
 
