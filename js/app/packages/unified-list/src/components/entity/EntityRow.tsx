@@ -27,6 +27,7 @@ import { createTimestampSlot } from './slots/TimestampSlot';
 import { createActionsSlot } from './slots/ActionsSlot';
 import { createNotificationsSlot } from './slots/NotificationsSlot';
 import { createSearchHitsSlot } from './slots/SearchHitsSlot';
+import { createPropertiesSlot } from './slots/PropertiesSlot';
 import { ChildrenSlot } from './slots/ChildrenSlot';
 
 export const ENTITY_HEIGHT = 40;
@@ -115,6 +116,11 @@ export function EntityRow<T extends EntityData>(
           onClick: props.config.onClick,
           onPointerDown: props.config.onPointerDown,
         }),
+      properties:
+        configSlots.properties ??
+        createPropertiesSlot({
+          properties: props.config.properties,
+        }),
       timestamp: configSlots.timestamp ?? createTimestampSlot(),
       actions:
         configSlots.actions ??
@@ -127,12 +133,14 @@ export function EntityRow<T extends EntityData>(
         createNotificationsSlot({
           maxVisible: 3,
           onNotificationClick: props.config.onNotificationClick,
+          onToggleExpand: props.config.onToggleExpand,
         }),
       searchHits:
         configSlots.searchHits ??
         createSearchHitsSlot({
           maxVisible: 1,
           onClick: props.config.onClick,
+          onToggleExpand: props.config.onToggleExpand,
         }),
     };
   });
@@ -258,6 +266,7 @@ export function EntityRow<T extends EntityData>(
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
             {renderSlot('badges')}
+            {renderSlot('properties')}
             {renderSlot('timestamp')}
             {renderSlot('actions')}
           </div>
@@ -307,6 +316,7 @@ export {
   createTitleSlot,
   createSubtitleSlot,
   createBadgesSlot,
+  createPropertiesSlot,
   createTimestampSlot,
   createActionsSlot,
   createNotificationsSlot,

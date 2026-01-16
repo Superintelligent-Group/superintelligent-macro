@@ -30,6 +30,8 @@ export type SearchHitsSlotConfig = {
   maxVisible?: number;
   showThreadBorder?: boolean;
   onClick?: EntityClickHandler<EntityData>;
+  /** Called when expand/collapse state changes - use to trigger virtualizer re-measurement */
+  onToggleExpand?: () => void;
 };
 
 /** Check if entity has search data */
@@ -271,6 +273,7 @@ export function SearchHitsSlot<T extends EntityData>(
               onClick={(e) => {
                 e.stopPropagation();
                 setShowAll((prev) => !prev);
+                props.onToggleExpand?.();
               }}
               data-blocks-navigation
             >
@@ -295,6 +298,7 @@ export function createSearchHitsSlot<T extends EntityData>(
       maxVisible={config.maxVisible ?? 1}
       showThreadBorder={config.showThreadBorder ?? true}
       onClick={config.onClick}
+      onToggleExpand={config.onToggleExpand}
     />
   );
 }

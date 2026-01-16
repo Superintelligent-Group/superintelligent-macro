@@ -20,6 +20,8 @@ export type NotificationsSlotConfig = {
   maxVisible?: number;
   collapsible?: boolean;
   onNotificationClick?: NotificationClickHandler<EntityData>;
+  /** Called when expand/collapse state changes - use to trigger virtualizer re-measurement */
+  onToggleExpand?: () => void;
 };
 
 /** Thread border connector line */
@@ -165,6 +167,7 @@ function CollapsibleList<T>(props: {
   items: T[];
   visibleCount?: number;
   children: (item: T) => JSX.Element;
+  onToggleExpand?: () => void;
 }): JSX.Element {
   const [showAll, setShowAll] = createSignal(false);
   const visibleCount = () => props.visibleCount ?? 3;
@@ -178,6 +181,13 @@ function CollapsibleList<T>(props: {
 
   const hasMore = () => props.items.length > visibleCount();
 
+  const handleToggle = (e: MouseEvent) => {
+    e.stopPropagation();
+    setShowAll((prev) => !prev);
+    // Notify parent that height may have changed
+    props.onToggleExpand?.();
+  };
+
   return (
     <>
       <For each={visibleItems()}>{(item) => props.children(item)}</For>
@@ -186,10 +196,7 @@ function CollapsibleList<T>(props: {
           <ThreadBorder />
           <button
             class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAll((prev) => !prev);
-            }}
+            onClick={handleToggle}
             data-blocks-navigation
           >
             <Show when={!showAll()} fallback={<>Collapse</>}>
@@ -221,6 +228,7 @@ export function NotificationsSlot<T extends EntityData>(
         <CollapsibleList
           items={notDoneNotifications()}
           visibleCount={props.maxVisible ?? 3}
+          onToggleExpand={props.onToggleExpand}
         >
           {(notification) => (
             <NotificationRow
@@ -245,6 +253,7 @@ export function createNotificationsSlot<T extends EntityData>(
       maxVisible={config.maxVisible ?? 3}
       collapsible={config.collapsible ?? true}
       onNotificationClick={config.onNotificationClick}
+      onToggleExpand={config.onToggleExpand}
     />
   );
 }

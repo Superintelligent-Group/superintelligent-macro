@@ -67,6 +67,8 @@ export type RowRenderState = {
   focused: boolean;
   selected: boolean;
   checked: boolean;
+  /** Trigger virtualizer to re-measure (call when row content expands/collapses) */
+  triggerMeasure: () => void;
 };
 
 /** Props for UnifiedListView */
@@ -133,6 +135,8 @@ export type UnifiedListContextValue<T extends { id: string }> = {
   isLoading: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  /** Trigger virtualizer to re-measure all items (e.g., after expand/collapse) */
+  triggerMeasure: () => void;
 };
 
 // Use unknown for context to allow generic types
@@ -279,10 +283,13 @@ export function UnifiedListView<T extends { id: string }>(
     on(
       () => props.measurementKey,
       () => {
-        const v = virtualizer();
-        if (v) {
-          v.measure();
-        }
+        // Use queueMicrotask to ensure DOM has updated before measuring
+        queueMicrotask(() => {
+          const v = virtualizer();
+          if (v) {
+            v.measure();
+          }
+        });
       },
       { defer: true }
     )
@@ -331,6 +338,13 @@ export function UnifiedListView<T extends { id: string }>(
     controllerCleanup();
   });
 
+  // Trigger re-measurement (exposed via context for child components)
+  const triggerMeasure = () => {
+    queueMicrotask(() => {
+      virtualizer()?.measure();
+    });
+  };
+
   // Context value
   const contextValue: UnifiedListContextValue<T> = {
     controller,
@@ -338,6 +352,7 @@ export function UnifiedListView<T extends { id: string }>(
     isLoading,
     hasMore,
     isFetchingNextPage,
+    triggerMeasure,
   };
 
   // Resolve children to separate toolbar/footer from list content
@@ -395,7 +410,12 @@ export function UnifiedListView<T extends { id: string }>(
                     <Show when={entity()}>
                       {(e) => (
                         <div
-                          ref={virtualizer()?.measureElement}
+                          ref={(el) => {
+                            // Delay measurement to ensure DOM has rendered content
+                            queueMicrotask(() =>
+                              virtualizer()?.measureElement(el)
+                            );
+                          }}
                           style={{
                             position: 'absolute',
                             top: 0,
@@ -411,6 +431,7 @@ export function UnifiedListView<T extends { id: string }>(
                             focused: isFocused(),
                             selected: isFocused(), // For visual "active" state
                             checked: isSelected(), // For multi-select checkbox state
+                            triggerMeasure,
                           })}
                         </div>
                       )}

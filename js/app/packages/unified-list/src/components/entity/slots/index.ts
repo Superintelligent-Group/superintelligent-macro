@@ -17,6 +17,7 @@ export {
   createNotificationsSlot,
 } from './NotificationsSlot';
 export { SearchHitsSlot, createSearchHitsSlot } from './SearchHitsSlot';
+export { PropertiesSlot, createPropertiesSlot } from './PropertiesSlot';
 
 // Children slot system
 export {

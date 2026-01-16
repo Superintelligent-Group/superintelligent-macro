@@ -26,6 +26,7 @@ import { type EntityData, isTaskEntity } from '@macro-entity';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import type { PropertiesEntityType } from '@service-properties/client';
+import { useTaskProperties } from '@core/component/Properties/hooks';
 import { toast } from '@core/component/Toast/Toast';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 
@@ -284,6 +285,9 @@ export function Soup(props: SoupProps): JSX.Element {
     () => (stores.search?.searchText()?.length ?? 0) > 0
   );
 
+  // Fetch task properties for the displayed entities
+  const taskPropertiesStore = useTaskProperties(processedEntities);
+
   // ---------------------------------------------------------------------------
   // Row Rendering
   // ---------------------------------------------------------------------------
@@ -301,17 +305,26 @@ export function Soup(props: SoupProps): JSX.Element {
     })
   );
 
-  const renderRow = (entity: EnhancedEntity, state: RowRenderState) => (
-    <EntityRow
-      entity={entity}
-      index={state.index}
-      focused={state.focused}
-      selected={{ active: state.selected }}
-      checked={state.checked}
-      config={rowConfig()}
-      searchActive={isSearchActive()}
-    />
-  );
+  const renderRow = (entity: EnhancedEntity, state: RowRenderState) => {
+    // Get properties for this entity (only tasks have properties)
+    const properties = taskPropertiesStore()[entity.id] ?? [];
+
+    return (
+      <EntityRow
+        entity={entity}
+        index={state.index}
+        focused={state.focused}
+        selected={{ active: state.selected }}
+        checked={state.checked}
+        config={{
+          ...rowConfig(),
+          properties,
+          onToggleExpand: state.triggerMeasure,
+        }}
+        searchActive={isSearchActive()}
+      />
+    );
+  };
 
   // ---------------------------------------------------------------------------
   // Render
@@ -328,7 +341,7 @@ export function Soup(props: SoupProps): JSX.Element {
         onFetchMore={fetchNextPage}
         plugins={plugins}
         rowHeight={ENTITY_HEIGHT}
-        measurementKey={unrollNotifications()}
+        measurementKey={`${unrollNotifications()}-${stores.search?.isServerSearchActive() ?? false}`}
         renderRow={renderRow}
         emptyState={
           <div class="flex items-center justify-center h-full text-ink-muted">

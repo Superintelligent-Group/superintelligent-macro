@@ -121,6 +121,8 @@ export type EntityRowConfig<T extends EntityData = EntityData> = {
   showDoneButton?: boolean;
   /** Whether to fade read items */
   fadeIfRead?: boolean;
+  /** Called when expandable content changes size (for virtualizer re-measurement) */
+  onToggleExpand?: () => void;
   /** Properties to display (for tasks) */
   properties?: Property[];
   /** Children slot configuration - unified children rendering (notifications, search hits, etc.) */
