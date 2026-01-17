@@ -7,6 +7,9 @@
  * - Composition for UI (children, slots) - no hardcoded toolbars
  * - Consumer never deals with virtualizer directly
  *
+ * Uses virtua for smooth, flicker-free virtualization with proper handling of
+ * data changes during scroll (shift mode).
+ *
  * @example
  * ```tsx
  * // Simple usage
@@ -33,27 +36,23 @@
 
 import {
   createSignal,
-  createMemo,
   createEffect,
+  createRenderEffect,
   createContext,
   useContext,
   onCleanup,
   onMount,
-  on,
   Show,
-  For,
+  mapArray,
   children as resolveChildren,
   type JSX,
   type Accessor,
   type ParentProps,
 } from 'solid-js';
-import { createVirtualizer } from '@tanstack/solid-virtual';
-import type {
-  ListController,
-  Plugin,
-  CleanupFn,
-  VirtualizerHandle,
-} from '../types';
+import { createStore, reconcile } from 'solid-js/store';
+import { type VirtualizerHandle as VirtuaHandle, VList } from 'virtua/solid';
+import type { ListController, Plugin, CleanupFn } from '../types';
+import type { VirtualizerHandle } from '../types';
 import { createListController } from '../core/controller';
 import { createPluginManager } from '../core/pluginManager';
 import type {
@@ -182,7 +181,6 @@ export function UnifiedListView<T extends { id: string }>(
 
   // Resolve defaults
   const rowHeight = () => props.rowHeight ?? 40;
-  const overscan = () => props.overscan ?? 8;
   const isLoading = () => props.isLoading?.() ?? false;
   const hasMore = () => props.hasMore?.() ?? false;
   const isFetchingNextPage = () => props.isFetchingNextPage?.() ?? false;
@@ -211,9 +209,45 @@ export function UnifiedListView<T extends { id: string }>(
     });
   });
 
-  // Sync entities to controller state
+  // Create a stable store for entities using reconcile to prevent jumpy scrolling
+  // This keeps entity references stable when data changes, preventing unnecessary DOM updates
+  const [stableEntitiesStore, setStableEntitiesStore] = createStore<T[]>([]);
+
+  // Track if data is being PREPENDED for virtua's shift mode
+  // shift mode is only needed when items are added to the BEGINNING of the list
+  // For infinite scroll (appending to end), shift is not needed
+  const [isShifting, setIsShifting] = createSignal(false);
+  let previousFirstId: string | undefined;
+
+  // Sync entities to stable store using reconcile (key by id for stable references)
+  // Also detect prepends by checking if the first item changed
+  createRenderEffect(() => {
+    const newEntities = props.entities();
+    const newFirstId = newEntities[0]?.id;
+
+    // Detect prepend: first item changed AND we had items before AND new list is longer
+    const wasPrepend =
+      previousFirstId !== undefined &&
+      newFirstId !== previousFirstId &&
+      newEntities.length > stableEntitiesStore.length;
+
+    if (wasPrepend) {
+      setIsShifting(true);
+    }
+
+    setStableEntitiesStore(reconcile(newEntities as T[], { key: 'id' }));
+    previousFirstId = newFirstId;
+  });
+
+  // Disable shift mode after display items are computed (data settled)
   createEffect(() => {
-    const entities = props.entities();
+    stableEntityItems(); // Track when items are processed
+    setIsShifting(false);
+  });
+
+  // Sync stable entities to controller state
+  createRenderEffect(() => {
+    const entities = stableEntitiesStore;
     controller.setters.setEntities(entities);
     props.onEntitiesChange?.(entities);
   });
@@ -232,23 +266,37 @@ export function UnifiedListView<T extends { id: string }>(
   const groupHeaderHeight = () =>
     props.groupHeaderHeight ?? GROUP_HEADER_HEIGHT;
 
-  // Compute display items - either grouped (headers + entities) or plain entities
-  const displayItems = createMemo((): DisplayItem<T>[] => {
-    const entities = controller.state.entities();
+  // Create stable display items using mapArray to prevent re-renders
+  // mapArray preserves object identity when items are added/removed
+  // This is critical for virtualization - VList uses these references for component reuse
+  const stableEntityItems = mapArray(
+    () => stableEntitiesStore,
+    (entity): DisplayItem<T> => ({
+      type: 'entity' as const,
+      entity,
+      groupId: '',
+    })
+  );
+
+  // For grouped items, also use mapArray for stability
+  const stableGroupedItems = mapArray(
+    () => {
+      const groupStore = props.groupStore;
+      if (!groupStore || !groupStore.enabled()) return [];
+      return groupStore.createDisplayItems(stableEntitiesStore);
+    },
+    (item) => item // Identity - items from groupStore should already be unique
+  );
+
+  // Choose between stable entity items or stable grouped items
+  // Using a simple accessor, not createMemo, to avoid breaking reference stability
+  const displayItems = (): DisplayItem<T>[] => {
     const groupStore = props.groupStore;
-
-    // No grouping or grouping disabled - wrap entities
     if (!groupStore || !groupStore.enabled()) {
-      return entities.map((entity) => ({
-        type: 'entity' as const,
-        entity,
-        groupId: '',
-      }));
+      return stableEntityItems();
     }
-
-    // Grouping enabled - use plugin's transform
-    return groupStore.createDisplayItems(entities);
-  });
+    return stableGroupedItems();
+  };
 
   // Update visible entity IDs for navigation when grouping changes
   createEffect(() => {
@@ -299,102 +347,142 @@ export function UnifiedListView<T extends { id: string }>(
     onCleanup(() => observer.disconnect());
   });
 
-  // Dynamic overscan based on viewport
-  const computedOverscan = createMemo(() => {
-    const viewportItems = Math.ceil(containerHeight() / rowHeight());
-    return Math.max(overscan(), Math.ceil(viewportItems * 0.5));
-  });
+  // Virtua handle for scroll control
+  const [virtuaHandle, setVirtuaHandle] = createSignal<VirtuaHandle | null>(
+    null
+  );
 
-  // Virtualizer - supports dynamic row heights via measureElement
-  const virtualizer = createMemo(() => {
-    const container = containerRef();
-    if (!container) return null;
-
-    const items = displayItems();
-
-    return createVirtualizer({
-      count: items.length,
-      getScrollElement: () => container,
-      estimateSize: (index) => {
-        const item = items[index];
-        // Headers have different height than entity rows
-        return item?.type === 'header' ? groupHeaderHeight() : rowHeight();
-      },
-      overscan: computedOverscan(),
-      // Enable dynamic row height measurement
-      measureElement: (element) => element.getBoundingClientRect().height,
-    });
-  });
-
-  // Update controller with virtualizer handle
+  // Update controller with virtualizer handle (adapter for our interface)
   createEffect(() => {
-    const v = virtualizer();
-    if (!v) {
+    const handle = virtuaHandle();
+    if (!handle) {
       controller.setVirtualizerHandle(null);
       return;
     }
 
-    const handle: VirtualizerHandle = {
-      scrollToIndex: (index, options) => v.scrollToIndex(index, options),
-      scrollToOffset: (offset, options) => v.scrollToOffset(offset, options),
-      scrollOffset: v.scrollOffset ?? 0,
-      getTotalSize: () => v.getTotalSize(),
-      getVirtualItems: () => v.getVirtualItems(),
+    const adaptedHandle: VirtualizerHandle = {
+      scrollToIndex: (index, options) => {
+        handle.scrollToIndex(index, options);
+      },
+      scrollToOffset: (offset) => {
+        handle.scrollTo(offset);
+      },
+      scrollOffset: handle.scrollOffset,
+      getTotalSize: () => handle.scrollSize,
+      getVirtualItems: () => {
+        // virtua doesn't expose virtual items the same way, but we can approximate
+        // This is mainly used for navigation plugin
+        const items = displayItems();
+        const viewportSize = containerHeight();
+        const itemSize = rowHeight();
+        const visibleCount = Math.ceil(viewportSize / itemSize);
+        const startIndex = Math.floor(handle.scrollOffset / itemSize);
+        const endIndex = Math.min(startIndex + visibleCount, items.length);
+
+        return Array.from({ length: endIndex - startIndex }, (_, i) => ({
+          index: startIndex + i,
+          start: (startIndex + i) * itemSize,
+          size: itemSize,
+          end: (startIndex + i + 1) * itemSize,
+          key: startIndex + i,
+          lane: 0,
+        }));
+      },
     };
-    controller.setVirtualizerHandle(handle);
+    controller.setVirtualizerHandle(adaptedHandle);
   });
 
-  // Re-measure all items when measurementKey changes (e.g., when unrollNotifications toggles)
-  createEffect(
-    on(
-      () => props.measurementKey,
-      () => {
-        // Use queueMicrotask to ensure DOM has updated before measuring
-        queueMicrotask(() => {
-          const v = virtualizer();
-          if (v) {
-            v.measure();
-          }
-        });
-      },
-      { defer: true }
-    )
-  );
+  // Aggressive pre-fetching configuration
+  // We want to always have content ahead - user should never hit empty space
+  const PREFETCH_BUFFER_ITEMS = 50; // Always try to maintain 50 items ahead of viewport
+  const PREFETCH_SCROLL_THRESHOLD = 0.5; // Start fetching at 50% scroll
 
   // Infinite scroll - fetch more when near bottom
-  const debouncedFetchMore = createDebouncedFn(() => {
+  const fetchMore = () => {
     if (hasMore() && !isFetchingNextPage() && !isLoading()) {
       props.onFetchMore?.();
     }
-  }, 50);
+  };
 
-  createEffect(() => {
-    const v = virtualizer();
-    if (!v || !props.onFetchMore || !hasMore()) return;
+  // Debounced version for scroll events
+  const debouncedFetchMore = createDebouncedFn(fetchMore, 50);
 
-    const items = v.getVirtualItems();
-    const lastItem = items[items.length - 1];
-    if (!lastItem) return;
+  // Check if we need more data based on current scroll position and buffer
+  const shouldFetchMore = (): boolean => {
+    const handle = virtuaHandle();
+    if (!handle) return false;
+    if (!hasMore() || isFetchingNextPage() || isLoading()) return false;
 
-    const totalCount = controller.state.entities().length;
-    if (totalCount === 0) return;
+    const items = displayItems();
+    const totalItems = items.length;
+    if (totalItems === 0) return true;
 
-    // Trigger at 90% scroll
-    if (lastItem.index >= Math.floor(totalCount * 0.9)) {
+    const viewportHeight = containerHeight();
+    const itemSize = rowHeight();
+    const viewportItems = Math.ceil(viewportHeight / itemSize);
+
+    // Calculate how many items are visible and how many are ahead
+    const scrollOffset = handle.scrollOffset;
+    const currentIndex = Math.floor(scrollOffset / itemSize);
+    const itemsAhead = totalItems - currentIndex - viewportItems;
+
+    // Fetch if we don't have enough buffer ahead
+    if (itemsAhead < PREFETCH_BUFFER_ITEMS) {
+      return true;
+    }
+
+    // Also fetch based on scroll progress as a fallback
+    const scrollProgress =
+      scrollOffset / Math.max(handle.scrollSize - viewportHeight, 1);
+    if (scrollProgress >= PREFETCH_SCROLL_THRESHOLD) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Handle scroll to trigger infinite load - called during scroll, not just at end
+  const handleScroll = () => {
+    if (shouldFetchMore()) {
       debouncedFetchMore();
     }
-  });
+  };
 
-  // Auto-fetch if filtered results don't fill viewport
+  // Also check on scroll end for any missed fetches
+  const handleScrollEnd = () => {
+    if (shouldFetchMore()) {
+      fetchMore(); // Immediate, no debounce
+    }
+  };
+
+  // Auto-fetch if filtered results don't fill viewport or don't have enough buffer
   createEffect(() => {
-    const entityCount = controller.state.entities().length;
+    const entityCount = stableEntitiesStore.length;
     const viewportCount = Math.ceil(containerHeight() / rowHeight());
 
-    if (entityCount >= viewportCount) return;
+    // Always try to have a buffer, not just fill viewport
+    const minItems = viewportCount + PREFETCH_BUFFER_ITEMS;
+
+    if (entityCount >= minItems) return;
     if (isLoading() || isFetchingNextPage()) return;
     if (!hasMore()) return;
 
-    debouncedFetchMore();
+    // Use immediate fetch for initial load / buffer building
+    fetchMore();
+  });
+
+  // Chain fetches - when a fetch completes, check if we need more
+  createEffect(() => {
+    // Track when fetching state changes from true to false (fetch completed)
+    const fetching = isFetchingNextPage();
+    if (!fetching && hasMore()) {
+      // Small delay to let data settle, then check if we need more
+      setTimeout(() => {
+        if (shouldFetchMore()) {
+          fetchMore();
+        }
+      }, 100);
+    }
   });
 
   // Cleanup
@@ -405,10 +493,9 @@ export function UnifiedListView<T extends { id: string }>(
   });
 
   // Trigger re-measurement (exposed via context for child components)
+  // Note: virtua handles this automatically, but we expose for compatibility
   const triggerMeasure = () => {
-    queueMicrotask(() => {
-      virtualizer()?.measure();
-    });
+    // virtua auto-measures, no-op
   };
 
   // Context value
@@ -433,7 +520,7 @@ export function UnifiedListView<T extends { id: string }>(
         {/* Main list container */}
         <div
           ref={setContainerRef}
-          class="flex-1 overflow-auto outline-none"
+          class="flex-1 overflow-hidden outline-none"
           tabIndex={0}
           data-unified-list-container
         >
@@ -455,100 +542,68 @@ export function UnifiedListView<T extends { id: string }>(
             )}
           </Show>
 
-          {/* Virtualized list */}
+          {/* Virtualized list using virtua */}
           <Show when={displayItems().length > 0}>
-            <div
+            <VList
+              ref={setVirtuaHandle}
+              data={displayItems()}
               style={{
-                height: `${virtualizer()?.getTotalSize() ?? 0}px`,
-                position: 'relative',
+                height: '100%',
+                'overflow-y': 'auto',
+                'overflow-x': 'hidden',
               }}
+              class="scrollbar-hidden"
+              itemSize={rowHeight()}
+              shift={isShifting()}
+              onScroll={handleScroll}
+              onScrollEnd={handleScrollEnd}
             >
-              <For each={virtualizer()?.getVirtualItems() ?? []}>
-                {(virtualRow) => {
-                  const item = () => displayItems()[virtualRow.index];
+              {(item: DisplayItem<T>, index: () => number) => {
+                // Handle header items
+                if (isHeaderItem(item)) {
+                  const header = item as DisplayItem<T> & { type: 'header' };
+                  const HeaderComponent =
+                    props.renderGroupHeader ?? GroupHeader;
 
                   return (
-                    <Show when={item()}>
-                      {(displayItem) => {
-                        // Handle header items
-                        if (isHeaderItem(displayItem())) {
-                          const header = displayItem() as ReturnType<
-                            typeof displayItems
-                          >[number] & { type: 'header' };
-                          const HeaderComponent =
-                            props.renderGroupHeader ?? GroupHeader;
-
-                          return (
-                            <div
-                              ref={(el) => {
-                                queueMicrotask(() =>
-                                  virtualizer()?.measureElement(el)
-                                );
-                              }}
-                              style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                transform: `translateY(${virtualRow.start}px)`,
-                              }}
-                              data-index={virtualRow.index}
-                              data-group-header={header.groupId}
-                            >
-                              <HeaderComponent
-                                groupId={header.groupId}
-                                label={header.label}
-                                icon={header.icon}
-                                count={header.count}
-                                collapsed={header.collapsed}
-                                onToggle={props.groupStore!.toggleGroup}
-                              />
-                            </div>
-                          );
-                        }
-
-                        // Handle entity items
-                        const entityItem = displayItem() as ReturnType<
-                          typeof displayItems
-                        >[number] & { type: 'entity' };
-                        const entity = entityItem.entity;
-                        const isFocused = () =>
-                          controller.state.focusedId() === entity.id;
-                        const isSelected = () =>
-                          controller.state.selectedIds().has(entity.id);
-
-                        return (
-                          <div
-                            ref={(el) => {
-                              queueMicrotask(() =>
-                                virtualizer()?.measureElement(el)
-                              );
-                            }}
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              width: '100%',
-                              transform: `translateY(${virtualRow.start}px)`,
-                            }}
-                            data-index={virtualRow.index}
-                            data-entity-id={entity.id}
-                          >
-                            {props.renderRow(entity, {
-                              index: virtualRow.index,
-                              focused: isFocused(),
-                              selected: isFocused(),
-                              checked: isSelected(),
-                              triggerMeasure,
-                            })}
-                          </div>
-                        );
-                      }}
-                    </Show>
+                    <div
+                      data-index={index()}
+                      data-group-header={header.groupId}
+                      style={{ height: `${groupHeaderHeight()}px` }}
+                    >
+                      <HeaderComponent
+                        groupId={header.groupId}
+                        label={header.label}
+                        icon={header.icon}
+                        count={header.count}
+                        collapsed={header.collapsed}
+                        onToggle={props.groupStore!.toggleGroup}
+                      />
+                    </div>
                   );
-                }}
-              </For>
-            </div>
+                }
+
+                // Handle entity items
+                const entityItem = item as DisplayItem<T> & { type: 'entity' };
+                const entity = entityItem.entity;
+                const isFocused = () =>
+                  controller.state.focusedId() === entity.id;
+                const isSelected = () =>
+                  controller.state.selectedIds().has(entity.id);
+
+                return (
+                  <div data-index={index()} data-entity-id={entity.id}>
+                    {props.renderRow(entity, {
+                      index: index(),
+                      focused: isFocused(),
+                      selected: isFocused(),
+                      checked: isSelected(),
+                      triggerMeasure,
+                    })}
+                  </div>
+                );
+              }}
+            </VList>
           </Show>
 
           {/* Loading more indicator */}
