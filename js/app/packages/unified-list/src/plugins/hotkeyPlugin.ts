@@ -62,14 +62,6 @@ export type HotkeyPluginConfig = {
   scopeId?: string;
   /** Hotkey bindings (defaults to defaultHotkeyBindings) */
   bindings?: HotkeyBinding[];
-  /**
-   * @deprecated Use scopeId instead. This is ignored when scopeId is provided.
-   */
-  scoped?: boolean;
-  /**
-   * @deprecated Use scopeId instead. This is ignored when scopeId is provided.
-   */
-  isInScope?: () => boolean;
 };
 
 // ============================================================================

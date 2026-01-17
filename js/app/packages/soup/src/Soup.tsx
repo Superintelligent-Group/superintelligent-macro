@@ -250,13 +250,22 @@ export function Soup(props: SoupProps): JSX.Element {
     {
       id: 'focus',
       label: 'Focus',
-      filters: filterConfigs.filter((f) => f.group === 'focus'),
+      filterIds: ['signal', 'noise'],
       allowMultiple: false,
     },
     {
       id: 'type',
       label: 'Type',
-      filters: filterConfigs.filter((f) => f.group === 'type'),
+      filterIds: [
+        'document',
+        'task',
+        'email',
+        'people',
+        'teams',
+        'agent',
+        'project',
+        'file',
+      ],
       allowMultiple: false,
     },
   ];

@@ -71,7 +71,6 @@ const signalFilter = {
     // For non-email, show recently viewed items
     return entity.viewedAt !== undefined;
   },
-  active: false,
   group: 'focus',
 };
 
@@ -79,7 +78,6 @@ const noiseFilter = {
   id: 'noise',
   label: 'Other',
   predicate: negateFilter(signalFilter.predicate),
-  active: false,
   group: 'focus',
 };
 
@@ -103,7 +101,6 @@ const unreadFilter = {
     // This would come from the notification enhancement
     return false;
   },
-  active: false,
 };
 
 // ============================================================================

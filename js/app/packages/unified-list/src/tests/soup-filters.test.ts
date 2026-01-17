@@ -543,7 +543,16 @@ describe('Soup Filter Plugin Integration', () => {
           {
             id: 'type',
             label: 'Type',
-            filters: filterConfigs.filter((f) => f.group === 'type'),
+            filterIds: [
+              'document',
+              'task',
+              'email',
+              'people',
+              'teams',
+              'agent',
+              'project',
+              'file',
+            ],
             allowMultiple: false,
           },
         ];

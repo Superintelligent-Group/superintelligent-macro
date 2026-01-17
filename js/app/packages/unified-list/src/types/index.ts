@@ -105,36 +105,14 @@ export { ListCommands } from '../core/types';
 export type { ListCommand } from '../core/types';
 
 // ============================================================================
-// Backwards Compatibility Aliases
+// Additional Types (not in core)
 // ============================================================================
 
-// Old names that mapped to new types
 import type {
-  StateTransition as CoreStateTransition,
-  ReactiveState as CoreReactiveState,
-  StateSetters as CoreStateSetters,
-  EntityConstraint,
   FilterConfig as CoreFilterConfig,
   FilterGroup as CoreFilterGroup,
   SortConfig as CoreSortConfig,
-  ListController,
-  CleanupFn,
 } from '../core/types';
-
-/** @deprecated Use ListState from core/types */
-export type ListStateTransition<T extends EntityConstraint> =
-  CoreStateTransition<T>;
-
-/** @deprecated Use ReactiveState from core/types */
-export type ReactiveListState<T extends EntityConstraint> =
-  CoreReactiveState<T>;
-
-/** @deprecated Use StateSetters from core/types */
-export type ListStateSetters<T extends EntityConstraint> = CoreStateSetters<T>;
-
-// ============================================================================
-// Additional Types (not in core)
-// ============================================================================
 
 // ============================================================================
 // Filter Types (extended)
@@ -265,12 +243,3 @@ export type EntityAction<T> = {
   canExecute: (entities: T[]) => boolean;
   hotkey?: string;
 };
-
-// ============================================================================
-// Legacy/Deprecated Types
-// ============================================================================
-
-/** @deprecated Use Plugin<T> from core/types instead */
-export type PluginFactory<T extends EntityConstraint, Config = void> = (
-  config: Config
-) => (controller: ListController<T>) => CleanupFn;

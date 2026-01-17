@@ -234,7 +234,6 @@ export const testDocumentFilter: FilterConfig<TestEntity> = {
   id: 'documents',
   label: 'Documents',
   predicate: (entity) => entity.type === 'document',
-  active: false,
 };
 
 /** Task type filter */
@@ -242,7 +241,6 @@ export const testTaskFilter: FilterConfig<TestEntity> = {
   id: 'tasks',
   label: 'Tasks',
   predicate: (entity) => entity.type === 'task',
-  active: false,
 };
 
 /** Email type filter */
@@ -250,7 +248,6 @@ export const testEmailFilter: FilterConfig<TestEntity> = {
   id: 'emails',
   label: 'Emails',
   predicate: (entity) => entity.type === 'email',
-  active: false,
 };
 
 /** Channel type filter */
@@ -258,7 +255,6 @@ export const testChannelFilter: FilterConfig<TestEntity> = {
   id: 'channels',
   label: 'Channels',
   predicate: (entity) => entity.type === 'channel',
-  active: false,
 };
 
 /** Unread filter */
@@ -266,7 +262,6 @@ export const testUnreadFilter: FilterConfig<TestEntity> = {
   id: 'unread',
   label: 'Unread',
   predicate: (entity) => entity.isUnread === true,
-  active: false,
 };
 
 /** Not done filter */
@@ -274,7 +269,6 @@ export const testNotDoneFilter: FilterConfig<TestEntity> = {
   id: 'not-done',
   label: 'Not Done',
   predicate: (entity) => entity.isDone === false,
-  active: false,
 };
 
 /** High priority filter */
@@ -282,7 +276,6 @@ export const testHighPriorityFilter: FilterConfig<TestEntity> = {
   id: 'high-priority',
   label: 'High Priority',
   predicate: (entity) => entity.priority === 'high',
-  active: false,
 };
 
 /** All test filters */

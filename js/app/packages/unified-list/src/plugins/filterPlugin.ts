@@ -107,11 +107,9 @@ export function createFilterStore<T>(
     return activeFilterIds().has(filterId);
   };
 
-  /** Get filter IDs from a group (handles both filterIds and filters properties) */
+  /** Get filter IDs from a group */
   const getGroupFilterIds = (group: FilterGroup): readonly string[] => {
-    if (group.filterIds) return group.filterIds;
-    if (group.filters) return group.filters.map((f) => f.id);
-    return [];
+    return group.filterIds;
   };
 
   /** Get active filters in a specific group */
@@ -205,10 +203,7 @@ export function createFilterPlugin<T extends EntityConstraint>(
             const group = groupMap.get(filterConfig.group);
             if (group && !group.allowMultiple) {
               // Remove other filters in same group
-              // Support both filterIds and deprecated filters property
-              const groupFilterIds =
-                group.filterIds ?? group.filters?.map((f) => f.id) ?? [];
-              for (const otherId of groupFilterIds) {
+              for (const otherId of group.filterIds) {
                 if (otherId !== filterId) {
                   newActive.delete(otherId);
                 }

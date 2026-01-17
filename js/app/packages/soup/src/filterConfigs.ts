@@ -84,14 +84,12 @@ export function createSoupFilterConfigs(): FilterConfig<EnhancedEntity>[] {
       id: 'signal',
       label: 'Inbox',
       predicate: signalFilter,
-      active: false,
       group: 'focus',
     },
     {
       id: 'noise',
       label: 'Other',
       predicate: noiseFilter,
-      active: false,
       group: 'focus',
     },
 
@@ -100,7 +98,6 @@ export function createSoupFilterConfigs(): FilterConfig<EnhancedEntity>[] {
       id: 'unread',
       label: 'Unread',
       predicate: unreadFilter,
-      active: false,
     },
 
     // Entity type filters (mutually exclusive)
@@ -108,56 +105,48 @@ export function createSoupFilterConfigs(): FilterConfig<EnhancedEntity>[] {
       id: 'document',
       label: 'Docs',
       predicate: documentFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'task',
       label: 'Tasks',
       predicate: taskFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'email',
       label: 'Mail',
       predicate: emailFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'people',
       label: 'People',
       predicate: peopleFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'teams',
       label: 'Teams',
       predicate: teamsFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'agent',
       label: 'Agents',
       predicate: agentFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'project',
       label: 'Folders',
       predicate: projectFilter,
-      active: false,
       group: 'type',
     },
     {
       id: 'file',
       label: 'Files',
       predicate: fileFilter,
-      active: false,
       group: 'type',
     },
   ];
@@ -169,11 +158,22 @@ export function createSoupFilterGroups() {
     {
       id: 'focus',
       label: 'Focus',
+      filterIds: ['signal', 'noise'],
       allowMultiple: false, // Mutually exclusive
     },
     {
       id: 'type',
       label: 'Type',
+      filterIds: [
+        'document',
+        'task',
+        'email',
+        'people',
+        'teams',
+        'agent',
+        'project',
+        'file',
+      ],
       allowMultiple: false, // Mutually exclusive
     },
   ];

@@ -32,12 +32,11 @@
 export type {
   // Core types
   ListState,
-  ListStateTransition,
-  ReactiveListState,
-  ListStateSetters,
+  StateTransition,
+  ReactiveState,
+  StateSetters,
   // Plugin types
   Plugin,
-  PluginFactory,
   CleanupFn,
   // Command types
   CommandHandler,

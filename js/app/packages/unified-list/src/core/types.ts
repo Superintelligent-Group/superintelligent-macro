@@ -216,18 +216,13 @@ export type FilterConfig<T> = {
   readonly label: string;
   readonly predicate: FilterPredicate<T>;
   readonly group?: string;
-  /** @deprecated Active state is managed by filter plugin store */
-  readonly active?: boolean;
 };
 
 /** Filter group for mutual exclusivity */
 export type FilterGroup = {
   readonly id: string;
   readonly label: string;
-  /** Filter IDs in this group (preferred) */
-  readonly filterIds?: readonly string[];
-  /** @deprecated Use filterIds instead. Filter configs - used for backwards compat */
-  readonly filters?: readonly FilterConfig<unknown>[];
+  readonly filterIds: readonly string[];
   readonly allowMultiple?: boolean;
 };
 
