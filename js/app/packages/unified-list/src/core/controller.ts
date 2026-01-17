@@ -174,7 +174,14 @@ export function createListController<T extends EntityConstraint>(
     return result;
   };
 
-  /** Scroll to entity by ID - maintains cursor position during scroll */
+  /**
+   * Scroll to entity by ID - ensures focused item is always visible.
+   *
+   * Scroll behavior:
+   * - If item is above viewport: scroll to put it at top
+   * - If item is below viewport: scroll to put it at bottom
+   * - If item is already visible: no scroll needed
+   */
   const scrollToEntity = (entityId: string): void => {
     const handle = virtualizerHandle();
     if (!handle) return;
@@ -182,10 +189,10 @@ export function createListController<T extends EntityConstraint>(
     const index = getEntityIndex(entityId);
     if (index === -1) return;
 
-    const totalEntities = state.entities().length;
-
-    // Get visible items to determine scroll behavior
+    // Get current visible range
     const virtualItems = handle.getVirtualItems();
+
+    // If no items visible or handle not ready, just scroll to center
     if (virtualItems.length === 0) {
       handle.scrollToIndex(index, { align: 'center' });
       return;
@@ -193,6 +200,8 @@ export function createListController<T extends EntityConstraint>(
 
     const firstVisible = virtualItems[0];
     const lastVisible = virtualItems[virtualItems.length - 1];
+
+    // Safety check
     if (!firstVisible || !lastVisible) {
       handle.scrollToIndex(index, { align: 'center' });
       return;
@@ -201,23 +210,21 @@ export function createListController<T extends EntityConstraint>(
     const firstVisibleIndex = firstVisible.index;
     const lastVisibleIndex = lastVisible.index;
 
-    // Going up: item is at or above top of viewport - keep it at top
+    // Item is already fully visible - no scroll needed
+    if (index > firstVisibleIndex && index < lastVisibleIndex) {
+      return;
+    }
+
+    // Item is at or above top of viewport - scroll it to top
     if (index <= firstVisibleIndex) {
       handle.scrollToIndex(index, { align: 'start' });
       return;
     }
 
-    // Going down: item is at or past second-to-last visible position
-    // Keep focused item at second-to-last by scrolling index+1 to bottom
-    const secondToLastIndex = lastVisibleIndex - 1;
-    if (index >= secondToLastIndex) {
-      // Only scroll if there's more content below
-      const hasMoreBelow = index < totalEntities - 1;
-      if (hasMoreBelow) {
-        // Scroll so that index+1 is at the bottom, making index second-to-last
-        handle.scrollToIndex(index + 1, { align: 'end' });
-      }
-      // If at the very end of data, no scroll needed - can select last item
+    // Item is at or below bottom of viewport - scroll it to bottom
+    if (index >= lastVisibleIndex) {
+      handle.scrollToIndex(index, { align: 'end' });
+      return;
     }
   };
 

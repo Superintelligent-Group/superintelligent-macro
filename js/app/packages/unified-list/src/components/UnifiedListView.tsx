@@ -364,6 +364,8 @@ export function UnifiedListView<T extends { id: string }>(
       return;
     }
 
+    // Create adapter that reads from virtua's handle at call time (not capture time)
+    // This ensures we always get fresh values when methods are called
     const adaptedHandle: VirtualizerHandle = {
       scrollToIndex: (index, options) => {
         handle.scrollToIndex(index, options);
@@ -371,16 +373,21 @@ export function UnifiedListView<T extends { id: string }>(
       scrollToOffset: (offset) => {
         handle.scrollTo(offset);
       },
-      scrollOffset: handle.scrollOffset,
+      // Use getter to ensure fresh value on each access
+      get scrollOffset() {
+        return handle.scrollOffset;
+      },
       getTotalSize: () => handle.scrollSize,
       getVirtualItems: () => {
-        // virtua doesn't expose virtual items the same way, but we can approximate
-        // This is mainly used for navigation plugin
+        // Use virtua's API to calculate visible range at call time
         const items = displayItems();
-        const viewportSize = containerHeight();
         const itemSize = rowHeight();
-        const visibleCount = Math.ceil(viewportSize / itemSize);
-        const startIndex = Math.floor(handle.scrollOffset / itemSize);
+        const currentOffset = handle.scrollOffset;
+        const viewport = handle.viewportSize;
+
+        // Calculate visible range from current scroll position
+        const startIndex = Math.max(0, Math.floor(currentOffset / itemSize));
+        const visibleCount = Math.ceil(viewport / itemSize);
         const endIndex = Math.min(startIndex + visibleCount, items.length);
 
         return Array.from({ length: endIndex - startIndex }, (_, i) => ({
@@ -630,7 +637,7 @@ export function UnifiedListView<T extends { id: string }>(
                     {props.renderRow(entity, {
                       index: index(),
                       focused: isFocused(),
-                      selected: isFocused(),
+                      selected: isSelected(),
                       checked: isSelected(),
                       triggerMeasure,
                     })}
