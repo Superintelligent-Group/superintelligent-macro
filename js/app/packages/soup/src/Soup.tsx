@@ -246,7 +246,7 @@ export function Soup(props: SoupProps): JSX.Element {
   // ---------------------------------------------------------------------------
 
   const filterConfigs = createSoupFilterConfigs();
-  const filterGroups: FilterGroup<EnhancedEntity>[] = [
+  const filterGroups: FilterGroup[] = [
     {
       id: 'focus',
       label: 'Focus',

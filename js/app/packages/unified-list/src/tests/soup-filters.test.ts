@@ -539,7 +539,7 @@ describe('Soup Filter Plugin Integration', () => {
     it('should handle mutual exclusivity in groups', () => {
       createRoot((dispose) => {
         const filterConfigs = createSoupFilterConfigs();
-        const filterGroups: FilterGroup<EnhancedEntity>[] = [
+        const filterGroups: FilterGroup[] = [
           {
             id: 'type',
             label: 'Type',

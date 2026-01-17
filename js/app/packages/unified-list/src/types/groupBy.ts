@@ -109,10 +109,10 @@ export type GroupStore<T> = {
   expandAll: () => void;
 
   /** Transform entities into display items (headers + entities) */
-  createDisplayItems: (entities: T[]) => DisplayItem<T>[];
+  createDisplayItems: (entities: readonly T[]) => DisplayItem<T>[];
 
   /** Get ordered list of visible group IDs (groups with at least one entity) */
-  getVisibleGroupIds: (entities: T[]) => GroupId[];
+  getVisibleGroupIds: (entities: readonly T[]) => GroupId[];
 };
 
 // ============================================================================

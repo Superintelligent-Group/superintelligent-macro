@@ -1,59 +1,83 @@
 /**
  * Filter Plugin - composable filtering system.
  *
- * Design:
- * - Filters are pure predicate functions
- * - Filter groups handle mutual exclusivity
- * - Filters can be combined with AND/OR logic
- * - State changes trigger automatic re-filtering
+ * Filters are pure predicate functions that can be composed.
+ * - AND composition by default
+ * - OR composition available via utility
+ * - Filter groups for mutual exclusivity
+ * - Reactive filter state with computed filterFn
+ *
+ * The plugin does NOT auto-apply filtering to entities.
+ * Consumer is responsible for using filterStore.filterFn() on their data.
+ * This keeps the pipeline explicit and testable.
+ *
+ * @example
+ * ```ts
+ * const { store, plugin } = createFilterPlugin({
+ *   filters: [
+ *     { id: 'docs', label: 'Documents', predicate: (e) => e.type === 'document' },
+ *     { id: 'tasks', label: 'Tasks', predicate: (e) => e.type === 'task' },
+ *   ],
+ *   groups: [{ id: 'type', filterIds: ['docs', 'tasks'], allowMultiple: false }],
+ * });
+ *
+ * // In component: apply filter
+ * const filtered = createMemo(() => entities().filter(store.filterFn()));
+ * ```
  */
 
 import { createSignal, createMemo, type Accessor, type Setter } from 'solid-js';
 import type {
+  EntityConstraint,
   Plugin,
-  CleanupFn,
   ListController,
   FilterConfig,
   FilterGroup,
-  FilterState,
-} from '../types';
-import { CommandPriority } from '../types';
+  FilterPredicate,
+  CleanupFn,
+  PluginWithStore,
+} from '../core/types';
+import { CommandPriority } from '../core/types';
 import { ListCommands, type ToggleFilterPayload } from '../core/commands';
 
 // ============================================================================
-// Filter State Management
+// Filter Store Types
 // ============================================================================
 
 export type FilterStore<T> = {
   /** All registered filters */
-  filters: Accessor<Map<string, FilterConfig<T>>>;
+  readonly filters: Accessor<ReadonlyMap<string, FilterConfig<T>>>;
   /** All registered filter groups */
-  groups: Accessor<Map<string, FilterGroup<T>>>;
+  readonly groups: Accessor<ReadonlyMap<string, FilterGroup>>;
   /** Currently active filter IDs */
-  activeFilterIds: Accessor<Set<string>>;
-  /** Setters */
-  setActiveFilterIds: Setter<Set<string>>;
-  /** Computed filter function */
-  filterFn: Accessor<(entity: T) => boolean>;
+  readonly activeFilterIds: Accessor<ReadonlySet<string>>;
+  /** Set active filter IDs */
+  readonly setActiveFilterIds: Setter<ReadonlySet<string>>;
+  /** Computed filter function (AND composition of active filters) */
+  readonly filterFn: Accessor<FilterPredicate<T>>;
+  /** Check if a specific filter is active */
+  readonly isActive: (filterId: string) => boolean;
+  /** Get active filters in a specific group */
+  readonly getActiveInGroup: (groupId: string) => readonly string[];
 };
 
-/** Create reactive filter state */
-export function createFilterStore<T>(
-  initialFilters?: Map<string, FilterConfig<T>>,
-  initialGroups?: Map<string, FilterGroup<T>>
-): FilterStore<T> {
-  const [filters, setFilters] = createSignal<Map<string, FilterConfig<T>>>(
-    initialFilters ?? new Map()
-  );
-  const [groups, setGroups] = createSignal<Map<string, FilterGroup<T>>>(
-    initialGroups ?? new Map()
-  );
-  const [activeFilterIds, setActiveFilterIds] = createSignal<Set<string>>(
-    new Set()
-  );
+// ============================================================================
+// Filter Store Factory
+// ============================================================================
 
-  /** Compose active filters into a single predicate */
-  const filterFn = createMemo<(entity: T) => boolean>(() => {
+/** Create reactive filter store */
+export function createFilterStore<T>(
+  initialFilters: ReadonlyMap<string, FilterConfig<T>> = new Map(),
+  initialGroups: ReadonlyMap<string, FilterGroup> = new Map(),
+  initialActive: ReadonlySet<string> = new Set()
+): FilterStore<T> {
+  const [filters] = createSignal(initialFilters);
+  const [groups] = createSignal(initialGroups);
+  const [activeFilterIds, setActiveFilterIds] =
+    createSignal<ReadonlySet<string>>(initialActive);
+
+  /** Compose active filters into a single predicate (AND logic) */
+  const filterFn = createMemo<FilterPredicate<T>>(() => {
     const active = activeFilterIds();
     const filterMap = filters();
 
@@ -61,8 +85,8 @@ export function createFilterStore<T>(
       return () => true;
     }
 
-    // Get predicates for all active filters
-    const predicates: ((entity: T) => boolean)[] = [];
+    // Collect predicates for active filters
+    const predicates: FilterPredicate<T>[] = [];
     for (const filterId of active) {
       const filter = filterMap.get(filterId);
       if (filter) {
@@ -74,9 +98,28 @@ export function createFilterStore<T>(
       return () => true;
     }
 
-    // Combine with AND logic
+    // AND composition
     return (entity: T) => predicates.every((pred) => pred(entity));
   });
+
+  /** Check if a specific filter is active */
+  const isActive = (filterId: string): boolean => {
+    return activeFilterIds().has(filterId);
+  };
+
+  /** Get filter IDs from a group (handles both filterIds and filters properties) */
+  const getGroupFilterIds = (group: FilterGroup): readonly string[] => {
+    if (group.filterIds) return group.filterIds;
+    if (group.filters) return group.filters.map((f) => f.id);
+    return [];
+  };
+
+  /** Get active filters in a specific group */
+  const getActiveInGroup = (groupId: string): readonly string[] => {
+    const group = groups().get(groupId);
+    if (!group) return [];
+    return getGroupFilterIds(group).filter((id) => activeFilterIds().has(id));
+  };
 
   return {
     filters,
@@ -84,6 +127,8 @@ export function createFilterStore<T>(
     activeFilterIds,
     setActiveFilterIds,
     filterFn,
+    isActive,
+    getActiveInGroup,
   };
 }
 
@@ -93,99 +138,115 @@ export function createFilterStore<T>(
 
 export type FilterPluginConfig<T> = {
   /** Initial filters to register */
-  filters?: FilterConfig<T>[];
+  readonly filters?: readonly FilterConfig<T>[];
   /** Filter groups for mutual exclusivity */
-  groups?: FilterGroup<T>[];
+  readonly groups?: readonly FilterGroup[];
+  /** Initially active filter IDs */
+  readonly initialActive?: readonly string[];
   /** Callback when filters change */
-  onFilterChange?: (activeIds: Set<string>) => void;
+  readonly onFilterChange?: (activeIds: ReadonlySet<string>) => void;
 };
 
 // ============================================================================
 // Filter Plugin Factory
 // ============================================================================
 
-/** Create a filter plugin */
-export function createFilterPlugin<T extends { id: string }>(
+/** Create a filter plugin with store */
+export function createFilterPlugin<T extends EntityConstraint>(
   config: FilterPluginConfig<T> = {}
-): Plugin<T, ListController<T>> & { store: FilterStore<T> } {
-  const { filters: initialFilters = [], groups: initialGroups = [] } = config;
+): PluginWithStore<T, FilterStore<T>> {
+  const {
+    filters: filterConfigs = [],
+    groups: groupConfigs = [],
+    initialActive = [],
+    onFilterChange,
+  } = config;
 
-  // Initialize filter and group maps
+  // Build maps from arrays
   const filterMap = new Map<string, FilterConfig<T>>();
-  initialFilters.forEach((filter) => {
+  for (const filter of filterConfigs) {
     filterMap.set(filter.id, filter);
-  });
+  }
 
-  const groupMap = new Map<string, FilterGroup<T>>();
-  initialGroups.forEach((group) => {
+  const groupMap = new Map<string, FilterGroup>();
+  for (const group of groupConfigs) {
     groupMap.set(group.id, group);
-  });
+  }
 
-  // Create store with initialized filters
-  const store = createFilterStore<T>(filterMap, groupMap);
+  // Create store
+  const store = createFilterStore<T>(
+    filterMap,
+    groupMap,
+    new Set(initialActive)
+  );
 
-  const plugin: Plugin<T, ListController<T>> = (
-    controller: ListController<T>
-  ) => {
+  // Plugin function
+  const plugin: Plugin<T> = (controller: ListController<T>) => {
     const cleanups: CleanupFn[] = [];
 
     // Register toggle filter command
-    cleanups.push(
-      controller.commands.register<ToggleFilterPayload>(
-        ListCommands.TOGGLE_FILTER,
-        (payload) => {
-          const { filterId } = payload;
-          const currentActive = store.activeFilterIds();
-          const filterConfig = filterMap.get(filterId);
+    const toggleReg = controller.commands.register<ToggleFilterPayload>(
+      ListCommands.TOGGLE_FILTER,
+      (payload) => {
+        const { filterId } = payload;
+        const filterConfig = filterMap.get(filterId);
+        if (!filterConfig) return false;
 
-          if (!filterConfig) return false;
+        const currentActive = store.activeFilterIds();
+        const newActive = new Set(currentActive);
 
-          const newActive = new Set(currentActive);
-
-          if (newActive.has(filterId)) {
-            // Deactivate filter
-            newActive.delete(filterId);
-          } else {
-            // Activate filter - check for mutual exclusivity
-            if (filterConfig.group) {
-              const group = groupMap.get(filterConfig.group);
-              if (group && !group.allowMultiple) {
-                // Remove other filters in the same group
-                group.filters.forEach((f) => {
-                  newActive.delete(f.id);
-                });
+        if (newActive.has(filterId)) {
+          // Deactivate filter
+          newActive.delete(filterId);
+        } else {
+          // Activate filter
+          // Handle mutual exclusivity via groups
+          if (filterConfig.group) {
+            const group = groupMap.get(filterConfig.group);
+            if (group && !group.allowMultiple) {
+              // Remove other filters in same group
+              // Support both filterIds and deprecated filters property
+              const groupFilterIds =
+                group.filterIds ?? group.filters?.map((f) => f.id) ?? [];
+              for (const otherId of groupFilterIds) {
+                if (otherId !== filterId) {
+                  newActive.delete(otherId);
+                }
               }
             }
-            newActive.add(filterId);
           }
+          newActive.add(filterId);
+        }
 
-          store.setActiveFilterIds(newActive);
-          config.onFilterChange?.(newActive);
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        store.setActiveFilterIds(newActive);
+        onFilterChange?.(newActive);
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(toggleReg.unregister);
 
     // Register clear filters command
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.CLEAR_FILTERS,
-        () => {
-          store.setActiveFilterIds(new Set<string>());
-          config.onFilterChange?.(new Set<string>());
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const clearReg = controller.commands.register(
+      ListCommands.CLEAR_FILTERS,
+      () => {
+        const empty = new Set<string>();
+        store.setActiveFilterIds(empty);
+        onFilterChange?.(empty);
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(clearReg.unregister);
 
     return () => {
-      cleanups.forEach((cleanup) => cleanup());
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
     };
   };
 
-  // Attach store to plugin for external access
+  // Attach store to plugin
   return Object.assign(plugin, { store });
 }
 
@@ -193,88 +254,77 @@ export function createFilterPlugin<T extends { id: string }>(
 // Filter Utilities
 // ============================================================================
 
-/** Compose multiple filter predicates with AND logic */
+/** Compose multiple predicates with AND logic */
 export function composeFilters<T>(
-  ...predicates: ((entity: T) => boolean)[]
-): (entity: T) => boolean {
+  ...predicates: FilterPredicate<T>[]
+): FilterPredicate<T> {
   if (predicates.length === 0) return () => true;
   return (entity: T) => predicates.every((pred) => pred(entity));
 }
 
-/** Compose multiple filter predicates with OR logic */
+/** Compose multiple predicates with OR logic */
 export function composeFiltersOr<T>(
-  ...predicates: ((entity: T) => boolean)[]
-): (entity: T) => boolean {
+  ...predicates: FilterPredicate<T>[]
+): FilterPredicate<T> {
   if (predicates.length === 0) return () => true;
   return (entity: T) => predicates.some((pred) => pred(entity));
 }
 
-/** Negate a filter predicate */
+/** Negate a predicate */
 export function negateFilter<T>(
-  predicate: (entity: T) => boolean
-): (entity: T) => boolean {
+  predicate: FilterPredicate<T>
+): FilterPredicate<T> {
   return (entity: T) => !predicate(entity);
 }
 
-/** Create a filter that matches entity type */
+/** Create a type-matching predicate */
 export function createTypeFilter<T extends { type: string }>(
-  types: string[]
-): (entity: T) => boolean {
+  types: readonly string[]
+): FilterPredicate<T> {
   const typeSet = new Set(types);
   return (entity: T) => typeSet.has(entity.type);
 }
 
-/** Create a filter that matches a property value */
+/** Create a property equality predicate */
 export function createPropertyFilter<T, K extends keyof T>(
   property: K,
   value: T[K]
-): (entity: T) => boolean {
+): FilterPredicate<T> {
   return (entity: T) => entity[property] === value;
 }
 
-/** Create a filter that checks if a property exists and is truthy */
+/** Create a truthy property predicate */
 export function createTruthyFilter<T, K extends keyof T>(
   property: K
-): (entity: T) => boolean {
+): FilterPredicate<T> {
   return (entity: T) => Boolean(entity[property]);
 }
 
 // ============================================================================
-// Pre-built Filter Configs
+// Pre-built Filter Config Factories
 // ============================================================================
 
 /** Create entity type filter config */
 export function entityTypeFilter<T extends { type: string }>(
   id: string,
   label: string,
-  types: string[],
+  types: readonly string[],
   group?: string
 ): FilterConfig<T> {
   return {
     id,
     label,
     predicate: createTypeFilter(types),
-    active: false,
     group,
   };
 }
 
-/** Create filter group config */
-export function createFilterGroup<T>(
+/** Create filter group */
+export function createFilterGroup(
   id: string,
   label: string,
-  filters: FilterConfig<T>[],
+  filterIds: readonly string[],
   allowMultiple = false
-): FilterGroup<T> {
-  // Set group on each filter
-  filters.forEach((f) => {
-    f.group = id;
-  });
-
-  return {
-    id,
-    label,
-    filters,
-    allowMultiple,
-  };
+): FilterGroup {
+  return { id, label, filterIds, allowMultiple };
 }

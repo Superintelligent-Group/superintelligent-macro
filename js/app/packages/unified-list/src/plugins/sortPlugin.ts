@@ -10,12 +10,14 @@
 
 import { createSignal, createMemo, type Accessor, type Setter } from 'solid-js';
 import type {
+  EntityConstraint,
   Plugin,
-  CleanupFn,
   ListController,
   SortConfig,
-  SortState,
-} from '../types';
+  Comparator,
+  SortOrder,
+  PluginWithStore,
+} from '../core/types';
 
 // ============================================================================
 // Sort State Management
@@ -23,37 +25,39 @@ import type {
 
 export type SortStore<T> = {
   /** Available sort options */
-  sorts: Accessor<Map<string, SortConfig<T>>>;
+  readonly sorts: Accessor<ReadonlyMap<string, SortConfig<T>>>;
   /** Currently active sort ID */
-  activeSortId: Accessor<string | null>;
+  readonly activeSortId: Accessor<string | null>;
   /** Sort direction */
-  sortOrder: Accessor<'ascending' | 'descending'>;
+  readonly sortOrder: Accessor<SortOrder>;
   /** Setters */
-  setActiveSortId: Setter<string | null>;
-  setSortOrder: Setter<'ascending' | 'descending'>;
+  readonly setActiveSortId: Setter<string | null>;
+  readonly setSortOrder: Setter<SortOrder>;
   /** Computed sort function */
-  sortFn: Accessor<((a: T, b: T) => number) | null>;
+  readonly sortFn: Accessor<Comparator<T> | null>;
+  /** Toggle order */
+  readonly toggleOrder: () => void;
 };
 
 /** Create reactive sort state */
 export function createSortStore<T>(
-  initialSorts: SortConfig<T>[] = [],
+  initialSorts: readonly SortConfig<T>[] = [],
   defaultSortId: string | null = null,
-  defaultOrder: 'ascending' | 'descending' = 'descending'
+  defaultOrder: SortOrder = 'descending'
 ): SortStore<T> {
   const sortMap = new Map<string, SortConfig<T>>();
-  initialSorts.forEach((sort) => sortMap.set(sort.id, sort));
+  for (const sort of initialSorts) {
+    sortMap.set(sort.id, sort);
+  }
 
-  const [sorts] = createSignal<Map<string, SortConfig<T>>>(sortMap);
+  const [sorts] = createSignal<ReadonlyMap<string, SortConfig<T>>>(sortMap);
   const [activeSortId, setActiveSortId] = createSignal<string | null>(
     defaultSortId
   );
-  const [sortOrder, setSortOrder] = createSignal<'ascending' | 'descending'>(
-    defaultOrder
-  );
+  const [sortOrder, setSortOrder] = createSignal<SortOrder>(defaultOrder);
 
   /** Get the active sort comparator */
-  const sortFn = createMemo<((a: T, b: T) => number) | null>(() => {
+  const sortFn = createMemo<Comparator<T> | null>(() => {
     const sortId = activeSortId();
     if (!sortId) return null;
 
@@ -71,6 +75,11 @@ export function createSortStore<T>(
     return baseComparator;
   });
 
+  /** Toggle sort order */
+  const toggleOrder = () => {
+    setSortOrder((prev) => (prev === 'ascending' ? 'descending' : 'ascending'));
+  };
+
   return {
     sorts,
     activeSortId,
@@ -78,6 +87,7 @@ export function createSortStore<T>(
     setActiveSortId,
     setSortOrder,
     sortFn,
+    toggleOrder,
   };
 }
 
@@ -87,16 +97,13 @@ export function createSortStore<T>(
 
 export type SortPluginConfig<T> = {
   /** Available sort options */
-  sorts: SortConfig<T>[];
+  readonly sorts?: readonly SortConfig<T>[];
   /** Default sort ID */
-  defaultSortId?: string;
+  readonly defaultSortId?: string;
   /** Default sort order */
-  defaultOrder?: 'ascending' | 'descending';
+  readonly defaultOrder?: SortOrder;
   /** Callback when sort changes */
-  onSortChange?: (
-    sortId: string | null,
-    order: 'ascending' | 'descending'
-  ) => void;
+  readonly onSortChange?: (sortId: string | null, order: SortOrder) => void;
 };
 
 // ============================================================================
@@ -104,19 +111,17 @@ export type SortPluginConfig<T> = {
 // ============================================================================
 
 /** Create a sort plugin */
-export function createSortPlugin<T extends { id: string }>(
-  config: SortPluginConfig<T>
-): Plugin<T, ListController<T>> & { store: SortStore<T> } {
+export function createSortPlugin<T extends EntityConstraint>(
+  config: SortPluginConfig<T> = {}
+): PluginWithStore<T, SortStore<T>> {
   const store = createSortStore<T>(
-    config.sorts,
+    config.sorts ?? [],
     config.defaultSortId ?? null,
     config.defaultOrder ?? 'descending'
   );
 
-  const plugin: Plugin<T, ListController<T>> = (
-    controller: ListController<T>
-  ) => {
-    // No commands needed for sort - state is controlled via store
+  const plugin: Plugin<T> = (_controller: ListController<T>) => {
+    // Sort plugin is passive - state is controlled via store
     return () => {};
   };
 

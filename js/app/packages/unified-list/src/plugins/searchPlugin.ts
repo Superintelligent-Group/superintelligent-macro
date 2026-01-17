@@ -13,9 +13,14 @@
  */
 
 import { createSignal, type Accessor, type Setter, createMemo } from 'solid-js';
-import type { Plugin, CleanupFn, ListController } from '../types';
-import { CommandPriority } from '../types';
-import { ListCommands } from '../core/commands';
+import type {
+  EntityConstraint,
+  Plugin,
+  CleanupFn,
+  ListController,
+  PluginWithStore,
+} from '../core/types';
+import { CommandPriority, ListCommands } from '../core/types';
 import { fuzzyMatch as coreUtilFuzzyMatch } from '@core/util/fuzzy';
 import type { SearchData } from '@macro-entity';
 
@@ -219,9 +224,9 @@ export type SearchPluginConfig<T> = SearchStoreConfig & {
 // ============================================================================
 
 /** Create a search plugin */
-export function createSearchPlugin<T extends { id: string }>(
+export function createSearchPlugin<T extends EntityConstraint>(
   config: SearchPluginConfig<T> = {}
-): Plugin<T, ListController<T>> & { store: SearchStore<T> } {
+): PluginWithStore<T, SearchStore<T>> {
   const {
     localDebounceMs,
     serverDebounceMs,
@@ -240,38 +245,36 @@ export function createSearchPlugin<T extends { id: string }>(
     useNameFuzzySearch,
   }) as unknown as SearchStore<T>;
 
-  const plugin: Plugin<T, ListController<T>> = (
-    controller: ListController<T>
-  ): CleanupFn => {
+  const plugin: Plugin<T> = (controller: ListController<T>): CleanupFn => {
     const cleanups: CleanupFn[] = [];
 
     // Register focus search command
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.FOCUS_SEARCH,
-        () => {
-          // This would be handled by the UI component
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const focusReg = controller.commands.register(
+      ListCommands.FOCUS_SEARCH,
+      () => {
+        // This would be handled by the UI component
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(focusReg.unregister);
 
     // Register clear search command
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.CLEAR_SEARCH,
-        () => {
-          store.setSearchText('');
-          onSearchChange?.('');
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const clearReg = controller.commands.register(
+      ListCommands.CLEAR_SEARCH,
+      () => {
+        store.setSearchText('');
+        onSearchChange?.('');
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(clearReg.unregister);
 
     return () => {
-      cleanups.forEach((cleanup) => cleanup());
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
     };
   };
 

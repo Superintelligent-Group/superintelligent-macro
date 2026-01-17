@@ -10,13 +10,15 @@
 
 import { createSignal, type Accessor, type Setter } from 'solid-js';
 import type {
+  EntityConstraint,
   Plugin,
   CleanupFn,
   ListController,
   SelectionMode,
-} from '../types';
-import { CommandPriority } from '../types';
-import { ListCommands, type ToggleSelectionPayload } from '../core/commands';
+  PluginWithStore,
+} from '../core/types';
+import { CommandPriority, ListCommands } from '../core/types';
+import type { ToggleSelectionPayload } from '../core/commands';
 
 // ============================================================================
 // Selection State
@@ -24,24 +26,26 @@ import { ListCommands, type ToggleSelectionPayload } from '../core/commands';
 
 export type SelectionStore = {
   /** Selection mode */
-  mode: Accessor<SelectionMode>;
+  readonly mode: Accessor<SelectionMode>;
   /** Selected entity IDs */
-  selectedIds: Accessor<Set<string>>;
+  readonly selectedIds: Accessor<ReadonlySet<string>>;
   /** Anchor ID for range selection */
-  anchorId: Accessor<string | null>;
+  readonly anchorId: Accessor<string | null>;
   /** Last clicked ID */
-  lastClickedId: Accessor<string | null>;
+  readonly lastClickedId: Accessor<string | null>;
   /** Setters */
-  setMode: Setter<SelectionMode>;
-  setSelectedIds: Setter<Set<string>>;
-  setAnchorId: Setter<string | null>;
-  setLastClickedId: Setter<string | null>;
+  readonly setMode: Setter<SelectionMode>;
+  readonly setSelectedIds: Setter<ReadonlySet<string>>;
+  readonly setAnchorId: Setter<string | null>;
+  readonly setLastClickedId: Setter<string | null>;
 };
 
 /** Create selection store */
 export function createSelectionStore(): SelectionStore {
   const [mode, setMode] = createSignal<SelectionMode>('multi');
-  const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = createSignal<ReadonlySet<string>>(
+    new Set()
+  );
   const [anchorId, setAnchorId] = createSignal<string | null>(null);
   const [lastClickedId, setLastClickedId] = createSignal<string | null>(null);
 
@@ -63,9 +67,9 @@ export function createSelectionStore(): SelectionStore {
 
 export type SelectionPluginConfig = {
   /** Initial selection mode */
-  mode?: SelectionMode;
+  readonly mode?: SelectionMode;
   /** Callback when selection changes */
-  onSelectionChange?: (selectedIds: Set<string>) => void;
+  readonly onSelectionChange?: (selectedIds: ReadonlySet<string>) => void;
 };
 
 // ============================================================================
@@ -73,197 +77,192 @@ export type SelectionPluginConfig = {
 // ============================================================================
 
 /** Create a selection plugin */
-export function createSelectionPlugin<T extends { id: string }>(
+export function createSelectionPlugin<T extends EntityConstraint>(
   config: SelectionPluginConfig = {}
-): Plugin<T, ListController<T>> & { store: SelectionStore } {
+): PluginWithStore<T, SelectionStore> {
   const store = createSelectionStore();
   if (config.mode) {
     store.setMode(config.mode);
   }
 
-  const plugin: Plugin<T, ListController<T>> = (
-    controller: ListController<T>
-  ): CleanupFn => {
+  const plugin: Plugin<T> = (controller: ListController<T>): CleanupFn => {
     const cleanups: CleanupFn[] = [];
 
     /** Toggle selection of focused entity */
-    cleanups.push(
-      controller.commands.register<ToggleSelectionPayload>(
-        ListCommands.TOGGLE_SELECTION,
-        (payload) => {
-          const { entityId, shiftKey } = payload;
+    const toggleReg = controller.commands.register<ToggleSelectionPayload>(
+      ListCommands.TOGGLE_SELECTION,
+      (payload) => {
+        const { entityId, shiftKey } = payload;
 
-          if (shiftKey && store.mode() === 'multi') {
-            // Range selection
-            const anchor = store.anchorId();
-            if (anchor) {
-              const anchorIndex = controller.getEntityIndex(anchor);
-              const targetIndex = controller.getEntityIndex(entityId);
+        if (shiftKey && store.mode() === 'multi') {
+          // Range selection
+          const anchor = store.anchorId();
+          if (anchor) {
+            const anchorIndex = controller.getEntityIndex(anchor);
+            const targetIndex = controller.getEntityIndex(entityId);
 
-              if (anchorIndex !== -1 && targetIndex !== -1) {
-                const entities = controller.state.entities();
-                const startIndex = Math.min(anchorIndex, targetIndex);
-                const endIndex = Math.max(anchorIndex, targetIndex);
+            if (anchorIndex !== -1 && targetIndex !== -1) {
+              const entities = controller.state.entities();
+              const startIndex = Math.min(anchorIndex, targetIndex);
+              const endIndex = Math.max(anchorIndex, targetIndex);
 
-                const newSelectedIds = new Set(store.selectedIds());
-                for (let i = startIndex; i <= endIndex; i++) {
-                  const entity = entities[i];
-                  if (entity) {
-                    newSelectedIds.add(entity.id);
-                  }
+              const newSelectedIds = new Set(store.selectedIds());
+              for (let i = startIndex; i <= endIndex; i++) {
+                const entity = entities[i];
+                if (entity) {
+                  newSelectedIds.add(entity.id);
                 }
-
-                store.setSelectedIds(newSelectedIds);
-                controller.setters.setSelectedIds(newSelectedIds);
-                config.onSelectionChange?.(newSelectedIds);
-                store.setLastClickedId(entityId);
-                return true;
               }
+
+              store.setSelectedIds(newSelectedIds);
+              controller.setters.setSelectedIds(newSelectedIds);
+              config.onSelectionChange?.(newSelectedIds);
+              store.setLastClickedId(entityId);
+              return true;
             }
           }
+        }
 
-          // Single toggle
-          const currentSelected = store.selectedIds();
-          const newSelectedIds = new Set(currentSelected);
+        // Single toggle
+        const currentSelected = store.selectedIds();
+        const newSelectedIds = new Set(currentSelected);
 
-          if (newSelectedIds.has(entityId)) {
-            newSelectedIds.delete(entityId);
-          } else {
-            newSelectedIds.add(entityId);
-            store.setAnchorId(entityId);
-          }
+        if (newSelectedIds.has(entityId)) {
+          newSelectedIds.delete(entityId);
+        } else {
+          newSelectedIds.add(entityId);
+          store.setAnchorId(entityId);
+        }
 
-          store.setSelectedIds(newSelectedIds);
-          controller.setters.setSelectedIds(newSelectedIds);
-          config.onSelectionChange?.(newSelectedIds);
-          store.setLastClickedId(entityId);
+        store.setSelectedIds(newSelectedIds);
+        controller.setters.setSelectedIds(newSelectedIds);
+        config.onSelectionChange?.(newSelectedIds);
+        store.setLastClickedId(entityId);
 
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(toggleReg.unregister);
 
     /** Select focused entity */
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.SELECT_FOCUSED,
-        () => {
-          const focusedId = controller.state.focusedId();
-          if (!focusedId) return false;
+    const selectFocusedReg = controller.commands.register(
+      ListCommands.SELECT_FOCUSED,
+      () => {
+        const focusedId = controller.state.focusedId();
+        if (!focusedId) return false;
 
-          return controller.commands.dispatch<ToggleSelectionPayload>(
-            ListCommands.TOGGLE_SELECTION,
-            { entityId: focusedId }
-          );
-        },
-        CommandPriority.NORMAL
-      )
+        return controller.commands.dispatch<ToggleSelectionPayload>(
+          ListCommands.TOGGLE_SELECTION,
+          { entityId: focusedId }
+        );
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(selectFocusedReg.unregister);
 
     /** Select all entities */
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.SELECT_ALL,
-        () => {
-          const entities = controller.state.entities();
-          const allIds = new Set(entities.map((e) => e.id));
+    const selectAllReg = controller.commands.register(
+      ListCommands.SELECT_ALL,
+      () => {
+        const entities = controller.state.entities();
+        const allIds: ReadonlySet<string> = new Set(entities.map((e) => e.id));
 
-          store.setSelectedIds(allIds);
-          controller.setters.setSelectedIds(allIds);
-          config.onSelectionChange?.(allIds);
+        store.setSelectedIds(allIds);
+        controller.setters.setSelectedIds(allIds);
+        config.onSelectionChange?.(allIds);
 
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(selectAllReg.unregister);
 
     /** Clear selection */
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.CLEAR_SELECTION,
-        () => {
-          store.setSelectedIds(new Set<string>());
-          store.setAnchorId(null);
-          store.setLastClickedId(null);
-          controller.setters.setSelectedIds(new Set<string>());
-          config.onSelectionChange?.(new Set<string>());
+    const clearReg = controller.commands.register(
+      ListCommands.CLEAR_SELECTION,
+      () => {
+        const empty: ReadonlySet<string> = new Set();
+        store.setSelectedIds(empty);
+        store.setAnchorId(null);
+        store.setLastClickedId(null);
+        controller.setters.setSelectedIds(empty);
+        config.onSelectionChange?.(empty);
 
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(clearReg.unregister);
 
     /** Extend selection up */
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.EXTEND_SELECTION_UP,
-        () => {
-          const focusedId = controller.state.focusedId();
-          if (!focusedId) return false;
+    const extendUpReg = controller.commands.register(
+      ListCommands.EXTEND_SELECTION_UP,
+      () => {
+        const focusedId = controller.state.focusedId();
+        if (!focusedId) return false;
 
-          const entities = controller.state.entities();
-          const currentIndex = controller.getEntityIndex(focusedId);
+        const entities = controller.state.entities();
+        const currentIndex = controller.getEntityIndex(focusedId);
 
-          if (currentIndex <= 0) return false;
+        if (currentIndex <= 0) return false;
 
-          const prevEntity = entities[currentIndex - 1];
-          if (!prevEntity) return false;
+        const prevEntity = entities[currentIndex - 1];
+        if (!prevEntity) return false;
 
-          // Navigate and select
-          controller.setters.setFocusedId(prevEntity.id);
-          controller.scrollToEntity(prevEntity.id);
+        // Navigate and select
+        controller.setters.setFocusedId(prevEntity.id);
+        controller.scrollToEntity(prevEntity.id);
 
-          // Add to selection
-          const newSelectedIds = new Set(store.selectedIds());
-          newSelectedIds.add(prevEntity.id);
-          store.setSelectedIds(newSelectedIds);
-          controller.setters.setSelectedIds(newSelectedIds);
-          config.onSelectionChange?.(newSelectedIds);
+        // Add to selection
+        const newSelectedIds = new Set(store.selectedIds());
+        newSelectedIds.add(prevEntity.id);
+        store.setSelectedIds(newSelectedIds);
+        controller.setters.setSelectedIds(newSelectedIds);
+        config.onSelectionChange?.(newSelectedIds);
 
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(extendUpReg.unregister);
 
     /** Extend selection down */
-    cleanups.push(
-      controller.commands.register(
-        ListCommands.EXTEND_SELECTION_DOWN,
-        () => {
-          const focusedId = controller.state.focusedId();
-          if (!focusedId) return false;
+    const extendDownReg = controller.commands.register(
+      ListCommands.EXTEND_SELECTION_DOWN,
+      () => {
+        const focusedId = controller.state.focusedId();
+        if (!focusedId) return false;
 
-          const entities = controller.state.entities();
-          const currentIndex = controller.getEntityIndex(focusedId);
+        const entities = controller.state.entities();
+        const currentIndex = controller.getEntityIndex(focusedId);
 
-          if (currentIndex >= entities.length - 1) return false;
+        if (currentIndex >= entities.length - 1) return false;
 
-          const nextEntity = entities[currentIndex + 1];
-          if (!nextEntity) return false;
+        const nextEntity = entities[currentIndex + 1];
+        if (!nextEntity) return false;
 
-          // Navigate and select
-          controller.setters.setFocusedId(nextEntity.id);
-          controller.scrollToEntity(nextEntity.id);
+        // Navigate and select
+        controller.setters.setFocusedId(nextEntity.id);
+        controller.scrollToEntity(nextEntity.id);
 
-          // Add to selection
-          const newSelectedIds = new Set(store.selectedIds());
-          newSelectedIds.add(nextEntity.id);
-          store.setSelectedIds(newSelectedIds);
-          controller.setters.setSelectedIds(newSelectedIds);
-          config.onSelectionChange?.(newSelectedIds);
+        // Add to selection
+        const newSelectedIds = new Set(store.selectedIds());
+        newSelectedIds.add(nextEntity.id);
+        store.setSelectedIds(newSelectedIds);
+        controller.setters.setSelectedIds(newSelectedIds);
+        config.onSelectionChange?.(newSelectedIds);
 
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(extendDownReg.unregister);
 
     return () => {
-      cleanups.forEach((cleanup) => cleanup());
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
     };
   };
 
@@ -275,12 +274,12 @@ export function createSelectionPlugin<T extends { id: string }>(
 // ============================================================================
 
 /** Calculate range selection IDs */
-export function calculateRangeSelection<T extends { id: string }>(
-  entities: T[],
+export function calculateRangeSelection<T extends EntityConstraint>(
+  entities: readonly T[],
   fromId: string,
   toId: string,
-  existingSelection: Set<string>
-): Set<string> {
+  existingSelection: ReadonlySet<string>
+): ReadonlySet<string> {
   const fromIndex = entities.findIndex((e) => e.id === fromId);
   const toIndex = entities.findIndex((e) => e.id === toId);
 

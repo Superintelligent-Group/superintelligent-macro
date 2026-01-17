@@ -9,8 +9,14 @@
  */
 
 import { createSignal } from 'solid-js';
-import type { Plugin, CleanupFn, ListController } from '../types';
-import { CommandPriority } from '../types';
+import type {
+  EntityConstraint,
+  Plugin,
+  CleanupFn,
+  ListController,
+  PluginWithStore,
+} from '../core/types';
+import { CommandPriority } from '../core/types';
 import type {
   GroupId,
   GroupKeyFn,
@@ -27,7 +33,7 @@ import type {
 // ============================================================================
 
 /** Create reactive group store */
-export function createGroupStore<T extends { id: string }>(
+export function createGroupStore<T extends EntityConstraint>(
   groupKeyFn: GroupKeyFn<T>,
   groupRegistry: GroupRegistry,
   initialCollapsed: Set<GroupId> = new Set(),
@@ -204,9 +210,9 @@ export const GroupByCommands = {
 // ============================================================================
 
 /** Create a group-by plugin */
-export function createGroupByPlugin<T extends { id: string }>(
+export function createGroupByPlugin<T extends EntityConstraint>(
   config: GroupByPluginConfig<T>
-): Plugin<T, ListController<T>> & { store: GroupStore<T> } {
+): PluginWithStore<T, GroupStore<T>> {
   const {
     groupKeyFn,
     groupRegistry,
@@ -223,65 +229,61 @@ export function createGroupByPlugin<T extends { id: string }>(
     initialEnabled
   );
 
-  const plugin: Plugin<T, ListController<T>> = (
-    controller: ListController<T>
-  ): CleanupFn => {
+  const plugin: Plugin<T> = (controller: ListController<T>): CleanupFn => {
     const cleanups: CleanupFn[] = [];
 
     // Register toggle group command
-    cleanups.push(
-      controller.commands.register<{ groupId: GroupId }>(
-        GroupByCommands.TOGGLE_GROUP,
-        (payload) => {
-          store.toggleGroup(payload.groupId);
-          onCollapseChange?.(store.collapsedGroups());
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const toggleReg = controller.commands.register<{ groupId: GroupId }>(
+      GroupByCommands.TOGGLE_GROUP,
+      (payload) => {
+        store.toggleGroup(payload.groupId);
+        onCollapseChange?.(store.collapsedGroups());
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(toggleReg.unregister);
 
     // Register collapse all command
-    cleanups.push(
-      controller.commands.register(
-        GroupByCommands.COLLAPSE_ALL_GROUPS,
-        () => {
-          store.collapseAll();
-          onCollapseChange?.(store.collapsedGroups());
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const collapseReg = controller.commands.register(
+      GroupByCommands.COLLAPSE_ALL_GROUPS,
+      () => {
+        store.collapseAll();
+        onCollapseChange?.(store.collapsedGroups());
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(collapseReg.unregister);
 
     // Register expand all command
-    cleanups.push(
-      controller.commands.register(
-        GroupByCommands.EXPAND_ALL_GROUPS,
-        () => {
-          store.expandAll();
-          onCollapseChange?.(store.collapsedGroups());
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const expandReg = controller.commands.register(
+      GroupByCommands.EXPAND_ALL_GROUPS,
+      () => {
+        store.expandAll();
+        onCollapseChange?.(store.collapsedGroups());
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(expandReg.unregister);
 
     // Register set enabled command
-    cleanups.push(
-      controller.commands.register<{ enabled: boolean }>(
-        GroupByCommands.SET_GROUP_BY_ENABLED,
-        (payload) => {
-          store.setEnabled(payload.enabled);
-          onEnabledChange?.(payload.enabled);
-          return true;
-        },
-        CommandPriority.NORMAL
-      )
+    const setEnabledReg = controller.commands.register<{ enabled: boolean }>(
+      GroupByCommands.SET_GROUP_BY_ENABLED,
+      (payload) => {
+        store.setEnabled(payload.enabled);
+        onEnabledChange?.(payload.enabled);
+        return true;
+      },
+      CommandPriority.NORMAL
     );
+    cleanups.push(setEnabledReg.unregister);
 
     return () => {
-      cleanups.forEach((cleanup) => cleanup());
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
     };
   };
 

@@ -1,11 +1,25 @@
 /**
  * Plugin Manager - composable plugin registration system.
  *
- * Similar to Lexical's plugin manager pattern:
+ * Inspired by Lexical's plugin system:
  * - Fluent interface for chaining plugin registration
  * - Automatic cleanup tracking
- * - Reactive plugin support
- * - Pre-built plugin helpers
+ * - Reactive plugin support (re-run when deps change)
+ * - Plugin composition helpers
+ *
+ * @example
+ * ```ts
+ * const manager = createPluginManager(controller);
+ *
+ * manager
+ *   .use(filterPlugin)
+ *   .use(sortPlugin)
+ *   .use(navigationPlugin)
+ *   .useAll([selectionPlugin, hotkeyPlugin]);
+ *
+ * // Later: cleanup all
+ * manager.cleanup();
+ * ```
  */
 
 import {
@@ -14,7 +28,12 @@ import {
   type Accessor,
   type AccessorArray,
 } from 'solid-js';
-import type { Plugin, CleanupFn, ListController } from '../types';
+import type {
+  EntityConstraint,
+  Plugin,
+  CleanupFn,
+  ListController,
+} from './types';
 
 // ============================================================================
 // Utility: Merge Register
@@ -23,60 +42,66 @@ import type { Plugin, CleanupFn, ListController } from '../types';
 /** Merge multiple cleanup functions into one */
 export function mergeRegister(...cleanups: CleanupFn[]): CleanupFn {
   return () => {
-    cleanups.forEach((cleanup) => cleanup());
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
   };
 }
 
 // ============================================================================
-// Plugin Manager
+// Plugin Manager Types
 // ============================================================================
 
-export type PluginManager<T extends { id: string }> = {
-  /** Register a plugin */
-  use: (plugin: Plugin<T, ListController<T>>) => PluginManager<T>;
+export type PluginManager<T extends EntityConstraint> = {
+  /** Register a plugin and return manager for chaining */
+  use(plugin: Plugin<T>): PluginManager<T>;
 
   /** Register a reactive plugin that re-runs when dependencies change */
-  useReactive: <D>(
+  useReactive<D>(
     deps: Accessor<D> | AccessorArray<D>,
-    pluginFactory: Accessor<Plugin<T, ListController<T>> | undefined>
-  ) => PluginManager<T>;
+    pluginFactory: Accessor<Plugin<T> | undefined>
+  ): PluginManager<T>;
 
-  /** Register multiple plugins */
-  useAll: (plugins: Plugin<T, ListController<T>>[]) => PluginManager<T>;
+  /** Register multiple plugins at once */
+  useAll(plugins: Plugin<T>[]): PluginManager<T>;
 
   /** Cleanup all registered plugins */
-  cleanup: () => void;
+  cleanup(): void;
 
-  /** Get the controller */
-  getController: () => ListController<T>;
+  /** Get the underlying controller */
+  getController(): ListController<T>;
 };
 
+// ============================================================================
+// Plugin Manager Factory
+// ============================================================================
+
 /** Create a plugin manager for a list controller */
-export function createPluginManager<T extends { id: string }>(
+export function createPluginManager<T extends EntityConstraint>(
   controller: ListController<T>
 ): PluginManager<T> {
   const cleanupFunctions: CleanupFn[] = [];
 
   const manager: PluginManager<T> = {
-    /** Register a plugin and return manager for chaining */
-    use(plugin: Plugin<T, ListController<T>>): PluginManager<T> {
+    use(plugin: Plugin<T>): PluginManager<T> {
       const cleanup = plugin(controller);
       cleanupFunctions.push(cleanup);
       return manager;
     },
 
-    /** Register a reactive plugin that re-runs when deps change */
     useReactive<D>(
       deps: Accessor<D> | AccessorArray<D>,
-      pluginFactory: Accessor<Plugin<T, ListController<T>> | undefined>
+      pluginFactory: Accessor<Plugin<T> | undefined>
     ): PluginManager<T> {
       let currentCleanup: CleanupFn | null = null;
 
       createEffect(() => {
-        // Track dependencies
-        const depsValue = Array.isArray(deps)
-          ? deps.map((d) => d())
-          : (deps as Accessor<D>)();
+        // Track dependencies (force reactivity)
+        if (Array.isArray(deps)) {
+          deps.forEach((d) => d());
+        } else {
+          (deps as Accessor<D>)();
+        }
 
         // Cleanup previous plugin
         if (currentCleanup) {
@@ -109,19 +134,20 @@ export function createPluginManager<T extends { id: string }>(
       return manager;
     },
 
-    /** Register multiple plugins at once */
-    useAll(plugins: Plugin<T, ListController<T>>[]): PluginManager<T> {
-      plugins.forEach((plugin) => manager.use(plugin));
+    useAll(plugins: Plugin<T>[]): PluginManager<T> {
+      for (const plugin of plugins) {
+        manager.use(plugin);
+      }
       return manager;
     },
 
-    /** Cleanup all registered plugins */
     cleanup(): void {
-      cleanupFunctions.forEach((cleanup) => cleanup());
+      for (const cleanup of cleanupFunctions) {
+        cleanup();
+      }
       cleanupFunctions.length = 0;
     },
 
-    /** Get the underlying controller */
     getController(): ListController<T> {
       return controller;
     },
@@ -135,9 +161,9 @@ export function createPluginManager<T extends { id: string }>(
 // ============================================================================
 
 /** Combine multiple plugins into a single plugin */
-export function composePlugins<T extends { id: string }>(
-  ...plugins: Plugin<T, ListController<T>>[]
-): Plugin<T, ListController<T>> {
+export function composePlugins<T extends EntityConstraint>(
+  ...plugins: Plugin<T>[]
+): Plugin<T> {
   return (controller: ListController<T>) => {
     const cleanups = plugins.map((plugin) => plugin(controller));
     return mergeRegister(...cleanups);
@@ -145,10 +171,10 @@ export function composePlugins<T extends { id: string }>(
 }
 
 /** Create a conditional plugin that only runs when condition is true */
-export function conditionalPlugin<T extends { id: string }>(
+export function conditionalPlugin<T extends EntityConstraint>(
   condition: Accessor<boolean>,
-  plugin: Plugin<T, ListController<T>>
-): Plugin<T, ListController<T>> {
+  plugin: Plugin<T>
+): Plugin<T> {
   return (controller: ListController<T>) => {
     let currentCleanup: CleanupFn | null = null;
 
@@ -171,12 +197,27 @@ export function conditionalPlugin<T extends { id: string }>(
   };
 }
 
-/** Create a plugin that runs once and doesn't cleanup */
-export function oncePlugin<T extends { id: string }>(
-  fn: (controller: ListController<T>) => void
-): Plugin<T, ListController<T>> {
+/** Create a plugin that runs setup once (no cleanup needed) */
+export function oncePlugin<T extends EntityConstraint>(
+  setup: (controller: ListController<T>) => void
+): Plugin<T> {
   return (controller: ListController<T>) => {
-    fn(controller);
+    setup(controller);
     return () => {};
   };
+}
+
+/** Create a plugin from configuration object */
+export function createPlugin<T extends EntityConstraint>(config: {
+  setup: (controller: ListController<T>) => void | CleanupFn;
+}): Plugin<T> {
+  return (controller: ListController<T>) => {
+    const result = config.setup(controller);
+    return result ?? (() => {});
+  };
+}
+
+/** No-op plugin for conditional composition */
+export function noopPlugin<T extends EntityConstraint>(): Plugin<T> {
+  return () => () => {};
 }

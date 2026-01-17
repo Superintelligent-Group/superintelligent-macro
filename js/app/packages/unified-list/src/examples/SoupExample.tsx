@@ -53,10 +53,10 @@ const projectFilter = entityTypeFilter<EntityData>('project', 'Projects', [
 const chatFilter = entityTypeFilter<EntityData>('chat', 'Chats', ['chat']);
 
 // Entity type filter group (mutually exclusive)
-const entityTypeGroup = createFilterGroup<EntityData>(
+const entityTypeGroup = createFilterGroup(
   'entity-types',
   'Entity Types',
-  [documentFilter, emailFilter, channelFilter, projectFilter, chatFilter],
+  ['document', 'email', 'channel', 'project', 'chat'],
   true // Allow multiple selections
 );
 
@@ -84,10 +84,10 @@ const noiseFilter = {
 };
 
 // Focus filter group (mutually exclusive)
-const focusGroup = createFilterGroup<EntityData>(
+const focusGroup = createFilterGroup(
   'focus',
   'Focus',
-  [signalFilter, noiseFilter],
+  ['signal', 'noise'],
   false // Only one can be active
 );
 

@@ -123,9 +123,8 @@ describe('State Management', () => {
         entities,
       };
 
-      const getIndex = (id: string) => entities.findIndex((e) => e.id === id);
-
-      const transition = selectRangeTransition<TestEntity>('1', '3', getIndex);
+      // Default getId uses entity.id - no need to pass getIndex
+      const transition = selectRangeTransition<TestEntity>('1', '3');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(true);
@@ -145,9 +144,8 @@ describe('State Management', () => {
         entities,
       };
 
-      const getIndex = (id: string) => entities.findIndex((e) => e.id === id);
-
-      const transition = selectRangeTransition<TestEntity>('3', '1', getIndex);
+      // Default getId uses entity.id - no need to pass getIndex
+      const transition = selectRangeTransition<TestEntity>('3', '1');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(true);
@@ -157,12 +155,10 @@ describe('State Management', () => {
 
     it('handles invalid IDs', () => {
       const initial = createInitialListState<TestEntity>();
-      const getIndex = () => -1;
 
       const transition = selectRangeTransition<TestEntity>(
         'invalid',
-        'also-invalid',
-        getIndex
+        'also-invalid'
       );
       const result = transition(initial);
 

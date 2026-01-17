@@ -173,7 +173,6 @@ describe('Filter Utilities', () => {
       expect(config.id).toBe('documents');
       expect(config.label).toBe('Documents');
       expect(config.group).toBe('type-group');
-      expect(config.active).toBe(false);
 
       const doc: TestEntity = { id: '1', type: 'document', name: 'Test' };
       const email: TestEntity = { id: '2', type: 'email', name: 'Test' };
@@ -184,39 +183,25 @@ describe('Filter Utilities', () => {
   });
 
   describe('createFilterGroup', () => {
-    it('creates filter group with assigned group IDs', () => {
-      const docFilter = entityTypeFilter<TestEntity>('documents', 'Documents', [
-        'document',
-      ]);
-      const emailFilter = entityTypeFilter<TestEntity>('emails', 'Emails', [
-        'email',
-      ]);
-
+    it('creates filter group with filter IDs', () => {
       const group = createFilterGroup(
         'entity-types',
         'Entity Types',
-        [docFilter, emailFilter],
+        ['documents', 'emails'],
         false
       );
 
       expect(group.id).toBe('entity-types');
       expect(group.label).toBe('Entity Types');
       expect(group.allowMultiple).toBe(false);
-      expect(group.filters.length).toBe(2);
-
-      // Check that group ID was set on filters
-      expect(docFilter.group).toBe('entity-types');
-      expect(emailFilter.group).toBe('entity-types');
+      expect(group.filterIds).toEqual(['documents', 'emails']);
     });
 
     it('allows multiple selections when configured', () => {
-      const filter1 = entityTypeFilter<TestEntity>('f1', 'F1', ['document']);
-      const filter2 = entityTypeFilter<TestEntity>('f2', 'F2', ['email']);
-
       const group = createFilterGroup(
         'multi-group',
         'Multi Group',
-        [filter1, filter2],
+        ['f1', 'f2'],
         true
       );
 

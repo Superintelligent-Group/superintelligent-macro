@@ -99,7 +99,7 @@ export type UnifiedListViewProps<T extends { id: string }> = {
   isFetchingNextPage?: Accessor<boolean>;
 
   /** Plugins to register */
-  plugins?: Plugin<T, ListController<T>>[];
+  plugins?: Plugin<T>[];
 
   /** Row height in pixels */
   rowHeight?: number;
@@ -147,7 +147,7 @@ export type UnifiedListViewProps<T extends { id: string }> = {
 
 export type UnifiedListContextValue<T extends { id: string }> = {
   controller: ListController<T>;
-  entities: Accessor<T[]>;
+  entities: Accessor<readonly T[]>;
   isLoading: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;

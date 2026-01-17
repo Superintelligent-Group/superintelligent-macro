@@ -7,7 +7,7 @@
  * - Testable: Pure functions where possible
  */
 
-import type { Accessor, JSX, Setter } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 // Re-export entity types - single source of truth
 export type {
@@ -30,227 +30,137 @@ export type {
 } from '@macro-entity';
 
 // ============================================================================
-// List State Types
+// Core Types - Re-export from core/types.ts
 // ============================================================================
 
-/** Core list state - pure data, no UI concerns */
-export type ListState<T> = {
-  /** All entities in the list (post-filter, post-sort) */
-  entities: T[];
-  /** Currently focused entity for keyboard navigation */
-  focusedId: string | null;
-  /** Multi-selected entity IDs */
-  selectedIds: Set<string>;
-  /** Whether the list is loading */
-  isLoading: boolean;
-  /** Whether there are more items to fetch */
-  hasMore: boolean;
-  /** Current scroll offset for restoration */
-  scrollOffset: number;
-};
+// Entity types
+export type { EntityConstraint, GetEntityId } from '../core/types';
 
-/** List state transitions - pure functions */
-export type ListStateTransition<T> = (state: ListState<T>) => ListState<T>;
+// List state types
+export type {
+  ListState,
+  StateTransition,
+  ReactiveState,
+  StateSetters,
+} from '../core/types';
 
-/** Accessor-based reactive list state */
-export type ReactiveListState<T> = {
-  entities: Accessor<T[]>;
-  focusedId: Accessor<string | null>;
-  selectedIds: Accessor<Set<string>>;
-  isLoading: Accessor<boolean>;
-  hasMore: Accessor<boolean>;
-  scrollOffset: Accessor<number>;
-  /** Visible entity IDs in display order (when grouping is active) */
-  visibleEntityIds: Accessor<string[] | null>;
-};
+// Command system types
+export type {
+  CommandHandler,
+  CommandPriorityValue,
+  CommandSystem,
+  CommandRegistration,
+} from '../core/types';
+export { CommandPriority } from '../core/types';
 
-/** Setters for list state */
-export type ListStateSetters<T> = {
-  setEntities: Setter<T[]>;
-  setFocusedId: Setter<string | null>;
-  setSelectedIds: Setter<Set<string>>;
-  setIsLoading: Setter<boolean>;
-  setHasMore: Setter<boolean>;
-  setScrollOffset: Setter<number>;
-  /** Set visible entity IDs (for grouped/filtered display order) */
-  setVisibleEntityIds: Setter<string[] | null>;
-};
+// Controller types
+export type {
+  ListController,
+  VirtualizerHandle,
+  VirtualItem,
+} from '../core/types';
 
-// ============================================================================
-// Plugin System Types
-// ============================================================================
+// Plugin types
+export type {
+  CleanupFn,
+  Plugin,
+  PluginWithStore,
+} from '../core/types';
 
-/** Plugin cleanup function */
-export type CleanupFn = () => void;
+// Filter types
+export type {
+  FilterPredicate,
+  FilterConfig,
+  FilterGroup,
+} from '../core/types';
 
-/** Base plugin interface - returns cleanup function */
-export type Plugin<T, C extends ListController<T>> = (
-  controller: C
-) => CleanupFn;
+// Sort types
+export type {
+  Comparator,
+  SortConfig,
+  SortOrder,
+} from '../core/types';
 
-/** Plugin factory - creates plugin with configuration */
-export type PluginFactory<T, C extends ListController<T>, Config = void> = (
-  config: Config
-) => Plugin<T, C>;
+// Selection types
+export type { SelectionMode } from '../core/types';
 
-/** Command handler function */
-export type CommandHandler<Payload = void> = (payload: Payload) => boolean;
+// Action types
+export type { ActionConfig } from '../core/types';
 
-/** Command priorities for execution order */
-export const CommandPriority = {
-  CRITICAL: 0,
-  HIGH: 1,
-  NORMAL: 2,
-  LOW: 3,
-} as const;
+// Group types
+export type {
+  GroupKeyFn,
+  GroupConfig,
+  GroupRegistry,
+  HeaderItem,
+  EntityItem,
+  DisplayItem,
+  RowRenderState,
+  RowRenderer,
+} from '../core/types';
+export { isHeaderItem, isEntityItem } from '../core/types';
 
-export type CommandPriorityValue =
-  (typeof CommandPriority)[keyof typeof CommandPriority];
-
-/** Command registration */
-export type CommandRegistration<Payload = void> = {
-  name: string;
-  handler: CommandHandler<Payload>;
-  priority: CommandPriorityValue;
-};
-
-/** Command system interface */
-export type CommandSystem = {
-  register: <Payload>(
-    name: string,
-    handler: CommandHandler<Payload>,
-    priority?: CommandPriorityValue
-  ) => CleanupFn;
-  dispatch: <Payload>(name: string, payload: Payload) => boolean;
-  canDispatch: (name: string) => boolean;
-};
+// Commands
+export { ListCommands } from '../core/types';
+export type { ListCommand } from '../core/types';
 
 // ============================================================================
-// Controller Types
+// Backwards Compatibility Aliases
 // ============================================================================
 
-/** Core list controller - the main interface plugins interact with */
-export type ListController<T> = {
-  /** Unique identifier for this list instance */
-  id: string;
+// Old names that mapped to new types
+import type {
+  StateTransition as CoreStateTransition,
+  ReactiveState as CoreReactiveState,
+  StateSetters as CoreStateSetters,
+  EntityConstraint,
+  FilterConfig as CoreFilterConfig,
+  FilterGroup as CoreFilterGroup,
+  SortConfig as CoreSortConfig,
+  ListController,
+  CleanupFn,
+} from '../core/types';
 
-  /** Reactive state accessors */
-  state: ReactiveListState<T>;
+/** @deprecated Use ListState from core/types */
+export type ListStateTransition<T extends EntityConstraint> =
+  CoreStateTransition<T>;
 
-  /** State setters */
-  setters: ListStateSetters<T>;
+/** @deprecated Use ReactiveState from core/types */
+export type ReactiveListState<T extends EntityConstraint> =
+  CoreReactiveState<T>;
 
-  /** Command system for dispatching actions */
-  commands: CommandSystem;
-
-  /** Get entity by ID */
-  getEntityById: (id: string) => T | undefined;
-
-  /** Get entity index by ID */
-  getEntityIndex: (id: string) => number;
-
-  /** Get focused entity */
-  getFocusedEntity: () => T | undefined;
-
-  /** Scroll to entity by ID */
-  scrollToEntity: (id: string) => void;
-
-  /** Fetch more entities (infinite scroll) */
-  fetchMore: () => Promise<void>;
-
-  /** DOM container ref */
-  containerRef: Accessor<HTMLElement | null>;
-  setContainerRef: Setter<HTMLElement | null>;
-
-  /** Virtualizer handle for scroll control */
-  virtualizerHandle: Accessor<VirtualizerHandle | null>;
-  setVirtualizerHandle: Setter<VirtualizerHandle | null>;
-};
-
-/** Virtualizer handle interface (from @tanstack/solid-virtual) */
-export type VirtualizerHandle = {
-  scrollToIndex: (
-    index: number,
-    options?: {
-      align?: 'start' | 'center' | 'end';
-      behavior?: 'auto' | 'smooth';
-    }
-  ) => void;
-  scrollToOffset: (
-    offset: number,
-    options?: { behavior?: 'auto' | 'smooth' }
-  ) => void;
-  scrollOffset: number;
-  getTotalSize: () => number;
-  getVirtualItems: () => VirtualItem[];
-};
-
-export type VirtualItem = {
-  key: string | number | bigint;
-  index: number;
-  start: number;
-  end: number;
-  size: number;
-};
+/** @deprecated Use StateSetters from core/types */
+export type ListStateSetters<T extends EntityConstraint> = CoreStateSetters<T>;
 
 // ============================================================================
-// Filter Types
+// Additional Types (not in core)
 // ============================================================================
 
-/** Filter configuration */
-export type FilterConfig<T> = {
-  /** Unique identifier for this filter */
-  id: string;
-  /** Display label */
-  label: string;
-  /** Filter predicate */
-  predicate: (entity: T) => boolean;
-  /** Whether filter is currently active */
-  active: boolean;
-  /** Filter group for mutual exclusivity */
-  group?: string;
-};
-
-/** Filter group - filters in same group are mutually exclusive */
-export type FilterGroup<T> = {
-  id: string;
-  label: string;
-  filters: FilterConfig<T>[];
-  /** Whether multiple filters in this group can be active */
-  allowMultiple: boolean;
-};
+// ============================================================================
+// Filter Types (extended)
+// ============================================================================
 
 /** Composed filter state */
 export type FilterState<T> = {
-  filters: Map<string, FilterConfig<T>>;
-  groups: Map<string, FilterGroup<T>>;
+  filters: Map<string, CoreFilterConfig<T>>;
+  groups: Map<string, CoreFilterGroup>;
   activeFilterIds: Set<string>;
 };
 
 // ============================================================================
-// Sort Types
+// Sort Types (extended)
 // ============================================================================
-
-/** Sort configuration */
-export type SortConfig<T> = {
-  id: string;
-  label: string;
-  comparator: (a: T, b: T) => number;
-};
 
 /** Sort state */
 export type SortState<T> = {
   activeSortId: string | null;
   sortOrder: 'ascending' | 'descending';
-  sorts: Map<string, SortConfig<T>>;
+  sorts: Map<string, CoreSortConfig<T>>;
 };
 
 // ============================================================================
-// Selection Types
+// Selection Types (extended)
 // ============================================================================
-
-/** Selection mode */
-export type SelectionMode = 'single' | 'multi' | 'range';
 
 /** Selection state */
 export type SelectionState = {
@@ -316,7 +226,7 @@ export type EntityTemplate<T> = {
 // ============================================================================
 
 /** Query configuration for data fetching */
-export type QueryConfig<T> = {
+export type QueryConfig = {
   /** Query key for caching */
   queryKey: unknown[];
   /** Whether this is an infinite query */
@@ -355,3 +265,12 @@ export type EntityAction<T> = {
   canExecute: (entities: T[]) => boolean;
   hotkey?: string;
 };
+
+// ============================================================================
+// Legacy/Deprecated Types
+// ============================================================================
+
+/** @deprecated Use Plugin<T> from core/types instead */
+export type PluginFactory<T extends EntityConstraint, Config = void> = (
+  config: Config
+) => (controller: ListController<T>) => CleanupFn;

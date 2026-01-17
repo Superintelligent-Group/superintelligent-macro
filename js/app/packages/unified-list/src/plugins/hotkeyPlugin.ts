@@ -15,8 +15,13 @@
 import { onCleanup } from 'solid-js';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
-import type { Plugin, CleanupFn, ListController } from '../types';
-import { ListCommands } from '../core/commands';
+import type {
+  EntityConstraint,
+  Plugin,
+  CleanupFn,
+  ListController,
+} from '../core/types';
+import { ListCommands } from '../core/types';
 
 // ============================================================================
 // Hotkey Types
@@ -235,9 +240,9 @@ function bindingToHotkeyString(binding: HotkeyBinding): string {
 }
 
 /** Create a hotkey plugin */
-export function createHotkeyPlugin<T extends { id: string }>(
+export function createHotkeyPlugin<T extends EntityConstraint>(
   config: HotkeyPluginConfig = {}
-): Plugin<T, ListController<T>> {
+): Plugin<T> {
   const { scopeId, bindings = defaultHotkeyBindings } = config;
 
   return (controller: ListController<T>): CleanupFn => {

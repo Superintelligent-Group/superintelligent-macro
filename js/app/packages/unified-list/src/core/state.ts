@@ -1,24 +1,31 @@
 /**
- * Core state management for unified-list.
+ * Pure state management for unified-list.
  *
- * Pure state transitions and reactive state creation.
- * All state changes go through well-defined transitions.
+ * All state transitions are pure functions: (state) => newState
+ * This makes testing trivial and reasoning about state changes easy.
+ *
+ * @example
+ * ```ts
+ * const newState = navigateDown(getEntityId)(currentState);
+ * ```
  */
 
-import { createSignal, type Accessor, type Setter } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type {
+  EntityConstraint,
   ListState,
-  ListStateTransition,
-  ReactiveListState,
-  ListStateSetters,
-} from '../types';
+  StateTransition,
+  ReactiveState,
+  StateSetters,
+  GetEntityId,
+} from './types';
 
 // ============================================================================
-// Initial State
+// Initial State Factory
 // ============================================================================
 
 /** Create initial list state */
-export function createInitialListState<T>(): ListState<T> {
+export function createInitialState<T extends EntityConstraint>(): ListState<T> {
   return {
     entities: [],
     focusedId: null,
@@ -26,157 +33,7 @@ export function createInitialListState<T>(): ListState<T> {
     isLoading: false,
     hasMore: true,
     scrollOffset: 0,
-  };
-}
-
-// ============================================================================
-// Pure State Transitions
-// ============================================================================
-
-/** Set entities transition */
-export function setEntitiesTransition<T>(
-  entities: T[]
-): ListStateTransition<T> {
-  return (state) => ({ ...state, entities });
-}
-
-/** Set focused ID transition */
-export function setFocusedIdTransition<T>(
-  focusedId: string | null
-): ListStateTransition<T> {
-  return (state) => ({ ...state, focusedId });
-}
-
-/** Toggle selection transition */
-export function toggleSelectionTransition<T>(
-  id: string
-): ListStateTransition<T> {
-  return (state) => {
-    const newSelectedIds = new Set(state.selectedIds);
-    if (newSelectedIds.has(id)) {
-      newSelectedIds.delete(id);
-    } else {
-      newSelectedIds.add(id);
-    }
-    return { ...state, selectedIds: newSelectedIds };
-  };
-}
-
-/** Select range transition */
-export function selectRangeTransition<T>(
-  fromId: string,
-  toId: string,
-  getIndex: (id: string) => number
-): ListStateTransition<T> {
-  return (state) => {
-    const fromIndex = getIndex(fromId);
-    const toIndex = getIndex(toId);
-    if (fromIndex === -1 || toIndex === -1) return state;
-
-    const startIndex = Math.min(fromIndex, toIndex);
-    const endIndex = Math.max(fromIndex, toIndex);
-    const newSelectedIds = new Set(state.selectedIds);
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const entity = state.entities[i] as T & { id: string };
-      if (entity?.id) {
-        newSelectedIds.add(entity.id);
-      }
-    }
-
-    return { ...state, selectedIds: newSelectedIds };
-  };
-}
-
-/** Clear selection transition */
-export function clearSelectionTransition<T>(): ListStateTransition<T> {
-  return (state) => ({ ...state, selectedIds: new Set() });
-}
-
-/** Set loading transition */
-export function setLoadingTransition<T>(
-  isLoading: boolean
-): ListStateTransition<T> {
-  return (state) => ({ ...state, isLoading });
-}
-
-/** Set has more transition */
-export function setHasMoreTransition<T>(
-  hasMore: boolean
-): ListStateTransition<T> {
-  return (state) => ({ ...state, hasMore });
-}
-
-/** Set scroll offset transition */
-export function setScrollOffsetTransition<T>(
-  scrollOffset: number
-): ListStateTransition<T> {
-  return (state) => ({ ...state, scrollOffset });
-}
-
-/** Navigate to next entity transition */
-export function navigateNextTransition<T>(
-  getEntityId: (entity: T) => string
-): ListStateTransition<T> {
-  return (state) => {
-    const { entities, focusedId } = state;
-    if (entities.length === 0) return state;
-
-    const currentIndex = focusedId
-      ? entities.findIndex((e) => getEntityId(e) === focusedId)
-      : -1;
-
-    const nextIndex = Math.min(currentIndex + 1, entities.length - 1);
-    const nextEntity = entities[nextIndex];
-    if (!nextEntity) return state;
-
-    return { ...state, focusedId: getEntityId(nextEntity) };
-  };
-}
-
-/** Navigate to previous entity transition */
-export function navigatePrevTransition<T>(
-  getEntityId: (entity: T) => string
-): ListStateTransition<T> {
-  return (state) => {
-    const { entities, focusedId } = state;
-    if (entities.length === 0) return state;
-
-    const currentIndex = focusedId
-      ? entities.findIndex((e) => getEntityId(e) === focusedId)
-      : entities.length;
-
-    const prevIndex = Math.max(currentIndex - 1, 0);
-    const prevEntity = entities[prevIndex];
-    if (!prevEntity) return state;
-
-    return { ...state, focusedId: getEntityId(prevEntity) };
-  };
-}
-
-/** Navigate to first entity transition */
-export function navigateFirstTransition<T>(
-  getEntityId: (entity: T) => string
-): ListStateTransition<T> {
-  return (state) => {
-    const { entities } = state;
-    const firstEntity = entities[0];
-    if (!firstEntity) return state;
-
-    return { ...state, focusedId: getEntityId(firstEntity) };
-  };
-}
-
-/** Navigate to last entity transition */
-export function navigateLastTransition<T>(
-  getEntityId: (entity: T) => string
-): ListStateTransition<T> {
-  return (state) => {
-    const { entities } = state;
-    const lastEntity = entities[entities.length - 1];
-    if (!lastEntity) return state;
-
-    return { ...state, focusedId: getEntityId(lastEntity) };
+    visibleEntityIds: null,
   };
 }
 
@@ -184,32 +41,30 @@ export function navigateLastTransition<T>(
 // Reactive State Factory
 // ============================================================================
 
-/** Create reactive list state with signals */
-export function createReactiveListState<T>(
-  initial: ListState<T> = createInitialListState<T>()
+/** Create reactive state with Solid.js signals */
+export function createReactiveState<T extends EntityConstraint>(
+  initial: ListState<T> = createInitialState()
 ): {
-  state: ReactiveListState<T>;
-  setters: ListStateSetters<T>;
+  state: ReactiveState<T>;
+  setters: StateSetters<T>;
   getSnapshot: () => ListState<T>;
-  applyTransition: (transition: ListStateTransition<T>) => void;
+  apply: (transition: StateTransition<T>) => void;
 } {
-  const [entities, setEntities] = createSignal<T[]>(initial.entities);
+  const [entities, setEntities] = createSignal<readonly T[]>(initial.entities);
   const [focusedId, setFocusedId] = createSignal<string | null>(
     initial.focusedId
   );
-  const [selectedIds, setSelectedIds] = createSignal<Set<string>>(
+  const [selectedIds, setSelectedIds] = createSignal<ReadonlySet<string>>(
     initial.selectedIds
   );
-  const [isLoading, setIsLoading] = createSignal<boolean>(initial.isLoading);
-  const [hasMore, setHasMore] = createSignal<boolean>(initial.hasMore);
-  const [scrollOffset, setScrollOffset] = createSignal<number>(
-    initial.scrollOffset
-  );
-  const [visibleEntityIds, setVisibleEntityIds] = createSignal<string[] | null>(
-    null
-  );
+  const [isLoading, setIsLoading] = createSignal(initial.isLoading);
+  const [hasMore, setHasMore] = createSignal(initial.hasMore);
+  const [scrollOffset, setScrollOffset] = createSignal(initial.scrollOffset);
+  const [visibleEntityIds, setVisibleEntityIds] = createSignal<
+    readonly string[] | null
+  >(initial.visibleEntityIds);
 
-  const state: ReactiveListState<T> = {
+  const state: ReactiveState<T> = {
     entities,
     focusedId,
     selectedIds,
@@ -219,7 +74,7 @@ export function createReactiveListState<T>(
     visibleEntityIds,
   };
 
-  const setters: ListStateSetters<T> = {
+  const setters: StateSetters<T> = {
     setEntities,
     setFocusedId,
     setSelectedIds,
@@ -229,7 +84,7 @@ export function createReactiveListState<T>(
     setVisibleEntityIds,
   };
 
-  /** Get current state as plain object */
+  /** Get current state as immutable snapshot */
   const getSnapshot = (): ListState<T> => ({
     entities: entities(),
     focusedId: focusedId(),
@@ -237,33 +92,381 @@ export function createReactiveListState<T>(
     isLoading: isLoading(),
     hasMore: hasMore(),
     scrollOffset: scrollOffset(),
+    visibleEntityIds: visibleEntityIds(),
   });
 
-  /** Apply a state transition */
-  const applyTransition = (transition: ListStateTransition<T>): void => {
-    const currentState = getSnapshot();
-    const nextState = transition(currentState);
+  /** Apply a state transition (pure function) */
+  const apply = (transition: StateTransition<T>): void => {
+    const current = getSnapshot();
+    const next = transition(current);
 
-    // Only update changed values
-    if (nextState.entities !== currentState.entities) {
-      setEntities(() => nextState.entities);
-    }
-    if (nextState.focusedId !== currentState.focusedId) {
-      setFocusedId(nextState.focusedId);
-    }
-    if (nextState.selectedIds !== currentState.selectedIds) {
-      setSelectedIds(nextState.selectedIds);
-    }
-    if (nextState.isLoading !== currentState.isLoading) {
-      setIsLoading(nextState.isLoading);
-    }
-    if (nextState.hasMore !== currentState.hasMore) {
-      setHasMore(nextState.hasMore);
-    }
-    if (nextState.scrollOffset !== currentState.scrollOffset) {
-      setScrollOffset(nextState.scrollOffset);
-    }
+    // Only update changed values (referential equality check)
+    if (next.entities !== current.entities) setEntities(() => next.entities);
+    if (next.focusedId !== current.focusedId) setFocusedId(next.focusedId);
+    if (next.selectedIds !== current.selectedIds)
+      setSelectedIds(next.selectedIds);
+    if (next.isLoading !== current.isLoading) setIsLoading(next.isLoading);
+    if (next.hasMore !== current.hasMore) setHasMore(next.hasMore);
+    if (next.scrollOffset !== current.scrollOffset)
+      setScrollOffset(next.scrollOffset);
+    if (next.visibleEntityIds !== current.visibleEntityIds)
+      setVisibleEntityIds(next.visibleEntityIds);
   };
 
-  return { state, setters, getSnapshot, applyTransition };
+  return { state, setters, getSnapshot, apply };
 }
+
+// ============================================================================
+// Pure State Transitions: Entities
+// ============================================================================
+
+/** Set entities */
+export function setEntities<T extends EntityConstraint>(
+  entities: readonly T[]
+): StateTransition<T> {
+  return (state) => ({ ...state, entities });
+}
+
+/** Append entities (for infinite scroll) */
+export function appendEntities<T extends EntityConstraint>(
+  newEntities: readonly T[]
+): StateTransition<T> {
+  return (state) => ({
+    ...state,
+    entities: [...state.entities, ...newEntities],
+  });
+}
+
+/** Update a single entity */
+export function updateEntity<T extends EntityConstraint>(
+  id: string,
+  updater: (entity: T) => T,
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => ({
+    ...state,
+    entities: state.entities.map((e) => (getId(e) === id ? updater(e) : e)),
+  });
+}
+
+/** Remove entity by ID */
+export function removeEntity<T extends EntityConstraint>(
+  id: string,
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const newSelected = new Set(state.selectedIds);
+    newSelected.delete(id);
+    return {
+      ...state,
+      entities: state.entities.filter((e) => getId(e) !== id),
+      focusedId: state.focusedId === id ? null : state.focusedId,
+      selectedIds: newSelected,
+    };
+  };
+}
+
+// ============================================================================
+// Pure State Transitions: Focus/Navigation
+// ============================================================================
+
+/** Set focused ID */
+export function setFocusedId<T extends EntityConstraint>(
+  id: string | null
+): StateTransition<T> {
+  return (state) => ({ ...state, focusedId: id });
+}
+
+/** Get effective entity IDs (visible or all) */
+function getEffectiveIds<T extends EntityConstraint>(
+  state: ListState<T>,
+  getId: GetEntityId<T>
+): readonly string[] {
+  return state.visibleEntityIds ?? state.entities.map((e) => getId(e));
+}
+
+/** Navigate to next entity */
+export function navigateDown<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    if (ids.length === 0) return state;
+
+    const currentIndex = state.focusedId ? ids.indexOf(state.focusedId) : -1;
+
+    // If nothing focused, focus first
+    if (currentIndex === -1) {
+      return { ...state, focusedId: ids[0] ?? null };
+    }
+
+    // Move to next if not at end
+    if (currentIndex < ids.length - 1) {
+      return { ...state, focusedId: ids[currentIndex + 1] ?? null };
+    }
+
+    return state;
+  };
+}
+
+/** Navigate to previous entity */
+export function navigateUp<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    if (ids.length === 0) return state;
+
+    const currentIndex = state.focusedId ? ids.indexOf(state.focusedId) : -1;
+
+    // If nothing focused, focus first
+    if (currentIndex === -1) {
+      return { ...state, focusedId: ids[0] ?? null };
+    }
+
+    // Move to previous if not at start
+    if (currentIndex > 0) {
+      return { ...state, focusedId: ids[currentIndex - 1] ?? null };
+    }
+
+    return state;
+  };
+}
+
+/** Navigate to first entity */
+export function navigateFirst<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    return { ...state, focusedId: ids[0] ?? null };
+  };
+}
+
+/** Navigate to last entity */
+export function navigateLast<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    return { ...state, focusedId: ids[ids.length - 1] ?? null };
+  };
+}
+
+/** Navigate by page (for page up/down) */
+export function navigateByPage<T extends EntityConstraint>(
+  direction: 'up' | 'down',
+  pageSize: number,
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    if (ids.length === 0) return state;
+
+    const currentIndex = state.focusedId ? ids.indexOf(state.focusedId) : 0;
+    const targetIndex =
+      direction === 'down'
+        ? Math.min(currentIndex + pageSize, ids.length - 1)
+        : Math.max(currentIndex - pageSize, 0);
+
+    return { ...state, focusedId: ids[targetIndex] ?? null };
+  };
+}
+
+// ============================================================================
+// Pure State Transitions: Selection
+// ============================================================================
+
+/** Toggle selection of an entity */
+export function toggleSelection<T extends EntityConstraint>(
+  id: string
+): StateTransition<T> {
+  return (state) => {
+    const newSelected = new Set(state.selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    return { ...state, selectedIds: newSelected };
+  };
+}
+
+/** Select a single entity (clears other selections) */
+export function selectSingle<T extends EntityConstraint>(
+  id: string
+): StateTransition<T> {
+  return (state) => ({ ...state, selectedIds: new Set([id]) });
+}
+
+/** Add IDs to selection */
+export function addToSelection<T extends EntityConstraint>(
+  ids: readonly string[]
+): StateTransition<T> {
+  return (state) => ({
+    ...state,
+    selectedIds: new Set([...state.selectedIds, ...ids]),
+  });
+}
+
+/** Select range between two IDs */
+export function selectRange<T extends EntityConstraint>(
+  fromId: string,
+  toId: string,
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    const fromIndex = ids.indexOf(fromId);
+    const toIndex = ids.indexOf(toId);
+
+    if (fromIndex === -1 || toIndex === -1) return state;
+
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+    const rangeIds = ids.slice(start, end + 1);
+
+    return {
+      ...state,
+      selectedIds: new Set([...state.selectedIds, ...rangeIds]),
+    };
+  };
+}
+
+/** Select all entities */
+export function selectAll<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    return { ...state, selectedIds: new Set(ids) };
+  };
+}
+
+/** Clear all selections */
+export function clearSelection<
+  T extends EntityConstraint,
+>(): StateTransition<T> {
+  return (state) => ({ ...state, selectedIds: new Set() });
+}
+
+/** Extend selection up (Shift+K) */
+export function extendSelectionUp<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    if (ids.length === 0 || !state.focusedId) return state;
+
+    const currentIndex = ids.indexOf(state.focusedId);
+    if (currentIndex <= 0) return state;
+
+    const prevId = ids[currentIndex - 1];
+    if (!prevId) return state;
+
+    return {
+      ...state,
+      focusedId: prevId,
+      selectedIds: new Set([...state.selectedIds, state.focusedId, prevId]),
+    };
+  };
+}
+
+/** Extend selection down (Shift+J) */
+export function extendSelectionDown<T extends EntityConstraint>(
+  getId: GetEntityId<T> = (e) => e.id
+): StateTransition<T> {
+  return (state) => {
+    const ids = getEffectiveIds(state, getId);
+    if (ids.length === 0 || !state.focusedId) return state;
+
+    const currentIndex = ids.indexOf(state.focusedId);
+    if (currentIndex >= ids.length - 1) return state;
+
+    const nextId = ids[currentIndex + 1];
+    if (!nextId) return state;
+
+    return {
+      ...state,
+      focusedId: nextId,
+      selectedIds: new Set([...state.selectedIds, state.focusedId, nextId]),
+    };
+  };
+}
+
+// ============================================================================
+// Pure State Transitions: Loading/Metadata
+// ============================================================================
+
+/** Set loading state */
+export function setLoading<T extends EntityConstraint>(
+  isLoading: boolean
+): StateTransition<T> {
+  return (state) => ({ ...state, isLoading });
+}
+
+/** Set hasMore state */
+export function setHasMore<T extends EntityConstraint>(
+  hasMore: boolean
+): StateTransition<T> {
+  return (state) => ({ ...state, hasMore });
+}
+
+/** Set scroll offset */
+export function setScrollOffset<T extends EntityConstraint>(
+  scrollOffset: number
+): StateTransition<T> {
+  return (state) => ({ ...state, scrollOffset });
+}
+
+/** Set visible entity IDs (for grouping/filtering) */
+export function setVisibleEntityIds<T extends EntityConstraint>(
+  visibleEntityIds: readonly string[] | null
+): StateTransition<T> {
+  return (state) => ({ ...state, visibleEntityIds });
+}
+
+// ============================================================================
+// Transition Composition
+// ============================================================================
+
+/** Compose multiple transitions into one */
+export function compose<T extends EntityConstraint>(
+  ...transitions: StateTransition<T>[]
+): StateTransition<T> {
+  return (state) => transitions.reduce((s, t) => t(s), state);
+}
+
+/** Apply transition only if condition is true */
+export function when<T extends EntityConstraint>(
+  condition: boolean | ((state: ListState<T>) => boolean),
+  transition: StateTransition<T>
+): StateTransition<T> {
+  return (state) => {
+    const shouldApply =
+      typeof condition === 'function' ? condition(state) : condition;
+    return shouldApply ? transition(state) : state;
+  };
+}
+
+// ============================================================================
+// Legacy Exports (for backwards compatibility)
+// ============================================================================
+
+// Re-export with legacy names for backwards compat
+export {
+  createInitialState as createInitialListState,
+  setEntities as setEntitiesTransition,
+  setFocusedId as setFocusedIdTransition,
+  toggleSelection as toggleSelectionTransition,
+  selectRange as selectRangeTransition,
+  clearSelection as clearSelectionTransition,
+  setLoading as setLoadingTransition,
+  setHasMore as setHasMoreTransition,
+  setScrollOffset as setScrollOffsetTransition,
+  navigateDown as navigateNextTransition,
+  navigateUp as navigatePrevTransition,
+  navigateFirst as navigateFirstTransition,
+  navigateLast as navigateLastTransition,
+  createReactiveState as createReactiveListState,
+};

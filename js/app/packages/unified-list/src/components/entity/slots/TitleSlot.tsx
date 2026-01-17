@@ -173,7 +173,7 @@ export function TitleSlot<T extends EntityData>(
     >
       {(emailEntity) => (
         <EmailTitle
-          entity={emailEntity() as EmailEntity}
+          entity={emailEntity() as unknown as EmailEntity}
           searchActive={searchActive()}
           searchHighlightName={searchHighlightName()}
         />

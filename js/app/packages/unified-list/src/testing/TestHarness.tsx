@@ -56,7 +56,7 @@ export type TestControllerState = {
   isLoading: boolean;
   hasMore: boolean;
   scrollOffset: number;
-  visibleEntityIds: string[] | null;
+  visibleEntityIds: readonly string[] | null;
 };
 
 /** Stores state exposed for Playwright assertions */
@@ -241,7 +241,7 @@ type TestExposerPluginConfig<T extends { id: string }> = {
  */
 function createTestExposerPlugin<T extends { id: string }>(
   config: TestExposerPluginConfig<T>
-): Plugin<T, ListController<T>> {
+): Plugin<T> {
   return (controller: ListController<T>): CleanupFn => {
     // Expose controller state and commands on window
     window.__TEST_CONTROLLER__ = {
@@ -339,7 +339,7 @@ export function TestHarness<T extends { id: string } = TestEntity>(
   const [entities] = createSignal<T[]>(props.entities);
 
   // Build plugins array
-  const plugins: Plugin<T, ListController<T>>[] = [];
+  const plugins: Plugin<T>[] = [];
 
   // Track stores for exposing to window
   let filterStore: FilterStore<T> | undefined;

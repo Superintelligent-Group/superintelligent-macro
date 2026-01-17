@@ -4,8 +4,12 @@
  * Provides a fluent builder API for assembling lists with plugins.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { ListController, CleanupFn, Plugin } from './types';
+import type {
+  EntityConstraint,
+  ListController,
+  CleanupFn,
+  Plugin,
+} from './core/types';
 import {
   createListController,
   type CreateControllerOptions,
@@ -49,7 +53,7 @@ import {
 // Factory Types
 // ============================================================================
 
-export type UnifiedListInstance<T extends { id: string }> = {
+export type UnifiedListInstance<T extends EntityConstraint> = {
   /** The list controller */
   controller: ListController<T>;
   /** Plugin manager for additional plugins */
@@ -68,7 +72,7 @@ export type UnifiedListInstance<T extends { id: string }> = {
   cleanup: CleanupFn;
 };
 
-export type UnifiedListFactoryConfig<T extends { id: string }> = {
+export type UnifiedListFactoryConfig<T extends EntityConstraint> = {
   /** Controller options */
   controller: CreateControllerOptions<T>;
   /** Filter plugin config */
@@ -86,7 +90,7 @@ export type UnifiedListFactoryConfig<T extends { id: string }> = {
   /** Action plugin config */
   actions?: ActionPluginConfig<T>;
   /** Additional plugins */
-  plugins?: Plugin<T, ListController<T>>[];
+  plugins?: Plugin<T>[];
 };
 
 // ============================================================================
@@ -94,7 +98,7 @@ export type UnifiedListFactoryConfig<T extends { id: string }> = {
 // ============================================================================
 
 /** Create a unified list instance with all configured plugins */
-export function createUnifiedList<T extends { id: string }>(
+export function createUnifiedList<T extends EntityConstraint>(
   config: UnifiedListFactoryConfig<T>
 ): UnifiedListInstance<T> {
   // Create controller
@@ -156,7 +160,7 @@ export function createUnifiedList<T extends { id: string }>(
   // Register action plugin
   if (config.actions) {
     const actionPlugin = createActionPlugin<T>(config.actions);
-    actionRegistry = actionPlugin.registry;
+    actionRegistry = actionPlugin.store;
     plugins.use(actionPlugin);
   }
 
@@ -187,7 +191,7 @@ export function createUnifiedList<T extends { id: string }>(
 // Builder Pattern Alternative
 // ============================================================================
 
-export type UnifiedListBuilder<T extends { id: string }> = {
+export type UnifiedListBuilder<T extends EntityConstraint> = {
   /** Configure controller */
   withController: (
     options: CreateControllerOptions<T>
@@ -207,19 +211,19 @@ export type UnifiedListBuilder<T extends { id: string }> = {
   /** Add action plugin */
   withActions: (config: ActionPluginConfig<T>) => UnifiedListBuilder<T>;
   /** Add custom plugin */
-  withPlugin: (plugin: Plugin<T, ListController<T>>) => UnifiedListBuilder<T>;
+  withPlugin: (plugin: Plugin<T>) => UnifiedListBuilder<T>;
   /** Build the list instance */
   build: () => UnifiedListInstance<T>;
 };
 
 /** Create a unified list builder */
-export function createUnifiedListBuilder<T extends { id: string }>(
+export function createUnifiedListBuilder<T extends EntityConstraint>(
   controllerId: string
 ): UnifiedListBuilder<T> {
   const config: UnifiedListFactoryConfig<T> = {
     controller: { id: controllerId },
   };
-  const additionalPlugins: Plugin<T, ListController<T>>[] = [];
+  const additionalPlugins: Plugin<T>[] = [];
 
   const builder: UnifiedListBuilder<T> = {
     withController(options) {

@@ -31,14 +31,15 @@
  */
 
 import type {
+  EntityConstraint,
   ListController,
   Plugin,
   FilterConfig,
   FilterGroup,
   SortConfig,
-  EntityAction,
   SelectionMode,
-} from './types';
+} from './core/types';
+import type { EntityAction } from './types';
 import { createFilterPlugin, type FilterStore } from './plugins/filterPlugin';
 import { createSortPlugin, type SortStore } from './plugins/sortPlugin';
 import { createNavigationPlugin } from './plugins/navigationPlugin';
@@ -62,11 +63,11 @@ import type {
 // ============================================================================
 
 /** Configuration options for unified list */
-export type UnifiedListConfig<T extends { id: string }> = {
+export type UnifiedListConfig<T extends EntityConstraint> = {
   /** Filter configuration */
   filters?: {
     filters: FilterConfig<T>[];
-    groups?: FilterGroup<T>[];
+    groups?: FilterGroup[];
     initialActive?: Set<string>;
     onFilterChange?: (activeIds: Set<string>) => void;
   };
@@ -143,9 +144,9 @@ export type UnifiedListConfig<T extends { id: string }> = {
 };
 
 /** Result of building a unified list */
-export type UnifiedListBuildResult<T extends { id: string }> = {
+export type UnifiedListBuildResult<T extends EntityConstraint> = {
   /** Plugins to pass to UnifiedListView */
-  plugins: Plugin<T, ListController<T>>[];
+  plugins: Plugin<T>[];
 
   /** Stores for accessing plugin state */
   stores: {
@@ -161,7 +162,7 @@ export type UnifiedListBuildResult<T extends { id: string }> = {
 // Builder
 // ============================================================================
 
-export type UnifiedListBuilder<T extends { id: string }> = {
+export type UnifiedListBuilder<T extends EntityConstraint> = {
   /** Add filter support */
   withFilters: (
     config: UnifiedListConfig<T>['filters']
@@ -206,7 +207,7 @@ export type UnifiedListBuilder<T extends { id: string }> = {
 
 /** Create a unified list builder */
 export function createUnifiedList<
-  T extends { id: string },
+  T extends EntityConstraint,
 >(): UnifiedListBuilder<T> {
   const config: UnifiedListConfig<T> = {};
 
@@ -259,7 +260,7 @@ export function createUnifiedList<
     },
 
     build() {
-      const plugins: Plugin<T, ListController<T>>[] = [];
+      const plugins: Plugin<T>[] = [];
 
       // Filter plugin
       if (config.filters) {

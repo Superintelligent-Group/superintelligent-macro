@@ -13,7 +13,7 @@ describe('Command System', () => {
 
       expect(commands.register).toBeInstanceOf(Function);
       expect(commands.dispatch).toBeInstanceOf(Function);
-      expect(commands.canDispatch).toBeInstanceOf(Function);
+      expect(commands.hasHandlers).toBeInstanceOf(Function);
     });
   });
 
@@ -24,20 +24,20 @@ describe('Command System', () => {
 
       commands.register('test-command', handler);
 
-      expect(commands.canDispatch('test-command')).toBe(true);
+      expect(commands.hasHandlers('test-command')).toBe(true);
     });
 
-    it('returns cleanup function', () => {
+    it('returns unregister handle', () => {
       const commands = createCommandSystem();
       const handler = vi.fn(() => true);
 
-      const cleanup = commands.register('test-command', handler);
+      const registration = commands.register('test-command', handler);
 
-      expect(commands.canDispatch('test-command')).toBe(true);
+      expect(commands.hasHandlers('test-command')).toBe(true);
 
-      cleanup();
+      registration.unregister();
 
-      expect(commands.canDispatch('test-command')).toBe(false);
+      expect(commands.hasHandlers('test-command')).toBe(false);
     });
   });
 
@@ -131,27 +131,27 @@ describe('Command System', () => {
       const commands = createCommandSystem();
       commands.register('test-command', () => true);
 
-      expect(commands.canDispatch('test-command')).toBe(true);
+      expect(commands.hasHandlers('test-command')).toBe(true);
     });
 
     it('returns false when command has no handlers', () => {
       const commands = createCommandSystem();
 
-      expect(commands.canDispatch('unknown-command')).toBe(false);
+      expect(commands.hasHandlers('unknown-command')).toBe(false);
     });
 
     it('returns false after all handlers are cleaned up', () => {
       const commands = createCommandSystem();
-      const cleanup1 = commands.register('test-command', () => true);
-      const cleanup2 = commands.register('test-command', () => true);
+      const reg1 = commands.register('test-command', () => true);
+      const reg2 = commands.register('test-command', () => true);
 
-      expect(commands.canDispatch('test-command')).toBe(true);
+      expect(commands.hasHandlers('test-command')).toBe(true);
 
-      cleanup1();
-      expect(commands.canDispatch('test-command')).toBe(true);
+      reg1.unregister();
+      expect(commands.hasHandlers('test-command')).toBe(true);
 
-      cleanup2();
-      expect(commands.canDispatch('test-command')).toBe(false);
+      reg2.unregister();
+      expect(commands.hasHandlers('test-command')).toBe(false);
     });
   });
 });
