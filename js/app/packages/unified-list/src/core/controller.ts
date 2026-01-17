@@ -174,7 +174,7 @@ export function createListController<T extends EntityConstraint>(
     return result;
   };
 
-  /** Scroll to entity by ID */
+  /** Scroll to entity by ID - maintains cursor position during scroll */
   const scrollToEntity = (entityId: string): void => {
     const handle = virtualizerHandle();
     if (!handle) return;
@@ -182,7 +182,43 @@ export function createListController<T extends EntityConstraint>(
     const index = getEntityIndex(entityId);
     if (index === -1) return;
 
-    handle.scrollToIndex(index, { align: 'center' });
+    const totalEntities = state.entities().length;
+
+    // Get visible items to determine scroll behavior
+    const virtualItems = handle.getVirtualItems();
+    if (virtualItems.length === 0) {
+      handle.scrollToIndex(index, { align: 'center' });
+      return;
+    }
+
+    const firstVisible = virtualItems[0];
+    const lastVisible = virtualItems[virtualItems.length - 1];
+    if (!firstVisible || !lastVisible) {
+      handle.scrollToIndex(index, { align: 'center' });
+      return;
+    }
+
+    const firstVisibleIndex = firstVisible.index;
+    const lastVisibleIndex = lastVisible.index;
+
+    // Going up: item is at or above top of viewport - keep it at top
+    if (index <= firstVisibleIndex) {
+      handle.scrollToIndex(index, { align: 'start' });
+      return;
+    }
+
+    // Going down: item is at or past second-to-last visible position
+    // Keep focused item at second-to-last by scrolling index+1 to bottom
+    const secondToLastIndex = lastVisibleIndex - 1;
+    if (index >= secondToLastIndex) {
+      // Only scroll if there's more content below
+      const hasMoreBelow = index < totalEntities - 1;
+      if (hasMoreBelow) {
+        // Scroll so that index+1 is at the bottom, making index second-to-last
+        handle.scrollToIndex(index + 1, { align: 'end' });
+      }
+      // If at the very end of data, no scroll needed - can select last item
+    }
   };
 
   /** Fetch more entities (infinite scroll) */

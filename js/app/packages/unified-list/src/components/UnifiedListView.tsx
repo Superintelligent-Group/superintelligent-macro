@@ -62,6 +62,10 @@ import type {
 } from '../types/groupBy';
 import { isHeaderItem } from '../types/groupBy';
 import { GroupHeader, GROUP_HEADER_HEIGHT } from './GroupHeader';
+import {
+  createScrollVelocityTracker,
+  shouldVelocityPrefetch,
+} from '../core/scrollVelocity';
 
 // ============================================================================
 // Types
@@ -392,67 +396,98 @@ export function UnifiedListView<T extends { id: string }>(
     controller.setVirtualizerHandle(adaptedHandle);
   });
 
-  // Aggressive pre-fetching configuration
-  // We want to always have content ahead - user should never hit empty space
-  const PREFETCH_BUFFER_ITEMS = 50; // Always try to maintain 50 items ahead of viewport
-  const PREFETCH_SCROLL_THRESHOLD = 0.5; // Start fetching at 50% scroll
+  // ============================================================================
+  // Scroll & Infinite Loading
+  // ============================================================================
 
-  // Infinite scroll - fetch more when near bottom
+  // Velocity tracker for smart prefetching (non-reactive - no signal updates during scroll)
+  const velocityTracker = createScrollVelocityTracker({
+    smoothingFactor: 0.3,
+    sampleWindow: 100,
+    slowThreshold: 200,
+    fastThreshold: 1000,
+    veryFastThreshold: 3000,
+  });
+
+  // Prefetch configuration
+  const PREFETCH_BUFFER_ITEMS = 50;
+  const PREFETCH_SCROLL_THRESHOLD = 0.5;
+
+  // Fetch more callback
   const fetchMore = () => {
     if (hasMore() && !isFetchingNextPage() && !isLoading()) {
       props.onFetchMore?.();
     }
   };
 
-  // Debounced version for scroll events
-  const debouncedFetchMore = createDebouncedFn(fetchMore, 50);
+  // Throttle fetch calls during rapid scrolling
+  let lastFetchCheck = 0;
+  const FETCH_THROTTLE_MS = 100;
 
-  // Check if we need more data based on current scroll position and buffer
-  const shouldFetchMore = (): boolean => {
+  // Check if we need more data
+  const checkAndFetch = () => {
+    const now = performance.now();
+    if (now - lastFetchCheck < FETCH_THROTTLE_MS) return;
+    lastFetchCheck = now;
+
     const handle = virtuaHandle();
-    if (!handle) return false;
-    if (!hasMore() || isFetchingNextPage() || isLoading()) return false;
+    if (!handle) return;
+    if (!hasMore() || isFetchingNextPage() || isLoading()) return;
 
     const items = displayItems();
     const totalItems = items.length;
-    if (totalItems === 0) return true;
+    if (totalItems === 0) {
+      fetchMore();
+      return;
+    }
 
     const viewportHeight = containerHeight();
     const itemSize = rowHeight();
     const viewportItems = Math.ceil(viewportHeight / itemSize);
-
-    // Calculate how many items are visible and how many are ahead
     const scrollOffset = handle.scrollOffset;
     const currentIndex = Math.floor(scrollOffset / itemSize);
     const itemsAhead = totalItems - currentIndex - viewportItems;
 
-    // Fetch if we don't have enough buffer ahead
-    if (itemsAhead < PREFETCH_BUFFER_ITEMS) {
-      return true;
+    // Use velocity-aware prefetching for fast scrolls
+    const snapshot = velocityTracker.getSnapshot();
+    if (
+      shouldVelocityPrefetch(
+        snapshot,
+        totalItems,
+        currentIndex,
+        itemSize,
+        PREFETCH_BUFFER_ITEMS
+      )
+    ) {
+      fetchMore();
+      return;
     }
 
-    // Also fetch based on scroll progress as a fallback
+    // Standard buffer check
+    if (itemsAhead < PREFETCH_BUFFER_ITEMS) {
+      fetchMore();
+      return;
+    }
+
+    // Fallback: scroll progress threshold
     const scrollProgress =
       scrollOffset / Math.max(handle.scrollSize - viewportHeight, 1);
     if (scrollProgress >= PREFETCH_SCROLL_THRESHOLD) {
-      return true;
-    }
-
-    return false;
-  };
-
-  // Handle scroll to trigger infinite load - called during scroll, not just at end
-  const handleScroll = () => {
-    if (shouldFetchMore()) {
-      debouncedFetchMore();
+      fetchMore();
     }
   };
 
-  // Also check on scroll end for any missed fetches
+  // Lightweight scroll handler - just update velocity tracker and check fetch
+  const handleScroll = (offset: number) => {
+    velocityTracker.update(offset);
+    checkAndFetch();
+  };
+
+  // Handle scroll end
   const handleScrollEnd = () => {
-    if (shouldFetchMore()) {
-      fetchMore(); // Immediate, no debounce
-    }
+    // Final fetch check with no throttle
+    lastFetchCheck = 0;
+    checkAndFetch();
   };
 
   // Auto-fetch if filtered results don't fill viewport or don't have enough buffer
@@ -478,9 +513,8 @@ export function UnifiedListView<T extends { id: string }>(
     if (!fetching && hasMore()) {
       // Small delay to let data settle, then check if we need more
       setTimeout(() => {
-        if (shouldFetchMore()) {
-          fetchMore();
-        }
+        lastFetchCheck = 0; // Reset throttle
+        checkAndFetch();
       }, 100);
     }
   });
@@ -666,24 +700,3 @@ function StatusBar(props: { class?: string }): JSX.Element {
 UnifiedListView.Toolbar = Toolbar;
 UnifiedListView.Footer = Footer;
 UnifiedListView.StatusBar = StatusBar;
-
-// ============================================================================
-// Utilities
-// ============================================================================
-
-function createDebouncedFn<T extends (...args: unknown[]) => void>(
-  fn: T,
-  delay: number
-): T {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  const debouncedFn = ((...args: unknown[]) => {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      fn(...args);
-      timeoutId = null;
-    }, delay);
-  }) as T;
-
-  return debouncedFn;
-}
