@@ -11,7 +11,11 @@ const getAbsolutePath = (packageName: string): string =>
     .replace(/^file:\/\//, '');
 
 const config: StorybookConfig = {
-  stories: ['../**/*.mdx', '../**/*.stories.@(js|jsx|mjs|ts|tsx)'],
+  stories: [
+    '../**/*.mdx',
+    '../**/*.stories.@(js|jsx|mjs|ts|tsx)',
+    '../../unified-list/src/testing/**/*.stories.@(js|jsx|mjs|ts|tsx)',
+  ],
   staticDirs: [
     { from: '../../app/asset/fonts', to: '/fonts' },
     // Also serve at the path that index.css @font-face rules expect after Vite transforms them
