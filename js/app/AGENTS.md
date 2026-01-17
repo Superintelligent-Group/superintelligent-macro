@@ -27,3 +27,8 @@
 4. Going forward, all network calls to serice clients should be done through Tanstack query in the `queries` package. **DO NOT** introduce code that calls any client from `service-clients` outside of the queries package.
 5. For exaustive switch statements use `match` from `ts-pattern`.
 6. When reaching for solid related utilities always check if a sufficient `solid-primitive` exists first (https://github.com/solidjs-community/solid-primitives).
+
+## Philosophy
+This codebase will outlive you. Every shortcut becomes someone else's burden. Patterns you establish will be copied.
+Corners you cut will be cut again.
+Fight entropy. Leave the codebase better than you found it.
