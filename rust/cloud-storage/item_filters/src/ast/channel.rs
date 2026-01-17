@@ -3,45 +3,22 @@ use std::str::FromStr;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumString};
 use uuid::Uuid;
 
 use crate::{ChannelFilters, ast::ExpandErr};
 
-/// Channel type filter
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// Channel type filter - mirrors `models_comms::channel::ChannelType`
+/// but lives here to avoid cyclic dependencies
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 #[allow(missing_docs)]
-pub enum ChannelTypeFilter {
+pub enum ChannelType {
     Public,
     Organization,
     Private,
     DirectMessage,
-}
-
-impl ChannelTypeFilter {
-    /// String representation
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Public => "public",
-            Self::Organization => "organization",
-            Self::Private => "private",
-            Self::DirectMessage => "direct_message",
-        }
-    }
-}
-
-impl FromStr for ChannelTypeFilter {
-    type Err = InvalidChannelType;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "public" => Ok(Self::Public),
-            "organization" => Ok(Self::Organization),
-            "private" => Ok(Self::Private),
-            "direct_message" => Ok(Self::DirectMessage),
-            _ => Err(InvalidChannelType(s.to_owned())),
-        }
-    }
 }
 
 /// Invalid channel type error
@@ -55,6 +32,12 @@ impl std::fmt::Display for InvalidChannelType {
 }
 
 impl std::error::Error for InvalidChannelType {}
+
+impl From<strum::ParseError> for InvalidChannelType {
+    fn from(e: strum::ParseError) -> Self {
+        InvalidChannelType(e.to_string())
+    }
+}
 
 /// the possible literal values in a channel filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -70,7 +53,7 @@ pub enum ChannelLiteral {
     /// the message comes from some sender x
     Sender(MacroUserIdStr<'static>),
     /// the channel is of a specific type
-    ChannelType(ChannelTypeFilter),
+    ChannelType(ChannelType),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -114,7 +97,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
 
         let channel_types = channel_types
             .iter()
-            .map(|s| ChannelTypeFilter::from_str(s))
+            .map(|s| ChannelType::from_str(s).map_err(|_| InvalidChannelType(s.clone())))
             .try_expand(|r| r.map(ChannelLiteral::ChannelType), Expr::or)?;
 
         Ok([
