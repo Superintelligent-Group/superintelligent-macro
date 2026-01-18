@@ -326,15 +326,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     )
   );
 
-  // Stable key for filter state - changes trigger selection reset
-  const filterKey = createMemo(() =>
-    stringify({ viewId: selectedView(), filters: view()?.filters })
+  // Stable key for filter/sort state - changes trigger selection reset and scroll to top
+  const filterSortKey = createMemo(() =>
+    stringify({
+      viewId: selectedView(),
+      filters: view()?.filters,
+      sort: view()?.sort,
+    })
   );
 
-  // Reset selection and scroll when filters change
+  // Reset selection and scroll when filters or sort changes
   createEffect(
     on(
-      filterKey,
+      filterSortKey,
       (_current, prev) => {
         if (isTouchDevice()) return;
         if (prev === undefined) return; // Skip initial run

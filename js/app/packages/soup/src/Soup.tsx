@@ -29,6 +29,7 @@ import type { PropertiesEntityType } from '@service-properties/client';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { toast } from '@core/component/Toast/Toast';
 import { SplitPanelContext } from '@app/component/split-layout/context';
+import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelpers';
 
 // Unified list imports
 import {
@@ -319,7 +320,15 @@ export function Soup(props: SoupProps): JSX.Element {
         if (options?.preview && !previewEnabled()) {
           setPreviewEnabled(true);
         }
-        props.onEntityClick?.(entity);
+        // Use custom handler if provided, otherwise open in split
+        if (props.onEntityClick) {
+          props.onEntityClick(entity);
+        } else if (splitPanelContext?.handle) {
+          openEntityInSplitFromUnifiedList(entity, {
+            openInNewSplit: options?.newSplit,
+            splitHandle: splitPanelContext.handle,
+          });
+        }
       },
     })
     .build();
@@ -437,7 +446,7 @@ export function Soup(props: SoupProps): JSX.Element {
         entity={entity}
         index={state.index}
         focused={state.focused}
-        selected={{ active: state.selected }}
+        selected={{ active: state.focused }}
         checked={state.checked}
         config={{
           ...rowConfig(),

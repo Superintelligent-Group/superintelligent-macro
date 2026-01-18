@@ -8,6 +8,7 @@
  * - Auto-scroll to keep focused item visible
  */
 
+import { createEffect, on } from 'solid-js';
 import type {
   EntityConstraint,
   Plugin,
@@ -40,7 +41,12 @@ export type NavigationPluginConfig = {
 export function createNavigationPlugin<T extends EntityConstraint>(
   config: NavigationPluginConfig = {}
 ): Plugin<T> {
-  const { pageSize = 10, onNavigate, autoScroll = true } = config;
+  const {
+    pageSize = 10,
+    onNavigate,
+    autoScroll = true,
+    autoSelectFirst = false,
+  } = config;
 
   return (controller: ListController<T>): CleanupFn => {
     const cleanups: CleanupFn[] = [];
@@ -54,6 +60,26 @@ export function createNavigationPlugin<T extends EntityConstraint>(
       if (visibleIds) return visibleIds;
       return controller.state.entities().map((e) => e.id);
     };
+
+    // Auto-select first entity when entities become available and nothing is focused
+    if (autoSelectFirst) {
+      createEffect(
+        on(
+          () => getVisibleIds(),
+          (visibleIds) => {
+            // Only auto-select if no entity is currently focused and there are entities
+            const currentFocusedId = controller.state.focusedId();
+            if (currentFocusedId !== null || visibleIds.length === 0) return;
+
+            const firstId = visibleIds[0];
+            if (firstId) {
+              controller.setters.setFocusedId(firstId);
+              onNavigate?.(firstId);
+            }
+          }
+        )
+      );
+    }
 
     /** Get index of an entity in the visible order */
     const getVisibleIndex = (entityId: string): number => {

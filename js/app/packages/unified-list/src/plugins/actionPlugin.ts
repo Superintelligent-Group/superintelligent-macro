@@ -108,23 +108,26 @@ export function createActionPlugin<T extends EntityConstraint>(
     const cleanups: CleanupFn[] = [];
 
     // Register open entity command
-    const openReg = controller.commands.register<OpenEntityPayload>(
+    const openReg = controller.commands.register<OpenEntityPayload | undefined>(
       ListCommands.OPEN_ENTITY,
       (payload) => {
-        const entity = controller.getEntityById(payload.entityId);
+        // If payload has entityId, try to get that entity
+        const entity = payload?.entityId
+          ? controller.getEntityById(payload.entityId)
+          : undefined;
         if (!entity) {
-          // If no payload, use focused entity
+          // If no entity from payload, use focused entity
           const focused = controller.getFocusedEntity();
           if (!focused) return false;
           onOpenEntity?.(focused, {
             preview: false,
-            newSplit: payload.newSplit,
+            newSplit: payload?.newSplit,
           });
           return true;
         }
         onOpenEntity?.(entity, {
           preview: false,
-          newSplit: payload.newSplit,
+          newSplit: payload?.newSplit,
         });
         return true;
       },
