@@ -23,7 +23,10 @@ import {
   type Setter,
 } from 'solid-js';
 import { type EntityData, isTaskEntity } from '@macro-entity';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  useGlobalNotificationSource,
+  useGlobalBlockOrchestrator,
+} from '@app/component/GlobalAppState';
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import type { PropertiesEntityType } from '@service-properties/client';
 import { useTaskProperties } from '@core/component/Properties/hooks';
@@ -61,6 +64,7 @@ import type { Property } from '@core/component/Properties/types';
 import { useSoupQuery } from './useSoupQuery';
 import { SOUP_DEFAULTS, type SortMethod, type EmailView } from './defaults';
 import { createSoupFilterConfigs } from './filterConfigs';
+import { createPreviewPlugin } from './createPreviewPlugin';
 
 // Debounce constants
 const LOCAL_SEARCH_DEBOUNCE_MS = 20;
@@ -180,6 +184,9 @@ export function Soup(props: SoupProps): JSX.Element {
   // Notification source from global context
   const notificationSource = useGlobalNotificationSource();
 
+  // Block orchestrator for preview panel
+  const orchestrator = useGlobalBlockOrchestrator();
+
   // Mark done mutation
   const setPropertyStatusCompleteMutation =
     useSetPropertyStatusCompleteMutation();
@@ -224,14 +231,14 @@ export function Soup(props: SoupProps): JSX.Element {
     SOUP_DEFAULTS.emailView
   );
 
-  // Preview mode state
-  const [previewEnabled, setPreviewEnabled] = createSignal(false);
-
   // Unroll notifications state
   const [unrollNotifications, setUnrollNotifications] = createSignal(false);
 
   // Group by mode state
   const [groupMode, setGroupMode] = createSignal<GroupMode>('none');
+
+  // Focused entity ID - tracked via navigation plugin's onNavigate callback
+  const [focusedId, setFocusedId] = createSignal<string | null>(null);
 
   // Search text state - managed by search plugin via stores.search
   // The plugin handles dual debouncing (20ms local, 300ms server) internally
@@ -291,6 +298,7 @@ export function Soup(props: SoupProps): JSX.Element {
     .withNavigation({
       autoScroll: true,
       autoSelectFirst: true,
+      onNavigate: setFocusedId,
     })
     .withSelection({
       mode: 'multi',
@@ -317,8 +325,8 @@ export function Soup(props: SoupProps): JSX.Element {
         },
       ],
       onOpenEntity: (entity, options) => {
-        if (options?.preview && !previewEnabled()) {
-          setPreviewEnabled(true);
+        if (options?.preview && !preview.enabled()) {
+          preview.setEnabled(true);
         }
         // Use custom handler if provided, otherwise open in split
         if (props.onEntityClick) {
@@ -421,13 +429,31 @@ export function Soup(props: SoupProps): JSX.Element {
   );
 
   // ---------------------------------------------------------------------------
+  // Preview Plugin
+  // ---------------------------------------------------------------------------
+
+  const preview = createPreviewPlugin({
+    hotkeyScope: hotkeyScope!,
+    splitPanelContext: splitPanelContext!,
+    orchestrator,
+    entities: processedEntities,
+    focusedId,
+  });
+
+  // ---------------------------------------------------------------------------
   // Row Rendering
   // ---------------------------------------------------------------------------
 
   const rowConfig = createMemo(() =>
     createDefaultEntityRowConfig({
       showUnrollNotifications: unrollNotifications(),
-      onClick: (event) => props.onEntityClick?.(event.entity),
+      onClick: (event) => {
+        // Let preview plugin handle click first
+        if (!preview.handleEntityClick(event.entity)) {
+          // Preview didn't consume, open entity
+          props.onEntityClick?.(event.entity);
+        }
+      },
       onDoubleClick: (event) => props.onEntityDoubleClick?.(event.entity),
       onRowAction: async (entity, action) => {
         if (action === 'done') {
@@ -463,53 +489,68 @@ export function Soup(props: SoupProps): JSX.Element {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="h-full">
-      <UnifiedListView
-        id="soup"
-        entities={processedEntities}
-        isLoading={isLoading}
-        hasMore={hasMore}
-        isFetchingNextPage={isFetchingNextPage}
-        onFetchMore={fetchNextPage}
-        plugins={plugins}
-        groupStore={activeGroupStore()}
-        rowHeight={ENTITY_HEIGHT}
-        measurementKey={`${unrollNotifications()}-${stores.search?.isServerSearchActive() ?? false}`}
-        renderRow={renderRow}
-        emptyState={
-          <div class="flex items-center justify-center h-full text-ink-muted">
-            No entities match your filters
-          </div>
-        }
+    <div class="flex size-full">
+      <SplitPanelContext.Provider
+        value={{
+          ...splitPanelContext!,
+          halfSplitState: preview.halfSplitState,
+        }}
       >
-        {/* Main Toolbar */}
-        <SoupToolbar
-          stores={stores}
-          sortMethod={sortMethod}
-          setSortMethod={setSortMethod}
-          emailView={emailView}
-          setEmailView={setEmailView}
-          previewEnabled={previewEnabled}
-          setPreviewEnabled={setPreviewEnabled}
-          unrollNotifications={unrollNotifications}
-          setUnrollNotifications={setUnrollNotifications}
-          groupMode={groupMode}
-          setGroupMode={setGroupMode}
-          onFilterChange={setActiveFilterIds}
-        />
-
-        {/* Selection toolbar */}
-        <Show when={(stores.selection?.selectedIds().size ?? 0) > 0}>
-          <SelectionToolbar
-            stores={stores}
-            onMarkDone={markDone}
+        <div
+          class="h-full flex-1 min-w-0"
+          classList={{ 'border-r border-edge-muted': preview.enabled() }}
+        >
+          <UnifiedListView
+            id="soup"
             entities={processedEntities}
-          />
-        </Show>
+            isLoading={isLoading}
+            hasMore={hasMore}
+            isFetchingNextPage={isFetchingNextPage}
+            onFetchMore={fetchNextPage}
+            plugins={plugins}
+            groupStore={activeGroupStore()}
+            rowHeight={ENTITY_HEIGHT}
+            measurementKey={`${unrollNotifications()}-${stores.search?.isServerSearchActive() ?? false}`}
+            renderRow={renderRow}
+            emptyState={
+              <div class="flex items-center justify-center h-full text-ink-muted">
+                No entities match your filters
+              </div>
+            }
+          >
+            {/* Main Toolbar */}
+            <SoupToolbar
+              stores={stores}
+              sortMethod={sortMethod}
+              setSortMethod={setSortMethod}
+              emailView={emailView}
+              setEmailView={setEmailView}
+              previewEnabled={preview.enabled}
+              onTogglePreview={preview.toggle}
+              unrollNotifications={unrollNotifications}
+              setUnrollNotifications={setUnrollNotifications}
+              groupMode={groupMode}
+              setGroupMode={setGroupMode}
+              onFilterChange={setActiveFilterIds}
+            />
 
-        {/* Status bar */}
-        <UnifiedListView.StatusBar />
-      </UnifiedListView>
+            {/* Selection toolbar */}
+            <Show when={(stores.selection?.selectedIds().size ?? 0) > 0}>
+              <SelectionToolbar
+                stores={stores}
+                onMarkDone={markDone}
+                entities={processedEntities}
+              />
+            </Show>
+
+            {/* Status bar */}
+            <UnifiedListView.StatusBar />
+          </UnifiedListView>
+        </div>
+      </SplitPanelContext.Provider>
+      <Show when={preview.enabled()}>
+        <preview.Panel />
+      </Show>
     </div>
   );
 }
@@ -544,7 +585,7 @@ type SoupToolbarProps = {
   emailView: Accessor<EmailView>;
   setEmailView: Setter<EmailView>;
   previewEnabled: Accessor<boolean>;
-  setPreviewEnabled: Setter<boolean>;
+  onTogglePreview: () => void;
   unrollNotifications: Accessor<boolean>;
   setUnrollNotifications: Setter<boolean>;
   groupMode: Accessor<GroupMode>;
@@ -687,7 +728,7 @@ function SoupToolbar(props: SoupToolbarProps): JSX.Element {
             type="checkbox"
             class="rounded"
             checked={props.previewEnabled()}
-            onChange={(e) => props.setPreviewEnabled(e.currentTarget.checked)}
+            onChange={() => props.onTogglePreview()}
           />
           <span>Preview</span>
         </label>
