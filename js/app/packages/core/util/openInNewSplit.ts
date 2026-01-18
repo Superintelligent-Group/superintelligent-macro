@@ -1,3 +1,6 @@
+import { isMobileWidth } from '../mobile/mobileWidth';
+import { isMobilePlatform } from './platform';
+
 /**
  * Macro uses "splits" as its tab-like navigation concept.
  *
@@ -12,5 +15,6 @@ export function openInNewSplitForMention(
   altKey: boolean | undefined,
   defaultOpenInNewSplit: boolean
 ): boolean {
+  if (isMobilePlatform() || isMobileWidth()) return false;
   return altKey ? false : defaultOpenInNewSplit;
 }
