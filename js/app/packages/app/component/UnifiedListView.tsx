@@ -1301,7 +1301,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     ) as EntityData;
 
     if (event.metaKey || event.ctrlKey) {
-      openEntityInNewTab({ entity, location });
+      await openEntityInSplitFromUnifiedList(entity, {
+        openInNewSplit: true,
+        location,
+        splitHandle: splitContext.handle,
+      });
       return;
     }
 
