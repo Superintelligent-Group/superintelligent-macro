@@ -224,16 +224,26 @@ export function UnifiedListView<T extends { id: string }>(
   let previousFirstId: string | undefined;
 
   // Sync entities to stable store using reconcile (key by id for stable references)
-  // Also detect prepends by checking if the first item changed
+  // Also detect prepends by checking if NEW items were inserted at the beginning
+  // (not just reordering of existing items, e.g., from search results)
   createRenderEffect(() => {
     const newEntities = props.entities();
     const newFirstId = newEntities[0]?.id;
 
-    // Detect prepend: first item changed AND we had items before AND new list is longer
-    const wasPrepend =
-      previousFirstId !== undefined &&
-      newFirstId !== previousFirstId &&
-      newEntities.length > stableEntitiesStore.length;
+    let wasPrepend = false;
+
+    if (previousFirstId !== undefined && newFirstId !== previousFirstId) {
+      // Build set of previous IDs to distinguish prepend vs reorder
+      const previousIds = new Set(stableEntitiesStore.map((e) => e.id));
+
+      // Check if the new first item is genuinely new (not in previous set)
+      // If the new first item already existed, this is a reorder, not a prepend
+      const newFirstItemIsNew = !previousIds.has(newFirstId);
+
+      // It's only a true prepend if items at the front are genuinely new
+      // Reordering existing items (e.g., search relevance sorting) should NOT enable shift
+      wasPrepend = newFirstItemIsNew;
+    }
 
     if (wasPrepend) {
       setIsShifting(true);

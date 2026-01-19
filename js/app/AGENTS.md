@@ -28,7 +28,10 @@
 5. For exaustive switch statements use `match` from `ts-pattern`.
 6. When reaching for solid related utilities always check if a sufficient `solid-primitive` exists first (https://github.com/solidjs-community/solid-primitives).
 
+
+
 ## Philosophy
-This codebase will outlive you. Every shortcut becomes someone else's burden. Patterns you establish will be copied.
-Corners you cut will be cut again.
-Fight entropy. Leave the codebase better than you found it.
+- Avoid piling on to existing systems when making changes. Make your changes small and composable, figure out how to idiomatically integrate them with the system instead of just inlining new fatures and solutions.
+- This codebase will outlive you. Every shortcut becomes someone else's burden. Patterns you establish will be copied.
+- Corners you cut will be cut again.
+- Fight entropy. Leave the codebase better than you found it.
