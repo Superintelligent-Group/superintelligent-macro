@@ -381,13 +381,17 @@ export function BaseInput(props: BaseInputProps) {
       mentions: allMentions(),
     };
 
+    // Stash attachments for potential restoration on error
+    const stashedAttachments = [...attachments()];
+
     clearMarkdownArea();
+    // Clear attachments immediately (optimistically), like we do with text content
+    props.inputAttachments.setStore(key, []);
     focusMarkdownArea();
 
     props
       .onSend(args)
       .then(() => {
-        props.inputAttachments.setStore(key, []);
         stopTyping();
         return props.afterSend?.();
       })
@@ -401,6 +405,8 @@ export function BaseInput(props: BaseInputProps) {
             error: e,
           });
         }
+        // Restore attachments on error
+        props.inputAttachments.setStore(key, stashedAttachments);
         focusMarkdownArea();
       })
       .finally(() => {
