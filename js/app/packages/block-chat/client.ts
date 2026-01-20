@@ -9,7 +9,7 @@ import { propsToHref } from '@core/util/url';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { postNewHistoryItem } from '@service-storage/history';
 
-const { track, TrackingEvents } = withAnalytics();
+const { track: trackington, TrackingEvents } = withAnalytics();
 
 export function useOpenChatForAttachment() {
   const { showPaywall } = usePaywallState();
@@ -100,7 +100,7 @@ export async function copyChat(args: { id: string; name: string }) {
   }
   const [_, { id }] = result;
   postNewHistoryItem('chat', id);
-  track(TrackingEvents.BLOCKCHAT.CHATMENU.COPY);
+  trackington(TrackingEvents.BLOCKCHAT.CHATMENU.COPY);
   const href = propsToHref({
     id,
     fileType: 'chat',
