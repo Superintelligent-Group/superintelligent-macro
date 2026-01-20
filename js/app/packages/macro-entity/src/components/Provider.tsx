@@ -34,10 +34,11 @@ function _reconcileEntities(
 
 export function Provider(props: ParentProps) {
   queryClient.setQueryDefaults(queryKeys.all.auth, {
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 55, // 55 minutes
     gcTime: 1000 * 60 * 60 * 24, // 1 day
   });
   queryClient.setQueryDefaults(queryKeys.auth.apiToken, {
+    staleTime: 1000 * 60 * 55, // 55 minutes
     queryFn: fetchApiToken,
   });
 

@@ -6,7 +6,7 @@ import {
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { useChannelName } from '@core/component/ChannelsProvider';
+import { useChannelName } from '@core/context/channels';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsModal } from '@core/component/NotificationsModal';
@@ -18,7 +18,7 @@ import LinkIcon from '@icon/regular/link.svg';
 import { useChannelQuery } from '@queries/channel/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';

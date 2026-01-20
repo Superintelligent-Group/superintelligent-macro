@@ -2,7 +2,7 @@ import type { ChannelData } from '@block-channel/definition';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { createBlockMemo, createBlockStore } from '@core/block';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { invalidateListChannels } from '@queries/channel/channels';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -19,7 +19,7 @@ import type { Message } from '@service-comms/generated/models/message';
 import type { ParticipantAccess } from '@service-comms/generated/models/participantAccess';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
@@ -210,12 +210,11 @@ export type SendMessageArgs = {
 
 export function useSendChannelMessageAction(channelID: Accessor<string>) {
   const optimisticSend = createCallback(optimisticChannelMessage);
-  const channelsContext = useChannelsContext();
   const userId = useUserId();
 
   const mutation = useSendMessageMutation({
     onSettled() {
-      channelsContext.refetchChannels();
+      invalidateListChannels();
     },
     onSuccess(_, variables) {
       const message = variables.message;

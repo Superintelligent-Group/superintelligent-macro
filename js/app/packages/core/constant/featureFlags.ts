@@ -118,6 +118,7 @@ export const ENABLE_PROPERTY_FILTER = DEV_MODE_ENV;
 export const ENABLE_SOUP_FROM_FILTER = false;
 
 export const ENABLE_PREVIEW = true;
+export const ENABLE_PROJECT_VIEW_PREVIEW = true;
 
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
@@ -135,6 +136,6 @@ export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
 export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
-export const ENABLE_EMAIL_SHARING = false;
+export const ENABLE_EMAIL_SHARING = true;
 
 export const ENABLE_FRECENCY = false;

@@ -1,7 +1,6 @@
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
-import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -10,8 +9,8 @@ import {
 } from '@core/signal/layout';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
-import { createEffect, onCleanup, onMount, Show, Suspense } from 'solid-js';
-import { updateCookie } from '../util/updateCookie';
+import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { updateCookie } from '@core/util/cookies';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
@@ -19,9 +18,12 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
-import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
+import { ShortcutsHelper } from './settings/ShortcutsHelper';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { cn } from '@ui/utils/classname';
+import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const AUTH_URLS = [
   '/app/login',
@@ -36,6 +38,8 @@ export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
+
+  useAppSquishHandlers();
 
   // save last_path to cookie
   createEffect(() => {
@@ -53,34 +57,10 @@ export function Layout(props: RouteSectionProps) {
     });
   });
 
-  // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
-  const handleResize = () => {
-    if (window.visualViewport) {
-      // Set the CSS variable with the calculated height
-      document.documentElement.style.setProperty(
-        '--viewport-height',
-        `${window.visualViewport.height}px`
-      );
-    }
-  };
-
   onMount(() => {
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
-      window.visualViewport.addEventListener('scroll', handleResize);
-      handleResize();
-    }
-
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
-    }
-  });
-
-  onCleanup(() => {
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', handleResize);
-      window.visualViewport.removeEventListener('scroll', handleResize);
     }
   });
 
@@ -105,18 +85,20 @@ export function Layout(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
-  useABTest();
-
   attachGlobalDOMScope(document.body);
 
   return (
     <div
-      class="relative flex flex-col justify-between w-dvw h-dvh"
+      class={cn(
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)]',
+        {
+          'pb-[max(env(safe-area-inset-bottom,0px),var(--tauri-inset-bottom,0px))]':
+            !virtualKeyboardVisible(),
+        }
+      )}
       style={{
         'padding-top':
           'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-        'padding-bottom':
-          'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
         'padding-left':
           'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
         'padding-right':
@@ -129,11 +111,14 @@ export function Layout(props: RouteSectionProps) {
           <Suspense>
             <KommandMenu />
           </Suspense>
-          <QuickCreateMenu />
           <GlobalBulkEditEntityModal />
+          <ShortcutsHelper />
         </Show>
         <Show
-          when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          when={
+            isAuthenticated() === false &&
+            !AUTH_URLS.includes(location.pathname)
+          }
         >
           <Banner />
         </Show>

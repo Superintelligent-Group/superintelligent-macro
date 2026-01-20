@@ -23,7 +23,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
@@ -106,7 +106,7 @@ export function ParticipantManager(props: { participantCount: number }) {
                 <div class="flex flex-row justify-between gap-2 min-h-[40px] text-ink-muted border-b border-edge-muted/50 p-2 items-center">
                   <RecipientSelector<'user'>
                     setSelectedOptions={setUsersToInvite}
-                    selectedOptions={usersToInvite}
+                    selectedOptions={usersToInvite()}
                     placeholder={'Search'}
                     options={options}
                     hideBorder

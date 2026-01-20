@@ -4,28 +4,11 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import type { Component, JSX, ParentProps, Ref } from 'solid-js';
 import { children, createMemo, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { createProfilePictureQuery } from '../queries/auth';
 import type { EntityData } from '../types/entity';
-import type { SearchLocation } from '../types/search';
+import type { EntityClickHandler } from './EntityWithEverything';
 
-export type EntityClickEvent = Parameters<
-  JSX.EventHandler<HTMLDivElement, MouseEvent>
->[0];
-type EntityPointerDownEvent = Parameters<
-  JSX.EventHandler<HTMLDivElement, PointerEvent>
->[0];
-export type EntityClickHandler<T extends EntityData> = (
-  entity: T,
-  event: EntityClickEvent,
-  location?: SearchLocation,
-  options?: { ignorePreview?: boolean }
-) => void;
-export type EntityPointerDownHandler<T extends EntityData> = (
-  entity: T,
-  event: EntityPointerDownEvent,
-  location?: SearchLocation,
-  options?: { ignorePreview?: boolean }
-) => void;
 interface EntityProps<T extends EntityData> extends ParentProps {
   entity: T;
   timestamp?: number;
@@ -112,6 +95,15 @@ export function Entity<T extends EntityData = EntityData>(
     });
   });
 
+  const displayName = createMemo(() => {
+    if (props.entity.type === 'document') {
+      return formatDocumentName(props.entity.name, props.entity.fileType, {
+        fullyQualifiedBlockName: true,
+      });
+    }
+    return props.entity.name;
+  });
+
   return (
     <div
       data-entity
@@ -131,7 +123,7 @@ export function Entity<T extends EntityData = EntityData>(
           />
         </div>
         <span class="@md:w-52 truncate font-medium text-sm">
-          {props.entity.name}
+          {displayName()}
         </span>
       </div>
 

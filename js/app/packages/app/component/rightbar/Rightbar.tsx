@@ -2,8 +2,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
+import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   Attachment,
@@ -18,6 +20,7 @@ import {
   getChatInputStoredState,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
@@ -64,6 +67,8 @@ import {
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
+import { Button } from '@ui/components/Button';
+import { Hotkey } from '@core/component/Hotkey';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -174,14 +179,12 @@ function TopBar(props: {
 
   return (
     <div
-      class="h-[calc(2.5rem-1px)] border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
+      class="h-10 border-b border-edge-muted flex items-center w-full px-2 shrink-0 grow-0"
       data-split-panel
     >
-      <DeprecatedIconButton
-        size="sm"
-        icon={XIcon}
-        tooltip={{ label: 'Close Assistant Panel' }}
-        theme="current"
+      <Button
+        tooltip="Close Assistant Panel"
+        class="p-1 size-6"
         onClick={() => {
           if (bigChatOpen()) {
             setBigChatOpen(false);
@@ -189,16 +192,23 @@ function TopBar(props: {
             toggleRightPanel();
           }
         }}
-      />
-      <DeprecatedIconButton
-        size="sm"
-        icon={PlusIcon}
-        tooltip={{ label: 'Create New Chat' }}
-        theme="current"
-        onClick={() => {
-          createNewRightbarChat();
-        }}
-      />
+      >
+        <XIcon />
+      </Button>
+      <Button
+        tooltip={
+          <div class="flex flex-row gap-x-1">
+            <div>Create New Chat</div>
+            <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="ctrl+t" />
+            </div>
+          </div>
+        }
+        class="p-1 size-6"
+        onClick={createNewRightbarChat}
+      >
+        <PlusIcon />
+      </Button>
       <div class="grow" />
       <Show when={ENABLE_REFERENCES_MODAL && props.chatId}>
         <ReferencesModal
@@ -258,7 +268,8 @@ export function Rightbar(props: {
   isBig?: boolean;
   setIsBig?: (val: boolean) => void;
 }) {
-  let messagesContainerRef!: HTMLDivElement;
+  const [messagesContainerRef, setMessagesContainerRef] =
+    createSignal<HTMLElement>();
 
   createEffect(() => {
     const stream_ = props.stream();
@@ -370,19 +381,22 @@ export function Rightbar(props: {
             </div>
           </Show>
           <Show when={props.messages().length > 0 || !props.isBig}>
-            <div
-              data-chat-scroll
-              class="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center w-full"
-              ref={messagesContainerRef}
-            >
-              <div class="w-full macro-message-width">
-                <ChatMessages
-                  chatId={props.chatId}
-                  messages={[props.messages, props.setState.setMessages]}
-                  messageActions={undefined}
-                  stream={[props.stream, props.setState.setStream]}
-                />
+            <div class="relative flex-1 min-h-0 w-full">
+              <div
+                data-chat-scroll
+                class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
+                ref={setMessagesContainerRef}
+              >
+                <div class="w-full macro-message-width">
+                  <ChatMessages
+                    chatId={props.chatId}
+                    messages={[props.messages, props.setState.setMessages]}
+                    messageActions={undefined}
+                    stream={[props.stream, props.setState.setStream]}
+                  />
+                </div>
               </div>
+              <CustomScrollbar scrollContainer={messagesContainerRef} />
             </div>
           </Show>
 
@@ -554,6 +568,28 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     }
   };
 
+  const buildChatSendRequest = useBuildChatSendRequest();
+
+  // Check for pending sends from SoupChatInput when bigchat opens
+  createEffect(
+    on(bigChatOpen, async (isOpen, wasOpen) => {
+      if (isOpen && !wasOpen) {
+        const pending = getPendingSend();
+        if (pending) {
+          // Build and send the request
+          const request = await buildChatSendRequest({
+            chatId: chatId(),
+            userRequest: pending.content,
+            attachments: pending.attachments,
+            model: pending.model,
+            isPersistent: true,
+          });
+          onSend(request);
+        }
+      }
+    })
+  );
+
   // load chat state
   createEffect(
     on(chatId, (chatId_) => {
@@ -604,12 +640,26 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     hotkeyToken: TOKENS.chat.spotlight.close,
     condition: () => Boolean(bigChatOpen() || isRightPanelOpen()),
     description: 'Close chat',
+    runWithInputFocused: true,
     keyDownHandler: () => {
       if (bigChatOpen()) {
         setBigChatOpen(false);
       } else {
         toggleRightPanel(false);
       }
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId,
+    hotkey: 'ctrl+t',
+    hotkeyToken: TOKENS.chat.new,
+    description: 'Create a new chat',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      console.log('create new chat');
+      setChatId(undefined);
       return true;
     },
   });

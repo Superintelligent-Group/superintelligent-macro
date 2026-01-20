@@ -2,7 +2,6 @@
 // These queries were migrated from document_cognition_service/src/service/db/
 
 // Chat queries
-pub mod add_attachment;
 pub mod append_attachment_to_chat;
 pub mod copy_messages;
 pub mod create_chat_message;
@@ -20,13 +19,6 @@ pub mod get_document;
 pub mod get_document_name_and_type;
 pub mod get_documents;
 pub mod get_documents_count;
-
-// Macro queries
-pub mod create_macro;
-pub mod delete_macro;
-pub mod get_macro;
-pub mod get_macros;
-pub mod patch_macro;
 
 // Text queries
 pub mod batch_verify;

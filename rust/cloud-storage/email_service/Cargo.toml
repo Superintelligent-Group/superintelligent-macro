@@ -29,6 +29,10 @@ path = "src/bin/backfill_sfs_attachments/backfill_sfs_attachments.rs"
 name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
+[[bin]]
+name = "email_service_openapi"
+path = "src/openapi.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -39,10 +43,12 @@ default = [
   "contacts_sync",
   "gmail_webhook_auth",
   "sfs_map",
+  "sfs_delete",
 ]
 gmail_webhook_auth = []
 local_queue = []
 sfs_map = []
+sfs_delete = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -55,6 +61,7 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
+chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
@@ -110,6 +117,8 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
   "search",
+  "sfs_delete",
+  "sfs_uploader"
 ] }
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }

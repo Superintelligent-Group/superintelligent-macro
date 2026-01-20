@@ -1,35 +1,51 @@
+import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import {
-  constrainModalToViewport,
-  MODAL_VIEWPORT_CLASSES,
-} from '@core/util/modalUtils';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import { MODAL_DIMENSIONS } from '../../constants';
+import { createSignal, onMount, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
+
+false && floatWithElement;
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '../../utils/entityConversion';
 import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
 import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
+import { PropertyDateSelector } from './shared/PropertyDateSelector';
+import {
+  useAddPropertyOptionMutation,
+  usePropertyOptionsQuery,
+} from '@queries/properties/options';
+import type { DateProperty } from '../../types';
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-sm';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
+  const propertyOptionsQuery = usePropertyOptionsQuery(
+    () => props.property.propertyDefinitionId
+  );
+
+  const addPropertyOptionMutation = useAddPropertyOptionMutation({});
+
+  const propertyOptions = () => {
+    if (
+      propertyOptionsQuery.isLoading ||
+      propertyOptionsQuery.isError ||
+      !propertyOptionsQuery.data
+    )
+      return [];
+    return propertyOptionsQuery.data;
+  };
+
+  const isLoading = () =>
+    propertyOptionsQuery.isLoading || addPropertyOptionMutation.isPending;
+
   const { saveHandler } = usePropertiesContext();
 
   let modalRef!: HTMLDivElement;
@@ -47,16 +63,26 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
       : []
   );
 
+  const [selectedDate, setSelectedDate] = createSignal<Date | null>(
+    props.property.valueType === 'DATE' && props.property.value != null
+      ? new Date(props.property.value)
+      : null
+  );
+
   const {
-    state: editorState,
-    fetchOptions,
+    selectedOptions,
+    hasChanges,
     initializeSelectedOptions,
     toggleOption,
     addOption,
-  } = usePropertyEditor(props.property);
+  } = usePropertyEditor(
+    props.property,
+    propertyOptions,
+    addPropertyOptionMutation.mutateAsync
+  );
 
   const saveChanges = async () => {
-    const selectedArray = Array.from(editorState().selectedOptions);
+    const selectedArray = Array.from(selectedOptions());
 
     let apiValues: PropertyApiValues;
 
@@ -81,8 +107,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
         };
         break;
       }
+      case 'DATE': {
+        const date = selectedDate();
+        apiValues = {
+          valueType: 'DATE',
+          value: date ? date.toISOString() : null,
+        };
+        break;
+      }
       default:
-        // Should not reach here as modal only handles select and entity types
         console.error(
           'PropertyEditor.saveChanges:',
           new Error(
@@ -122,10 +155,25 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     );
   };
 
+  const hasDateChanges = () => {
+    if (props.property.valueType !== 'DATE') return false;
+
+    const currentDate = selectedDate();
+    const originalDate = props.property.value
+      ? new Date(props.property.value)
+      : null;
+
+    if (!currentDate && !originalDate) return false;
+
+    if (!currentDate || !originalDate) return true;
+
+    return currentDate.getTime() !== originalDate.getTime();
+  };
+
   const handleClose = async () => {
-    // All properties that reach this modal (select and entity types) should auto-save
-    const hasChanges = editorState().hasChanges || hasEntityChanges();
-    if (hasChanges) {
+    const hasUnsavedChanges =
+      hasChanges() || hasEntityChanges() || hasDateChanges();
+    if (hasUnsavedChanges) {
       await saveChanges();
     } else {
       props.onClose();
@@ -134,12 +182,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   onMount(() => {
     initializeSelectedOptions();
-    if (
-      props.property.valueType === 'SELECT_STRING' ||
-      props.property.valueType === 'SELECT_NUMBER'
-    ) {
-      fetchOptions();
-    }
+    propertyOptionsQuery.refetch();
 
     // Attach hotkeys to modal element
     attachHotkeys(modalRef);
@@ -157,24 +200,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     });
   });
 
-  createEffect(() => {
-    const handleResize = () => {
-      if (modalRef && props.position) {
-        const constrainedPosition = constrainModalToViewport(
-          props.position,
-          MODAL_DIMENSIONS.DEFAULT_WIDTH,
-          MODAL_DIMENSIONS.DEFAULT_HEIGHT
-        );
-
-        modalRef.style.top = `${constrainedPosition.top}px`;
-        modalRef.style.left = `${constrainedPosition.left}px`;
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    onCleanup(() => window.removeEventListener('resize', handleResize));
-  });
-
   return (
     <ScopedPortal scope="local">
       <div class="fixed inset-0 z-modal" onClick={handleClose}>
@@ -182,95 +207,71 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           ref={mergeRefs((ref) => {
             modalRef = ref;
           })}
-          class={`${MODAL_BASE} ${MODAL_VIEWPORT_CLASSES}`}
+          class={MODAL_BASE}
           tabIndex={-1}
-          style={createMemo(() => {
-            if (!props.position) {
-              return {
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-              };
-            }
-
-            const constrainedPosition = constrainModalToViewport(
-              props.position,
-              MODAL_DIMENSIONS.DEFAULT_WIDTH,
-              MODAL_DIMENSIONS.DEFAULT_HEIGHT
-            );
-
-            return {
-              top: `${constrainedPosition.top}px`,
-              left: `${constrainedPosition.left}px`,
-            };
-          })()}
+          use:floatWithElement={{ element: () => props.anchorRef }}
+          // All properties that reach this modal (select, entity, and date types) should auto-save
           onClick={(e) => e.stopPropagation()}
         >
-          <div class="bg-dialog text-ink">
-            {/*<div class={HEADER_CLASSES}>
+          <Show when={!isLoading()}>
+            <div class="bg-dialog text-ink">
               <div>
-                <h3 class="text-base font-semibold text-ink">
-                  {props.property.displayName}
-                </h3>
-                <p class="text-xs text-ink-muted mt-1">
-                  {`${props.property.isMultiSelect ? 'Multi-select ' : ''}${getValueTypeDisplay(props.property)}`}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <DeprecatedIconButton
-                  icon={XIcon}
-                  theme="clear"
-                  size="sm"
-                  onClick={handleClose}
-                />
-              </div>
-            </div>*/}
-
-            <div>
-              <Show
-                when={
-                  props.property.valueType === 'SELECT_STRING' ||
-                  props.property.valueType === 'SELECT_NUMBER'
-                }
-                fallback={
-                  <Show when={props.property.valueType === 'ENTITY'}>
-                    <PropertyEntitySelector
-                      property={props.property}
-                      selectedOptions={() => {
-                        const refs = selectedEntityRefs();
-                        return entityReferencesToIdSet(refs);
-                      }}
-                      setSelectedOptions={(newOptions, entityInfo) => {
-                        const currentRefs = selectedEntityRefs();
-                        const updatedRefs = updateEntityReferences(
-                          currentRefs,
-                          newOptions,
-                          entityInfo
-                        );
-                        setSelectedEntityRefs(updatedRefs);
-                      }}
-                      setHasChanges={() => {}} // Not needed with new hook
-                      onClose={handleClose}
-                    />
-                  </Show>
-                }
-              >
-                <PropertyOptionSelector
-                  property={props.property}
-                  options={editorState().options}
-                  isLoading={editorState().isLoading}
-                  error={editorState().error}
-                  selectedOptions={() => editorState().selectedOptions}
-                  onToggleOption={toggleOption}
-                  onRetry={fetchOptions}
-                  onAddOption={
-                    props.property.isSystemProperty ? undefined : addOption
+                <Show
+                  when={
+                    props.property.valueType === 'SELECT_STRING' ||
+                    props.property.valueType === 'SELECT_NUMBER'
                   }
-                  onClose={handleClose}
-                />
-              </Show>
+                  fallback={
+                    <Show
+                      when={props.property.valueType === 'ENTITY'}
+                      fallback={
+                        <Show when={props.property.valueType === 'DATE'}>
+                          <PropertyDateSelector
+                            property={props.property as DateProperty}
+                            selectedDate={selectedDate()}
+                            onSelectDate={(date) => setSelectedDate(date)}
+                            onClose={handleClose}
+                          />
+                        </Show>
+                      }
+                    >
+                      <PropertyEntitySelector
+                        property={props.property}
+                        selectedOptions={() => {
+                          const refs = selectedEntityRefs();
+                          return entityReferencesToIdSet(refs);
+                        }}
+                        setSelectedOptions={(newOptions, entityInfo) => {
+                          const currentRefs = selectedEntityRefs();
+                          const updatedRefs = updateEntityReferences(
+                            currentRefs,
+                            newOptions,
+                            entityInfo
+                          );
+                          setSelectedEntityRefs(updatedRefs);
+                        }}
+                        setHasChanges={() => {}} // Not needed with new hook
+                        onClose={handleClose}
+                      />
+                    </Show>
+                  }
+                >
+                  <PropertyOptionSelector
+                    property={props.property}
+                    options={propertyOptions()}
+                    isLoading={false}
+                    error={null}
+                    selectedOptions={selectedOptions}
+                    onToggleOption={toggleOption}
+                    onAddOption={
+                      props.property.isSystemProperty ? undefined : addOption
+                    }
+                    onClose={handleClose}
+                  />
+                </Show>
+              </div>
             </div>
-          </div>
+          </Show>
         </div>
       </div>
     </ScopedPortal>

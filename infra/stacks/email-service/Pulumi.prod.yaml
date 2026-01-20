@@ -9,6 +9,7 @@ config:
   email-service:internal_auth_key: document-storage-service-auth-key-prod
   email-service:cf_private_key: email-attachments-private-key-prod
   email-service:notifications_enabled: true
+  email-service:sent_undo_delay_secs: 5
   email-service:redis_rate_limit_reqs: 14000
   email-service:redis_rate_limit_reqs_backfill: 13000
   email-service:redis_rate_limit_window_secs: 60
@@ -22,3 +23,5 @@ config:
   email-service:presigned_url_ttl_secs: 3600
   email-service:gmail_gcp_queue: gmail-gcp-queue-prod
   email-service:macro_db_secret_key: macro-db-prod
+  email-service:delete_unused_after_days: 14
+  email-service:delete_inactive_after_days: 60

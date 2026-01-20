@@ -3,8 +3,14 @@ import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
-import { type BlockName, useBlockId } from '@core/block';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import { useUserId } from '@core/context/user';
+import {
+  type BlockName,
+  useBlockId,
+  useMaybeBlockAliasedName,
+} from '@core/block';
+import { IS_MAC } from '@core/constant/isMac';
+import type { EntityDragEvent } from '@macro-entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -60,6 +66,10 @@ import {
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
+import {
+  checkboxToTaskPlugin,
+  CONVERT_CHECKBOXES_TO_TASKS,
+} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
@@ -178,6 +188,8 @@ const EDITOR_PADDING_BOTTOM = 200;
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
+  const userId = useUserId();
+  const blockName = useMaybeBlockAliasedName();
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -288,7 +300,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   ];
 
   // turn the solid dnd events into something we can use.
-  const wrapDndEvent = (event: DragEventWithData) => {
+  const wrapDndEvent = (event: EntityDragEvent) => {
     const currentPos = dragDropState?.active.sensor?.coordinates?.current;
     if (!currentPos) return;
     const mousePos = {
@@ -306,7 +318,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     };
   };
 
-  const dndDragEnd = async (event: DragEventWithData) => {
+  const dndDragEnd = async (event: EntityDragEvent) => {
     if (!dragInsertStore.visible) return;
     setDragInsertStore({ visible: false });
     if (!canEdit()) return;
@@ -346,7 +358,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   };
 
-  const dndDragMove = throttle((event: DragEventWithData) => {
+  const dndDragMove = throttle((event: EntityDragEvent) => {
     if (!droppable.isActiveDroppable) {
       return setDragInsertStore({ visible: false });
     }
@@ -359,12 +371,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
   }, 60);
 
-  onDragEnd((event) => {
-    dndDragEnd(event as DragEventWithData);
+  onDragEnd((event: EntityDragEvent) => {
+    dndDragEnd(event);
   });
 
-  onDragMove((event) => {
-    dndDragMove(event as DragEventWithData);
+  onDragMove((event: EntityDragEvent) => {
+    dndDragMove(event);
   });
 
   // handler for the find and replace directive
@@ -535,8 +547,29 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
     .use(
+      checkboxToTaskPlugin({
+        currentUserId: userId(),
+        parentTaskId: blockName === 'task' ? blockId : undefined,
+      })
+    )
+    .use(
       keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
+        shortcuts: [
+          ...DefaultShortcuts,
+          {
+            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
+            test: (e) =>
+              e.code === 'KeyO' &&
+              e.shiftKey &&
+              (IS_MAC ? e.metaKey : e.ctrlKey),
+            handler: (editor) => {
+              const userId = useUserId()();
+              if (!userId) return;
+              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
+            },
+            priority: 0,
+          },
+        ],
       })
     )
     .use(

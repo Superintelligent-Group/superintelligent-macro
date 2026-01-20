@@ -91,6 +91,12 @@ just initialize_dbs          # Initialize all databases
 just test                    # Run tests
 ```
 
+### Pre Commit
+```bash
+cargo fmt                   # format
+just clippy                 # extra lints / best practices
+```
+
 ### Database Management
 
 ```bash
@@ -247,6 +253,55 @@ The migration included comprehensive indexes:
 
 - Prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))`
 - Use `bail!` for early returns with errors - it's more concise and idiomatic
+
+### Documentation Requirements
+
+- Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items
+- This ensures all public functions, structs, enums, and modules have documentation comments
+- Do not use `ignore` to except code blocks from doc tests unless explicitely directed
+
+
+### Test File Organization
+
+Place tests in a separate `test.rs` file within the same module directory, rather than inline with `#[cfg(test)]` blocks in the implementation file.
+
+**Pattern:**
+- Implementation: `foo/mod.rs` or `foo.rs`
+- Tests: `foo/test.rs`
+
+**Example structure:**
+```
+src/
+  user/
+    mod.rs      # Contains: mod test;  (with #[cfg(test)])
+    test.rs     # Contains: use super::*; and test functions
+```
+
+**In `mod.rs`:**
+```rust
+#[cfg(test)]
+mod test;
+
+// implementation code...
+```
+
+**In `test.rs`:**
+```rust
+use super::*;
+
+#[tokio::test]
+async fn test_something() {
+    // test code
+}
+```
+
+This keeps implementation files focused and makes tests easier to locate and maintain.
+
+### Tracing
+
+- Include `err` when adding the `tracing::instrument` attribute to functions. Never include `level = "info"`.
+- When including an error with a log, include it like so: `tracing::error!(error=?e, "error msg");`
+don't inject it directly into the error message.
 
 ## Development Memories
 

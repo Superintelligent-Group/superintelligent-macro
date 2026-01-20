@@ -68,6 +68,11 @@ export type EmailContextValues = {
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
+    expandedBodyIds: Record<string, boolean>;
+    setExpandedBodyId: (id: string, expanded: boolean) => void;
+    isBodyExpanded: (id: string) => boolean;
+    replyingToMessageId: Accessor<string | undefined>;
+    setReplyingToMessageId: (id: string | undefined) => void;
   };
   thread: Accessor<APIThread | undefined>;
   permissions: Accessor<{
@@ -96,6 +101,23 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       select(data) {
         const messages = data.pages.flatMap((t) => t.messages);
 
+        // Sort all messages by recency
+        messages.sort((a, b) => {
+          if (a.internal_date_ts && b.internal_date_ts) {
+            return (
+              new Date(a.internal_date_ts).getTime() -
+              new Date(b.internal_date_ts).getTime()
+            );
+          }
+          // Below is fallback for when internal_date_ts is not set
+          else if (a.sent_at && b.sent_at) {
+            return (
+              new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+            );
+          }
+          return 0;
+        });
+
         const filtered = [];
         const messageDraftMap: Record<string, MessageWithBodyReplyless> = {};
 
@@ -115,22 +137,6 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
           messageDraftMap[replyingToId] = message;
         }
-
-        filtered.sort((a, b) => {
-          if (a.internal_date_ts && b.internal_date_ts) {
-            return (
-              new Date(a.internal_date_ts).getTime() -
-              new Date(b.internal_date_ts).getTime()
-            );
-          }
-          // Below is fallback for when internal_date_ts is not set
-          else if (a.sent_at && b.sent_at) {
-            return (
-              new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
-            );
-          }
-          return 0;
-        });
 
         return {
           ...data.pages[0],
@@ -157,6 +163,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
+  const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
+  const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
+    Record<string, boolean>
+  >({});
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
     const messageID = searchParams[URL_PARAMS.messageId];
@@ -389,6 +399,34 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     });
   };
 
+  const onExpandMessageBody = (messageID: string, expanded: boolean) => {
+    const listContainer = messagesListRef();
+
+    const lastScrollPosition = listContainer?.scrollTop;
+    const lastScrollHeight = listContainer?.scrollHeight;
+
+    setExpandedMessageBodyIds(messageID, expanded);
+
+    if (
+      !listContainer ||
+      lastScrollPosition == null ||
+      lastScrollHeight == null
+    )
+      return;
+
+    // Maintain the scroll position when expansion changes
+    queueMicrotask(() => {
+      const lastPos = lastScrollHeight + lastScrollPosition;
+      const currentPos = listContainer.scrollHeight + listContainer.scrollTop;
+
+      // List is reversed, we need a negative value to maintain scroll
+      // position
+      const diff = lastPos - currentPos;
+
+      messagesListRef()?.scrollBy({ top: diff });
+    });
+  };
+
   return (
     <Suspense>
       <EmailContext.Provider
@@ -404,7 +442,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           query: {
             hasMore: () => threadQuery.hasNextPage ?? false,
             fetchNextPage: threadQuery.fetchNextPage,
-            isFetching: () => threadQuery.isFetching,
+            isFetching: () =>
+              threadQuery.isLoading || threadQuery.isFetchingNextPage,
             refetch: threadQuery.refetch,
           },
           drafts: {
@@ -419,6 +458,11 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
+            expandedBodyIds: expandedMessageBodyIds,
+            setExpandedBodyId: onExpandMessageBody,
+            isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
+            replyingToMessageId,
+            setReplyingToMessageId,
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);
@@ -443,4 +487,8 @@ export function useEmailContext() {
     throw new Error('useEmailContext must be used within an EmailProvider');
   }
   return ctx;
+}
+
+export function useMaybeEmailContext() {
+  return useContext(EmailContext);
 }

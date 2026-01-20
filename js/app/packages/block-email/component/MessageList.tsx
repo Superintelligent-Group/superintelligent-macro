@@ -1,20 +1,17 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { createMemo, createSelector, For } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createMemo, createSelector, Index, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
   initialLoadComplete: boolean;
+  title: string;
 }
 
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = isScrollingToMessage.get;
   const context = useEmailContext();
-  const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
-    Record<string, boolean>
-  >({});
   const isFocusedSelector = createSelector(
     context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
@@ -26,7 +23,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
+      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
@@ -53,13 +50,16 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       <StaticMarkdownContext>
-        <For each={context.messages.list().toReversed()}>
+        {/* We use Index because the index of the messages should always be stable and
+          only the value changes. This also helps prevent nested inputs from rerendering
+        */}
+        <Index each={context.messages.list().toReversed()}>
           {(message, index) => {
             // We need the index as if the list was not reversed
             const normalizedIndex = createMemo(() => {
               const listLength = context.messages.list().length;
 
-              const normalized = listLength - 1 - index();
+              const normalized = listLength - 1 - index;
 
               // The element at the 0th index isn't actually the first message
               // if there is more data to load so we return -1 so that `isFirstMessage`
@@ -72,6 +72,30 @@ export function MessageList(props: MessageListProps) {
               return normalized;
             });
 
+            const isLastMessage = createMemo(() => {
+              return (
+                normalizedIndex() === (context.messages.list().length ?? 0) - 1
+              );
+            });
+
+            const isNewMessage = createMemo(() => {
+              return (
+                message().labels.find(
+                  (l) => l.provider_label_id === 'UNREAD'
+                ) !== undefined
+              );
+            });
+
+            const isExpanded = createMemo(() => {
+              const messageID = message().db_id;
+
+              if (!messageID) return false;
+              const manuallyExpanded =
+                context.messages.isBodyExpanded(messageID);
+
+              return manuallyExpanded || isLastMessage() || isNewMessage();
+            });
+
             return (
               <MessageContainer
                 isFirstMessage={normalizedIndex() === 0}
@@ -79,16 +103,24 @@ export function MessageList(props: MessageListProps) {
                   normalizedIndex() ===
                   (context.messages.list().length ?? 0) - 1
                 }
-                isFocused={isFocusedSelector(message.db_id ?? undefined)}
-                isTarget={isTargetSelector(message.db_id ?? undefined)}
-                message={message}
-                expandedMessageBodyIds={expandedMessageBodyIds}
-                setExpandedMessageBodyIds={setExpandedMessageBodyIds}
+                isFocused={isFocusedSelector(message().db_id ?? undefined)}
+                isTarget={isTargetSelector(message().db_id ?? undefined)}
+                message={message()}
+                isExpanded={isExpanded()}
               />
             );
           }}
-        </For>
+        </Index>
       </StaticMarkdownContext>
+      <Show when={props.title}>
+        <div class="shrink-0 w-full flex justify-center pb-4">
+          <div class="macro-message-width w-full">
+            <h1 class="text-4xl font-semibold text-ink pt-8 pb-4">
+              {props.title}
+            </h1>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

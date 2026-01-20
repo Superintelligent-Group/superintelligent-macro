@@ -10,7 +10,7 @@ use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
-use model_notifications::{NewEmailMetadata, NotificationEvent, NotificationQueueMessage};
+use model_notifications::{NewEmailMetadata, NotificationQueueMessage};
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -20,9 +20,6 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_opensearch::SearchEntityType;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::EntityName;
 use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
@@ -231,14 +228,6 @@ async fn handle_attachment_upload(
     let mut attachments = document_atts;
     attachments.extend(media_atts);
     if !attachments.is_empty() {
-        tracing::info!(
-            "Uploading attachments ({:?}) to Macro for new email",
-            attachments
-                .iter()
-                .map(|a| a.attachment_db_id)
-                .collect::<Vec<_>>()
-        );
-
         let message_ids = attachments
             .iter()
             .map(|a| a.message_db_id)
@@ -318,12 +307,6 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    tracing::info!(
-        "Upserting contacts {:?} for new sent message with id {}",
-        recipient_emails,
-        provider_message_id
-    );
-
     // Create users list starting with the sender, then all recipients
     let mut users = vec![link.macro_id.to_string()];
     users.extend(
@@ -349,12 +332,6 @@ async fn handle_contacts_sync(
                 )),
             })
         })?;
-
-    tracing::info!(
-        "Successfully upserted contacts {:?} for new sent message with id {}",
-        recipient_emails,
-        provider_message_id
-    );
 
     Ok(())
 }
@@ -398,26 +375,12 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads.into_iter() {
-        let thread_id = threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
+        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::DatabaseQueryFailed,
                     source: e.context("Failed to insert thread and messages".to_string()),
-                })
-            })?;
-
-        // when a thread is created, add an entry into the names index for it
-        ctx.sqs_client
-            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
-                entity_id: thread_id,
-                entity_type: SearchEntityType::Emails,
-            }))
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to send message to search extractor queue"),
                 })
             })?;
     }
@@ -522,7 +485,7 @@ async fn send_notifications(
 
     let notification_queue_message = NotificationQueueMessage {
         notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
-        notification_event: NotificationEvent::NewEmail(notification_metadata),
+        notification_event: notification_metadata.into(),
         sender_id,
         recipient_ids: Some(vec![link.macro_id.to_string()]),
     };

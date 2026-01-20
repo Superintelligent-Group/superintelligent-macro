@@ -124,19 +124,19 @@ export const Hotkey = (props: HotkeyProps) => {
     'children',
     'lowercase',
   ]);
-  const tokenShortcut = local.token
-    ? getPrettyHotkeyStringByToken(local.token)
-    : undefined;
+  const tokenShortcut = createMemo(() =>
+    local.token ? getPrettyHotkeyStringByToken(local.token) : undefined
+  );
 
   const hotkey = createMemo(() => {
     // fallback for when we specify a shortcut directly instead of a hotkey token
-    if (local.shortcut && !tokenShortcut) {
+    if (local.shortcut && !tokenShortcut()) {
       return breakApartHotkeyString(local.shortcut);
     }
-    if (!tokenShortcut) {
+    if (!tokenShortcut()) {
       return { key: '', modifiers: [] };
     }
-    return breakApartHotkeyString(tokenShortcut);
+    return breakApartHotkeyString(tokenShortcut() ?? '');
   });
 
   const normalizedKey = () => {
@@ -150,25 +150,37 @@ export const Hotkey = (props: HotkeyProps) => {
         : key.map((k) => k.toUpperCase());
   };
 
-  return (
-    <div {...rest}>
-      <For each={hotkey().modifiers}>
-        {(mod) => (
-          <>
-            <span class="text-current">
-              {modifierMap[mod as keyof typeof modifierMap] || mod}
-            </span>
+  // Don't render anything if there are no modifiers and no key
+  const hasContent = () => {
+    const h = hotkey();
+    const key = normalizedKey();
+    return (
+      h.modifiers.length > 0 ||
+      (key && (typeof key === 'string' ? key.length > 0 : key.length > 0))
+    );
+  };
 
-            <Show when={local.showPlus}>
-              <span class="text-current"> + </span>
-            </Show>
-          </>
-        )}
-      </For>
-      <Show when={normalizedKey()}>
-        <span class="text-current">{normalizedKey()}</span>
-      </Show>
-    </div>
+  return (
+    <Show when={hasContent()}>
+      <div {...rest}>
+        <For each={hotkey().modifiers}>
+          {(mod) => (
+            <>
+              <span class="text-current">
+                {modifierMap[mod as keyof typeof modifierMap] || mod}
+              </span>
+
+              <Show when={local.showPlus}>
+                <span class="text-current"> + </span>
+              </Show>
+            </>
+          )}
+        </For>
+        <Show when={normalizedKey()}>
+          <span class="text-current">{normalizedKey()}</span>
+        </Show>
+      </div>
+    </Show>
   );
 };
 

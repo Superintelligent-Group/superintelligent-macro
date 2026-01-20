@@ -1,12 +1,12 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-// import EnvelopSimple from '@icon/regular/envelope-simple.svg';
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@core/context/user';
+import { Button } from '@ui/components/Button';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
+import type { ReplyType } from '@block-email/util/replyType';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
@@ -40,79 +40,61 @@ export function MessageActions(props: {
     return !allActionsHidden;
   };
 
+  const onChangeReplyType = (type: ReplyType) => {
+    return () => {
+      if (!props.isLastMessage) {
+        props.setShowReply(true);
+      }
+      const form = formRegistry.getOrInit({
+        type: 'replying_to',
+        messageID: props.message.db_id ?? '',
+      });
+      form.setReplyType(type);
+      form.setShouldFocusInput(true);
+    };
+  };
+
   return (
-    <Show when={canShowActions()}>
-      <div class="flex flex-row items-center gap-4">
-        <Show
-          when={
-            shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
-          }
-          fallback={
-            <Show when={!props.hiddenActions?.includes('reply')}>
-              <DeprecatedIconButton
-                icon={ArrowBendUpLeft}
-                theme="clear"
-                onClick={() => {
-                  if (!props.isLastMessage) {
-                    props.setShowReply(true);
-                  }
-                  const form = formRegistry.getOrInit(
-                    props.message.db_id ?? ''
-                  );
-                  form.setReplyType('reply');
-                  form.setShouldFocusInput(true);
-                }}
-                tooltip={{
-                  label: 'Reply',
-                }}
-              />
-            </Show>
-          }
+    <div
+      class="flex flex-row items-center gap-4 transition-opacity"
+      classList={{
+        'opacity-0 pointer-events-none': !canShowActions(),
+        'opacity-100': canShowActions(),
+      }}
+    >
+      <Show
+        when={
+          shouldShowReplyAll() && !props.hiddenActions?.includes('reply-all')
+        }
+        fallback={
+          <Show when={!props.hiddenActions?.includes('reply')}>
+            <Button
+              class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+              onClick={onChangeReplyType('reply')}
+              tooltip={<span>Reply</span>}
+            >
+              <ArrowBendUpLeft class="h-5 w-5" />
+            </Button>
+          </Show>
+        }
+      >
+        <Button
+          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          onClick={onChangeReplyType('reply-all')}
+          tooltip={<span>Reply all</span>}
         >
-          <DeprecatedIconButton
-            icon={ArrowBendDoubleUpLeft}
-            theme="clear"
-            onClick={() => {
-              if (!props.isLastMessage) {
-                props.setShowReply(true);
-              }
-              const form = formRegistry.getOrInit(props.message.db_id ?? '');
-              form.setReplyType('reply-all');
-              form.setShouldFocusInput(true);
-            }}
-            tooltip={{
-              label: 'Reply all',
-            }}
-          />
-        </Show>
-        <Show when={!props.hiddenActions?.includes('forward')}>
-          <DeprecatedIconButton
-            icon={ArrowBendUpRight}
-            theme="clear"
-            onClick={() => {
-              if (!props.isLastMessage) {
-                props.setShowReply(true);
-              }
-              const form = formRegistry.getOrInit(props.message.db_id ?? '');
-              form.setReplyType('forward');
-              form.setShouldFocusInput(true);
-            }}
-            tooltip={{
-              label: 'Forward',
-            }}
-          />
-        </Show>
-        {/* <IconButton
-          icon={EnvelopSimple}
-          theme="clear"
-          onClick={async () => {
-            // TODO: Implement mark as unread
-          }}
-          tooltip={{
-            label: 'Mark as unread',
-          }}
-        /> */}
-      </div>
-    </Show>
+          <ArrowBendDoubleUpLeft class="h-5 w-5" />
+        </Button>
+      </Show>
+      <Show when={!props.hiddenActions?.includes('forward')}>
+        <Button
+          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
+          onClick={onChangeReplyType('forward')}
+          tooltip={<span>Forward</span>}
+        >
+          <ArrowBendUpRight class="h-5 w-5" />
+        </Button>
+      </Show>
+    </div>
   );
 }

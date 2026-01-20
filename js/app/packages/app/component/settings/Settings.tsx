@@ -3,7 +3,7 @@ import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { MacroPermissions, usePermissions } from '@service-gql/client';
+import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
@@ -16,6 +16,7 @@ import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
 import { Inbox } from './Inbox';
+import { Shortcuts } from './Shortcuts';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 
@@ -114,11 +115,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const settingsTabs = createMemo(() => {
     const tabs: {value: string; label: string }[] = [
       {value: 'Appearance', label: 'Appearance'},
-      {value: 'Account', label: 'Account'}
+      {value: 'Account', label: 'Account'},
+      {value: 'Shortcuts', label: 'Shortcuts'}
     ];
 
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
+    if(orgName() && permissions()?.includes('WriteItPanel')){tabs.push({value: 'Organization', label: 'Organization'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
     if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
@@ -141,7 +143,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -150,7 +152,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center px-2 h-[2.5rem]">
+                <div class="flex items-center px-2">
                   <Show when={!isTouchDevice() || !isMobileWidth()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
@@ -173,7 +175,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   />
 
                   <Tabs.List
-                    class="flex flex-row suppress-css-brackets h-10 bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                    class="flex flex-row suppress-css-brackets h-[calc(2.5rem-1px)] bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
                     as="div"
                     ref={(el) => {
                       scrollRef = el;
@@ -258,13 +260,16 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <Subscription />
                   </Tabs.Content>
                 </Show>
-                <Show when={ orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)}>
+                <Show when={ orgName() && permissions()?.includes('WriteItPanel')}>
                   <Tabs.Content value="Organization" class="absolute inset-0">
                     <Organization />
                   </Tabs.Content>
                 </Show>
                 <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
+                </Tabs.Content>
+                <Tabs.Content value="Shortcuts" class="absolute inset-0">
+                  <Shortcuts />
                 </Tabs.Content>
                 <Show when={DEV_MODE_ENV}>
                   <Tabs.Content value="Inbox" class="absolute inset-0">

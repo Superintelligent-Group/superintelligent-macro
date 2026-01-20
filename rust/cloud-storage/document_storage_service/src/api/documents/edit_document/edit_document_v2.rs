@@ -1,7 +1,4 @@
-use crate::{
-    api::{context::ApiContext, documents::utils},
-    model::request::documents::edit::EditDocumentRequestV2,
-};
+use crate::{api::context::ApiContext, model::request::documents::edit::EditDocumentRequestV2};
 use anyhow::Context;
 use axum::{
     http::StatusCode,
@@ -82,14 +79,6 @@ pub async fn edit_document(
     )
     .await;
 
-    // If an important attribute is updated we will need to send a message to the search extractor
-    if document_name.is_some() {
-        utils::notify_search_service_of_document_name_update(
-            ctx.sqs_client.clone(),
-            document_context.document_id.clone(),
-        );
-    }
-
     Ok((
         StatusCode::OK,
         Json(SuccessResponse {
@@ -130,7 +119,6 @@ async fn edit_document_transaction(
     if let Some(share_permission) = share_permission {
         update_user_item_access(
             &mut transaction,
-            &ctx.comms_service_client,
             &user_context.user_id,
             &document_context.document_id,
             "document",

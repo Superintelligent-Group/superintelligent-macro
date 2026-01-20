@@ -8,7 +8,7 @@ import {
 } from '@core/block';
 import { isErr } from '@core/util/maybeResult';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
 import type { Comment } from '@service-storage/generated/schemas/comment';
@@ -472,16 +472,11 @@ export function useDeleteUnthreadedHighlightResource() {
 export function useCreateThreadReplyResource() {
   const createComment = useCreateComment();
 
-  return async (text: string, threadId: number) => {
-    if (threadId < 0) {
+  return async (body: CreateCommentRequest & { threadId: number }) => {
+    if (body.threadId < 0) {
       console.error('Provide a valid thread id');
       return null;
     }
-
-    const body: CreateCommentRequest = {
-      text: text,
-      threadId,
-    };
 
     return createComment(body);
   };

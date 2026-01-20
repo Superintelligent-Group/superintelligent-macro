@@ -19,13 +19,12 @@ mod health;
 mod internal;
 mod models;
 mod preview;
-mod swagger;
+pub(crate) mod swagger;
 pub mod utils;
 mod ws;
 
 mod attachments;
 mod chats;
-mod macros;
 mod notification;
 
 #[tracing::instrument(err, skip(state))]
@@ -79,7 +78,6 @@ fn api_router(api_context: ApiContext) -> Router {
             "/internal",
             internal::router(api_context.clone()).nest("/notifications", notification::router()),
         )
-        .nest("/macros", macros::router())
         .nest("/document_text", document_text::router())
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())

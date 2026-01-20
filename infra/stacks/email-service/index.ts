@@ -42,6 +42,7 @@ const AUDIENCE = aws.secretsmanager
   .apply((secret) => secret.secretString);
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
+const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
 const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
   `redis_rate_limit_reqs_backfill`
@@ -109,6 +110,21 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
+const sfsDeleteLambdaStack = new pulumi.StackReference(
+  'email-sfs-delete-handler-stack',
+  {
+    name: `macro-inc/email-sfs-delete-handler/${stack}`,
+  }
+);
+
+const sfsDeleteQueueArn: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueArn')
+  .apply((arn) => arn as string);
+
+const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueName')
+  .apply((name) => name as string);
+
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
@@ -154,6 +170,8 @@ export const inboxSyncRetryQueueName = pulumi.interpolate`${inbox_sync_retry_que
 
 const link_manager_queue = new Queue('email-service-refresh', {
   tags,
+  // deleting a link from the database can sometimes take a long time
+  visibilityTimeoutSeconds: 300,
 });
 
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
@@ -161,7 +179,6 @@ export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queu
 
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
-  fifoQueue: true,
 });
 
 export const scheduledQueueArn = pulumi.interpolate`${scheduled_queue.queue.arn}`;
@@ -184,6 +201,8 @@ const sfs_uploader_queue = new Queue('email-service-sfs-mapper', {
 
 export const sfsUploaderQueueArn = pulumi.interpolate`${sfs_uploader_queue.queue.arn}`;
 export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queue.name}`;
+
+export { sfsDeleteQueueArn, sfsDeleteQueueName };
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
@@ -234,6 +253,7 @@ const queueArns = [
   searchEventQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
+  sfsDeleteQueueArn,
   contactsQueueArn,
 ];
 
@@ -363,6 +383,10 @@ const containerEnvVars = [
     value: sfsUploaderQueueName,
   },
   {
+    name: 'SFS_DELETE_QUEUE',
+    value: sfsDeleteQueueName,
+  },
+  {
     name: 'GMAIL_GCP_QUEUE',
     value: pulumi.interpolate`${GMAIL_GCP_QUEUE}`,
   },
@@ -413,6 +437,10 @@ const containerEnvVars = [
   {
     name: 'SEARCH_EVENT_QUEUE',
     value: pulumi.interpolate`${searchEventQueueName}`,
+  },
+  {
+    name: 'SENT_UNDO_DELAY_SECS',
+    value: pulumi.interpolate`${SENT_UNDO_DELAY_SECS}`,
   },
   {
     name: 'REDIS_RATE_LIMIT_REQS',
@@ -513,6 +541,9 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   containerEnvVars,
 });
 
+const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
+const DELETE_INACTIVE_AFTER_DAYS = config.require(`delete_inactive_after_days`);
+
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   queueArns: [linkManagerQueueArn],
   vpc: coparse_api_vpc,
@@ -521,6 +552,8 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
     LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
+    DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
+    DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
   },
   tags,
 });

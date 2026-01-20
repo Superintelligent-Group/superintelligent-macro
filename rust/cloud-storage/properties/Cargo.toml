@@ -9,7 +9,6 @@ schema = ["dep:schemars", "dep:utoipa"]
 
 [dependencies]
 anyhow = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
 futures = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 macro_db_client = { path = "../macro_db_client" }

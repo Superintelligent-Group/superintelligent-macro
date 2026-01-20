@@ -18,6 +18,7 @@ import { formatOptionValue, useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -28,7 +29,6 @@ type SelectOptionsProps = {
   error: string | null;
   selectedOptions: () => Set<string>;
   onToggleOption: (value: string) => void;
-  onRetry: () => void;
   onAddOption?: (value: string) => Promise<void>;
   onClose?: () => void;
 };
@@ -37,8 +37,8 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
-    createSignal<number | null>(null);
+
+  const keyboardMode = useKeyPressed(100);
 
   let searchInputRef!: HTMLInputElement;
 
@@ -155,11 +155,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     }
   });
 
-  const isKeyboardNavigating = () => {
-    const timeout = keyboardNavigationTimeout();
-    return timeout !== null && Date.now() - timeout < 150;
-  };
-
   const shouldShowHotkeys = createMemo(() => {
     return !searchQuery().trim() && selectableItems().length <= 9;
   });
@@ -190,11 +185,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setKeyboardNavigationTimeout(Date.now());
       setSelectedIndex((prev) => (prev + 1) % items.length);
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setKeyboardNavigationTimeout(Date.now());
       setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -266,20 +259,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
         </div>
       }
     >
-      <Show
-        when={!props.error}
-        fallback={
-          <div class="text-center py-6">
-            <div class="text-failure-ink mb-3 text-sm">{props.error}</div>
-            <button
-              onClick={props.onRetry}
-              class="px-3 py-1.5 bg-accent text-ink text-sm hover:bg-accent/90"
-            >
-              Retry
-            </button>
-          </div>
-        }
-      >
+      <Show when={!props.error}>
         <div>
           <div class="relative">
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
@@ -361,7 +341,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               }
                             }}
                             onMouseEnter={() => {
-                              if (!isKeyboardNavigating()) {
+                              if (!keyboardMode()) {
                                 setSelectedIndex(index());
                               }
                             }}
@@ -390,7 +370,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                       >
                         <div
                           onMouseEnter={() => {
-                            if (!isKeyboardNavigating()) {
+                            if (!keyboardMode()) {
                               setSelectedIndex(index());
                             }
                           }}

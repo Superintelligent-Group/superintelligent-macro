@@ -3,10 +3,7 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@app/component/split-layout/components/SplitToolbar';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
@@ -14,19 +11,32 @@ import { Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailPropertiesModal } from './EmailPropertiesModal';
 
-export function TopBar(props: { id: string; title: string }) {
+export function TopBar(props: {
+  id: string;
+  title: string;
+  isDraft?: boolean;
+}) {
   const email = useEmailContext();
 
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel iconType="email" label={props.title} />
+        <StaticSplitLabel
+          iconType="email"
+          label={props.title}
+          badges={
+            props.isDraft
+              ? [
+                  <SplitHeaderBadge
+                    text="draft"
+                    tooltip="This is a Draft Email"
+                  />,
+                ]
+              : undefined
+          }
+        />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="flex items-center h-full p-1">
-          <SplitHeaderBadge text="beta" tooltip="Email is in Beta" />
-        </div>
-      </SplitToolbarLeft>
+
       <SplitToolbarRight>
         <div class="flex items-center gap-2">
           <EmailPropertiesModal
