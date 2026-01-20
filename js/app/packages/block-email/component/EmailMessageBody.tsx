@@ -32,6 +32,9 @@ interface EmailMessageBodyProps {
   isFirstMessageInThread: boolean;
 }
 
+const EMAIL_INLINE_IMAGE_MAX_WIDTH_PX = 600;
+const EMAIL_INLINE_IMAGE_MAX_HEIGHT_PX = 400;
+
 export function EmailMessageBody(props: EmailMessageBodyProps) {
   const [showFullHTML, setShowFullHTML] = createSignal<boolean>(false);
   const userEmail = useEmail();
@@ -117,7 +120,15 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const shadow = hostContainer.attachShadow({ mode: 'open' });
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial);}`;
+    styleEl.textContent = `
+      img {
+        display: var(--macro-email-img-display, initial);
+        max-width: min(100%, ${EMAIL_INLINE_IMAGE_MAX_WIDTH_PX}px);
+        max-height: ${EMAIL_INLINE_IMAGE_MAX_HEIGHT_PX}px;
+        width: auto;
+        height: auto;
+      }
+    `;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
