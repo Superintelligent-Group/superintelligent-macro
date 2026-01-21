@@ -5,15 +5,15 @@
  *
  * @example
  * ```tsx
- * import { createUnifiedListBuilder, UnifiedList } from '@unified-list';
+ * import { createUnifiedList, UnifiedListView } from '@unified-list';
  *
- * const list = createUnifiedListBuilder<MyEntity>('my-list')
+ * const { plugins, stores } = createUnifiedList<MyEntity>()
  *   .withFilters({
  *     filters: [entityTypeFilter('docs', 'Documents', ['document'])],
  *   })
  *   .withSorts({
  *     sorts: [updatedAtSort(), createdAtSort()],
- *     defaultSortId: 'updated_at',
+ *     defaultSort: 'updated_at',
  *   })
  *   .withNavigation()
  *   .withSelection()
@@ -21,7 +21,11 @@
  *   .build();
  *
  * // In component:
- * <UnifiedList controller={list.controller} rowConfig={rowConfig} />
+ * <UnifiedListView
+ *   entities={entities}
+ *   plugins={plugins}
+ *   renderRow={(entity, state) => <EntityRow entity={entity} {...state} />}
+ * />
  * ```
  */
 
@@ -97,28 +101,27 @@ export { CommandPriority } from './types';
 
 export {
   // State management
-  createInitialListState,
-  createReactiveListState,
+  createInitialState,
+  createReactiveState,
   // State transitions
-  setEntitiesTransition,
-  setFocusedIdTransition,
-  toggleSelectionTransition,
-  selectRangeTransition,
-  clearSelectionTransition,
-  setLoadingTransition,
-  setHasMoreTransition,
-  setScrollOffsetTransition,
-  navigateNextTransition,
-  navigatePrevTransition,
-  navigateFirstTransition,
-  navigateLastTransition,
+  setEntities,
+  setFocusedId,
+  toggleSelection,
+  selectRange,
+  clearSelection,
+  setLoading,
+  setHasMore,
+  setScrollOffset,
+  navigateDown,
+  navigateUp,
+  navigateFirst,
+  navigateLast,
 } from './core/state';
 
 export {
   // Command system
   createCommandSystem,
   ListCommands,
-  type ListCommandName,
   type ToggleFilterPayload,
   type ToggleSelectionPayload,
   type OpenEntityPayload,
@@ -263,13 +266,7 @@ export type {
 export { isEntityItem, isHeaderItem, getDisplayItemKey } from './types/groupBy';
 
 // GroupBy components
-export {
-  GroupHeader,
-  GROUP_HEADER_HEIGHT,
-  createGroupHeaderRenderer,
-  createMinimalGroupHeader,
-  createStickyGroupHeader,
-} from './components/GroupHeader';
+export { GroupHeader, GROUP_HEADER_HEIGHT } from './components/GroupHeader';
 
 export {
   EntityRow,
@@ -286,13 +283,6 @@ export {
 } from './components/EntityRow';
 
 export {
-  UnifiedList,
-  createUnifiedListBuilder as createUnifiedListComponentBuilder,
-  type UnifiedListProps,
-  type UnifiedListBuilder as UnifiedListComponentBuilder,
-} from './components/UnifiedList';
-
-export {
   UnifiedListView,
   useUnifiedList,
   type UnifiedListViewProps,
@@ -305,24 +295,11 @@ export {
 // ============================================================================
 
 export {
-  createUnifiedList as createUnifiedListBuilder2,
-  createBasicList,
+  createUnifiedList,
   type UnifiedListConfig,
   type UnifiedListBuildResult,
-  type UnifiedListBuilder as UnifiedListBuilder2,
-} from './builder';
-
-// ============================================================================
-// Factory
-// ============================================================================
-
-export {
-  createUnifiedList,
-  createUnifiedListBuilder,
-  type UnifiedListInstance,
-  type UnifiedListFactoryConfig,
   type UnifiedListBuilder,
-} from './factory';
+} from './builder';
 
 // ============================================================================
 // Entity rendering

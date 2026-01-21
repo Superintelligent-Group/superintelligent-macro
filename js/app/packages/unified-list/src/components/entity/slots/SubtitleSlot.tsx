@@ -19,12 +19,20 @@ export type SubtitleSlotConfig = {
 function ChannelSubtitle(props: { entity: ChannelEntity }): JSX.Element {
   const latestMessage = createMemo(() => props.entity.latestMessage);
 
-  const userNameFromSender = createMemo(() => {
-    const senderId = props.entity.latestMessage?.senderId;
-    if (!senderId) return;
-    const [userName] = useDisplayName(tryMacroId(senderId));
+  // Get sender ID at component level (not inside memo)
+  const senderId = () => props.entity.latestMessage?.senderId;
+  const macroId = () => {
+    const id = senderId();
+    return id ? tryMacroId(id) : undefined;
+  };
+
+  // Call hook at component level with reactive ID
+  const [userName] = useDisplayName(macroId());
+
+  const userNameFromSender = () => {
+    if (!senderId()) return undefined;
     return userName();
-  });
+  };
 
   return (
     <Show when={latestMessage()}>

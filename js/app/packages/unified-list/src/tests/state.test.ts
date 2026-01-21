@@ -4,17 +4,17 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  createInitialListState,
-  setEntitiesTransition,
-  setFocusedIdTransition,
-  toggleSelectionTransition,
-  selectRangeTransition,
-  clearSelectionTransition,
-  setLoadingTransition,
-  navigateNextTransition,
-  navigatePrevTransition,
-  navigateFirstTransition,
-  navigateLastTransition,
+  createInitialState,
+  setEntities,
+  setFocusedId,
+  toggleSelection,
+  selectRange,
+  clearSelection,
+  setLoading,
+  navigateDown,
+  navigateUp,
+  navigateFirst,
+  navigateLast,
 } from '../core/state';
 
 // Test entity type
@@ -26,9 +26,9 @@ const createTestEntity = (id: string, name: string): TestEntity => ({
 });
 
 describe('State Management', () => {
-  describe('createInitialListState', () => {
+  describe('createInitialState', () => {
     it('creates correct initial state', () => {
-      const state = createInitialListState<TestEntity>();
+      const state = createInitialState<TestEntity>();
 
       expect(state.entities).toEqual([]);
       expect(state.focusedId).toBeNull();
@@ -39,15 +39,15 @@ describe('State Management', () => {
     });
   });
 
-  describe('setEntitiesTransition', () => {
+  describe('setEntities', () => {
     it('sets entities correctly', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
       const entities = [
         createTestEntity('1', 'Entity 1'),
         createTestEntity('2', 'Entity 2'),
       ];
 
-      const transition = setEntitiesTransition<TestEntity>(entities);
+      const transition = setEntities<TestEntity>(entities);
       const result = transition(initial);
 
       expect(result.entities).toEqual(entities);
@@ -55,11 +55,11 @@ describe('State Management', () => {
     });
   });
 
-  describe('setFocusedIdTransition', () => {
+  describe('setFocusedId', () => {
     it('sets focused ID correctly', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const transition = setFocusedIdTransition<TestEntity>('1');
+      const transition = setFocusedId<TestEntity>('1');
       const result = transition(initial);
 
       expect(result.focusedId).toBe('1');
@@ -67,22 +67,22 @@ describe('State Management', () => {
 
     it('clears focused ID when set to null', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         focusedId: '1',
       };
 
-      const transition = setFocusedIdTransition<TestEntity>(null);
+      const transition = setFocusedId<TestEntity>(null);
       const result = transition(initial);
 
       expect(result.focusedId).toBeNull();
     });
   });
 
-  describe('toggleSelectionTransition', () => {
+  describe('toggleSelection', () => {
     it('adds ID to selection when not present', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const transition = toggleSelectionTransition<TestEntity>('1');
+      const transition = toggleSelection<TestEntity>('1');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(true);
@@ -90,27 +90,27 @@ describe('State Management', () => {
 
     it('removes ID from selection when present', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         selectedIds: new Set(['1']),
       };
 
-      const transition = toggleSelectionTransition<TestEntity>('1');
+      const transition = toggleSelection<TestEntity>('1');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(false);
     });
 
     it('does not mutate original state', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const transition = toggleSelectionTransition<TestEntity>('1');
+      const transition = toggleSelection<TestEntity>('1');
       transition(initial);
 
       expect(initial.selectedIds.has('1')).toBe(false);
     });
   });
 
-  describe('selectRangeTransition', () => {
+  describe('selectRange', () => {
     it('selects range of entities', () => {
       const entities = [
         createTestEntity('1', 'Entity 1'),
@@ -119,12 +119,12 @@ describe('State Management', () => {
         createTestEntity('4', 'Entity 4'),
       ];
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
       };
 
       // Default getId uses entity.id - no need to pass getIndex
-      const transition = selectRangeTransition<TestEntity>('1', '3');
+      const transition = selectRange<TestEntity>('1', '3');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(true);
@@ -140,12 +140,12 @@ describe('State Management', () => {
         createTestEntity('3', 'Entity 3'),
       ];
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
       };
 
       // Default getId uses entity.id - no need to pass getIndex
-      const transition = selectRangeTransition<TestEntity>('3', '1');
+      const transition = selectRange<TestEntity>('3', '1');
       const result = transition(initial);
 
       expect(result.selectedIds.has('1')).toBe(true);
@@ -154,9 +154,9 @@ describe('State Management', () => {
     });
 
     it('handles invalid IDs', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const transition = selectRangeTransition<TestEntity>(
+      const transition = selectRange<TestEntity>(
         'invalid',
         'also-invalid'
       );
@@ -166,25 +166,25 @@ describe('State Management', () => {
     });
   });
 
-  describe('clearSelectionTransition', () => {
+  describe('clearSelection', () => {
     it('clears all selections', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         selectedIds: new Set(['1', '2', '3']),
       };
 
-      const transition = clearSelectionTransition<TestEntity>();
+      const transition = clearSelection<TestEntity>();
       const result = transition(initial);
 
       expect(result.selectedIds.size).toBe(0);
     });
   });
 
-  describe('setLoadingTransition', () => {
+  describe('setLoading', () => {
     it('sets loading state', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const transition = setLoadingTransition<TestEntity>(true);
+      const transition = setLoading<TestEntity>(true);
       const result = transition(initial);
 
       expect(result.isLoading).toBe(true);
@@ -200,89 +200,89 @@ describe('State Management', () => {
 
     const getEntityId = (e: TestEntity) => e.id;
 
-    it('navigateNextTransition moves to next entity', () => {
+    it('navigateDown moves to next entity', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '1',
       };
 
-      const transition = navigateNextTransition<TestEntity>(getEntityId);
+      const transition = navigateDown<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('2');
     });
 
-    it('navigateNextTransition stops at end', () => {
+    it('navigateDown stops at end', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '3',
       };
 
-      const transition = navigateNextTransition<TestEntity>(getEntityId);
+      const transition = navigateDown<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('3');
     });
 
-    it('navigatePrevTransition moves to previous entity', () => {
+    it('navigateUp moves to previous entity', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '2',
       };
 
-      const transition = navigatePrevTransition<TestEntity>(getEntityId);
+      const transition = navigateUp<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('1');
     });
 
-    it('navigatePrevTransition stops at start', () => {
+    it('navigateUp stops at start', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '1',
       };
 
-      const transition = navigatePrevTransition<TestEntity>(getEntityId);
+      const transition = navigateUp<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('1');
     });
 
-    it('navigateFirstTransition moves to first entity', () => {
+    it('navigateFirst moves to first entity', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '3',
       };
 
-      const transition = navigateFirstTransition<TestEntity>(getEntityId);
+      const transition = navigateFirst<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('1');
     });
 
-    it('navigateLastTransition moves to last entity', () => {
+    it('navigateLast moves to last entity', () => {
       const initial = {
-        ...createInitialListState<TestEntity>(),
+        ...createInitialState<TestEntity>(),
         entities,
         focusedId: '1',
       };
 
-      const transition = navigateLastTransition<TestEntity>(getEntityId);
+      const transition = navigateLast<TestEntity>(getEntityId);
       const result = transition(initial);
 
       expect(result.focusedId).toBe('3');
     });
 
     it('handles empty entity list', () => {
-      const initial = createInitialListState<TestEntity>();
+      const initial = createInitialState<TestEntity>();
 
-      const nextTransition = navigateNextTransition<TestEntity>(getEntityId);
-      const prevTransition = navigatePrevTransition<TestEntity>(getEntityId);
+      const nextTransition = navigateDown<TestEntity>(getEntityId);
+      const prevTransition = navigateUp<TestEntity>(getEntityId);
 
       expect(nextTransition(initial)).toBe(initial);
       expect(prevTransition(initial)).toBe(initial);

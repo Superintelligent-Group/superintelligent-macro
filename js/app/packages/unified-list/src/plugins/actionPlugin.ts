@@ -92,6 +92,23 @@ export type ActionPluginConfig<T> = {
 // Action Plugin Factory
 // ============================================================================
 
+/** Get selected entities or fall back to focused entity */
+function getSelectedOrFocusedEntities<T extends EntityConstraint>(
+  controller: ListController<T>
+): T[] | null {
+  const selectedIds = controller.state.selectedIds();
+
+  if (selectedIds.size > 0) {
+    const entities = Array.from(selectedIds)
+      .map((id) => controller.getEntityById(id))
+      .filter((e): e is T => e !== undefined);
+    return entities.length > 0 ? entities : null;
+  }
+
+  const focused = controller.getFocusedEntity();
+  return focused ? [focused] : null;
+}
+
 /** Create an action plugin */
 export function createActionPlugin<T extends EntityConstraint>(
   config: ActionPluginConfig<T> = {}
@@ -152,20 +169,8 @@ export function createActionPlugin<T extends EntityConstraint>(
     const markDoneReg = controller.commands.register(
       ListCommands.MARK_DONE,
       () => {
-        const selectedIds = controller.state.selectedIds();
-        let entities: T[];
-
-        if (selectedIds.size > 0) {
-          entities = Array.from(selectedIds)
-            .map((id) => controller.getEntityById(id))
-            .filter((e): e is T => e !== undefined);
-        } else {
-          const focused = controller.getFocusedEntity();
-          if (!focused) return false;
-          entities = [focused];
-        }
-
-        if (entities.length === 0) return false;
+        const entities = getSelectedOrFocusedEntities(controller);
+        if (!entities) return false;
 
         if (registry.canExecute('mark_done', entities)) {
           registry.execute('mark_done', entities);
@@ -183,20 +188,8 @@ export function createActionPlugin<T extends EntityConstraint>(
     const deleteReg = controller.commands.register(
       ListCommands.DELETE_SELECTED,
       () => {
-        const selectedIds = controller.state.selectedIds();
-        let entities: T[];
-
-        if (selectedIds.size > 0) {
-          entities = Array.from(selectedIds)
-            .map((id) => controller.getEntityById(id))
-            .filter((e): e is T => e !== undefined);
-        } else {
-          const focused = controller.getFocusedEntity();
-          if (!focused) return false;
-          entities = [focused];
-        }
-
-        if (entities.length === 0) return false;
+        const entities = getSelectedOrFocusedEntities(controller);
+        if (!entities) return false;
 
         if (registry.canExecute('delete', entities)) {
           registry.execute('delete', entities);

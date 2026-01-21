@@ -37,7 +37,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelp
 // Unified list imports
 import {
   UnifiedListView,
-  createUnifiedListBuilder2 as createUnifiedList,
+  createUnifiedList,
   updatedAtSort,
   createdAtSort,
   viewedAtSort,

@@ -9,7 +9,7 @@
  */
 
 import { Show, type JSX } from 'solid-js';
-import type { GroupHeaderProps, GroupHeaderRenderer } from '../types/groupBy';
+import type { GroupHeaderProps } from '../types/groupBy';
 
 /** Default height for group headers */
 export const GROUP_HEADER_HEIGHT = 36;
@@ -93,61 +93,3 @@ export function GroupHeader(props: GroupHeaderProps): JSX.Element {
   );
 }
 
-// ============================================================================
-// Factory Functions
-// ============================================================================
-
-/** Create a custom group header renderer */
-export function createGroupHeaderRenderer(
-  customRender: (props: GroupHeaderProps) => JSX.Element
-): GroupHeaderRenderer {
-  return customRender;
-}
-
-/** Create a minimal header (just label and count) */
-export function createMinimalGroupHeader(): GroupHeaderRenderer {
-  return (props) => (
-    <div
-      class="flex items-center gap-2 px-3 h-7 bg-hover/50 cursor-pointer select-none"
-      onClick={() => props.onToggle(props.groupId)}
-    >
-      <ChevronIcon collapsed={props.collapsed} />
-      <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
-        {props.label}
-      </span>
-      <span class="text-xs text-ink-extra-muted tabular-nums">
-        ({props.count})
-      </span>
-    </div>
-  );
-}
-
-/** Create a sticky header with shadow effect */
-export function createStickyGroupHeader(): GroupHeaderRenderer {
-  return (props) => (
-    <div
-      class="group-header flex items-center gap-1.5 px-3 h-9 bg-accent/[0.03] border-y border-ink/[0.04] cursor-pointer select-none sticky top-0 z-10 shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/[0.06]"
-      onClick={() => props.onToggle(props.groupId)}
-      role="button"
-      tabIndex={-1}
-      aria-expanded={!props.collapsed}
-      data-group-header
-      data-group-id={props.groupId}
-    >
-      <ChevronIcon collapsed={props.collapsed} />
-      <Show when={props.icon}>
-        {(icon) => (
-          <span class="flex size-4 items-center justify-center shrink-0 text-accent">
-            {icon()()}
-          </span>
-        )}
-      </Show>
-      <span class="text-[13px] font-medium text-ink/90 truncate">
-        {props.label}
-      </span>
-      <span class="ml-1 px-1.5 py-0.5 rounded text-[11px] text-ink-muted bg-ink/[0.06] tabular-nums">
-        {props.count}
-      </span>
-    </div>
-  );
-}

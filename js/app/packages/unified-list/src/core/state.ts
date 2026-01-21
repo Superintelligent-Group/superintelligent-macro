@@ -253,26 +253,6 @@ export function navigateLast<T extends EntityConstraint>(
   };
 }
 
-/** Navigate by page (for page up/down) */
-export function navigateByPage<T extends EntityConstraint>(
-  direction: 'up' | 'down',
-  pageSize: number,
-  getId: GetEntityId<T> = (e) => e.id
-): StateTransition<T> {
-  return (state) => {
-    const ids = getEffectiveIds(state, getId);
-    if (ids.length === 0) return state;
-
-    const currentIndex = state.focusedId ? ids.indexOf(state.focusedId) : 0;
-    const targetIndex =
-      direction === 'down'
-        ? Math.min(currentIndex + pageSize, ids.length - 1)
-        : Math.max(currentIndex - pageSize, 0);
-
-    return { ...state, focusedId: ids[targetIndex] ?? null };
-  };
-}
-
 // ============================================================================
 // Pure State Transitions: Selection
 // ============================================================================
@@ -449,24 +429,3 @@ export function when<T extends EntityConstraint>(
   };
 }
 
-// ============================================================================
-// Legacy Exports (for backwards compatibility)
-// ============================================================================
-
-// Re-export with legacy names for backwards compat
-export {
-  createInitialState as createInitialListState,
-  setEntities as setEntitiesTransition,
-  setFocusedId as setFocusedIdTransition,
-  toggleSelection as toggleSelectionTransition,
-  selectRange as selectRangeTransition,
-  clearSelection as clearSelectionTransition,
-  setLoading as setLoadingTransition,
-  setHasMore as setHasMoreTransition,
-  setScrollOffset as setScrollOffsetTransition,
-  navigateDown as navigateNextTransition,
-  navigateUp as navigatePrevTransition,
-  navigateFirst as navigateFirstTransition,
-  navigateLast as navigateLastTransition,
-  createReactiveState as createReactiveListState,
-};

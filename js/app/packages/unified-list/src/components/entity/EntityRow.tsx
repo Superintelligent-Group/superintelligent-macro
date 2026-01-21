@@ -6,7 +6,6 @@
  */
 
 import { createSignal, createMemo, Show, type JSX } from 'solid-js';
-import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { mergeRefs } from '@solid-primitives/refs';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@macro-entity';
@@ -71,11 +70,6 @@ export function EntityRow<T extends EntityData>(
     null
   );
 
-  // Setup drag and drop
-  const draggable = createDraggable(props.entity.id, props.entity);
-  false && draggable;
-  const droppable = createDroppable(props.entity.id, props.entity);
-  false && droppable;
 
   // Compute slot props
   const slotProps = createMemo<SlotProps<T>>(() => ({
@@ -156,8 +150,6 @@ export function EntityRow<T extends EntityData>(
 
   return (
     <div
-      use:draggable
-      use:droppable
       data-checked={props.checked}
       class="everything-entity w-full relative group/entity hover:bg-hover/30 mx-[1px]"
       style={{

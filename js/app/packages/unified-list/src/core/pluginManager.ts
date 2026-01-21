@@ -217,7 +217,3 @@ export function createPlugin<T extends EntityConstraint>(config: {
   };
 }
 
-/** No-op plugin for conditional composition */
-export function noopPlugin<T extends EntityConstraint>(): Plugin<T> {
-  return () => () => {};
-}

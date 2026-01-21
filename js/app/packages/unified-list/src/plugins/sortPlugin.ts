@@ -154,16 +154,8 @@ export function createStringSort<T, K extends keyof T>(
   };
 }
 
-/** Create a comparator for a date/timestamp property */
-export function createDateSort<T, K extends keyof T>(
-  property: K
-): (a: T, b: T) => number {
-  return (a: T, b: T) => {
-    const aVal = a[property] as unknown as number | undefined;
-    const bVal = b[property] as unknown as number | undefined;
-    return (aVal ?? 0) - (bVal ?? 0);
-  };
-}
+/** Create a comparator for a date/timestamp property (alias for createNumericSort) */
+export const createDateSort = createNumericSort;
 
 /** Compose multiple sort comparators (first match wins, then fallback) */
 export function composeComparators<T>(

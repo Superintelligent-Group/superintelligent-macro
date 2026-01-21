@@ -32,7 +32,6 @@
 
 import type {
   EntityConstraint,
-  ListController,
   Plugin,
   FilterConfig,
   FilterGroup,
@@ -374,20 +373,3 @@ export function createUnifiedList<
   return builder;
 }
 
-// ============================================================================
-// Preset Configurations
-// ============================================================================
-
-/**
- * Create a basic list with navigation and selection.
- * Use this as a starting point for simple lists.
- */
-export function createBasicList<T extends { id: string }>(options?: {
-  hotkeyScope?: string;
-}): UnifiedListBuildResult<T> {
-  return createUnifiedList<T>()
-    .withNavigation({ autoScroll: true, autoSelectFirst: true })
-    .withSelection({ mode: 'multi' })
-    .withHotkeys({ scope: options?.hotkeyScope })
-    .build();
-}

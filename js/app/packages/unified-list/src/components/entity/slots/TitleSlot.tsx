@@ -2,13 +2,13 @@
  * Title Slot - Entity name with search highlighting and email-specific formatting.
  */
 
-import { Show, createMemo, type JSX } from 'solid-js';
+import { Show, For, createMemo, createSignal, type JSX } from 'solid-js';
 import type { EntityData, EmailEntity, WithSearch } from '@macro-entity';
 import type { SlotProps, SlotRenderer } from '../types';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { useEmail } from '@service-gql/client';
-import { emailToMacroId, tryMacroId, useDisplayName } from '@core/user';
+import { emailToMacroId, useDisplayName } from '@core/user';
 
 export type TitleSlotConfig = {
   showSearchHighlight?: boolean;
@@ -21,6 +21,32 @@ function isSearchEntity(
   return 'search' in entity && entity.search !== undefined;
 }
 
+/** Helper to check if a value looks like an email */
+const isLikelyEmail = (value?: string) =>
+  typeof value === 'string' && value.includes('@');
+
+/** Single participant display name component - calls hook at component level */
+function ParticipantName(props: {
+  email: string;
+  fallbackName?: string;
+  onName: (name: string) => void;
+}): null {
+  const [displayName] = useDisplayName(emailToMacroId(props.email));
+
+  createMemo(() => {
+    const macroDisplayName = displayName?.();
+    if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+      props.onName(macroDisplayName);
+    } else if (props.fallbackName && !isLikelyEmail(props.fallbackName)) {
+      props.onName(props.fallbackName);
+    } else {
+      props.onName(props.email.split('@')[0]);
+    }
+  });
+
+  return null;
+}
+
 /** Email title component */
 function EmailTitle(props: {
   entity: EmailEntity;
@@ -28,37 +54,28 @@ function EmailTitle(props: {
   searchHighlightName?: string | null;
 }): JSX.Element {
   const userEmail = useEmail();
+  const [participantNames, setParticipantNames] = createSignal<Map<string, string>>(new Map());
 
-  const isLikelyEmail = (value?: string) =>
-    typeof value === 'string' && value.includes('@');
-
-  const combinedParticipantNames = createMemo(() => {
+  const filteredParticipants = createMemo(() => {
     const me = userEmail();
     if (
       props.entity.participants?.length === 1 &&
       props.entity.participants?.[0].email === me
     ) {
+      return null; // Signal to use 'me'
+    }
+    return props.entity.participants?.filter(
+      (p) => p.email && (!me || p.email !== me)
+    ) ?? [];
+  });
+
+  const combinedParticipantNames = createMemo(() => {
+    if (filteredParticipants() === null) {
       return ['me'];
     }
-    const namesSet = new Set<string>();
-
-    props.entity.participants?.forEach((participant) => {
-      if (!participant.email) return;
-      if (me && participant.email === me) return;
-      const macroDisplayName = useDisplayName(
-        emailToMacroId(participant.email)
-      )[0]?.();
-      const participantFullName = participant.name ?? '';
-      if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
-        namesSet.add(macroDisplayName);
-      } else if (participantFullName && !isLikelyEmail(participantFullName)) {
-        namesSet.add(participantFullName);
-      } else {
-        const emailName = participant.email.split('@')[0];
-        namesSet.add(emailName);
-      }
-    });
-    return Array.from(namesSet);
+    const names = participantNames();
+    const uniqueNames = new Set(names.values());
+    return Array.from(uniqueNames);
   });
 
   const displayedNames = () => {
@@ -72,6 +89,22 @@ function EmailTitle(props: {
 
   return (
     <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
+      {/* Render participant name components to collect display names */}
+      <For each={filteredParticipants() ?? []}>
+        {(participant) => (
+          <ParticipantName
+            email={participant.email!}
+            fallbackName={participant.name}
+            onName={(name) => {
+              setParticipantNames((prev) => {
+                const next = new Map(prev);
+                next.set(participant.email!, name);
+                return next;
+              });
+            }}
+          />
+        )}
+      </For>
       <div
         class="flex gap-2 items-center font-semibold shrink-0 @max-md/uList:w-full @max-md/uList:truncate"
         classList={{

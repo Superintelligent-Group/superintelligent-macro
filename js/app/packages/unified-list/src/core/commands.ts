@@ -152,36 +152,3 @@ export type ToggleGroupPayload = {
   readonly groupId: string;
 };
 
-// ============================================================================
-// Legacy Exports (backwards compatibility)
-// ============================================================================
-
-// Keep old command names for backwards compat
-export const LegacyListCommands = {
-  NAVIGATE_UP: 'unified-list:navigate-up',
-  NAVIGATE_DOWN: 'unified-list:navigate-down',
-  NAVIGATE_START: 'unified-list:navigate-start',
-  NAVIGATE_END: 'unified-list:navigate-end',
-  NAVIGATE_PAGE_UP: 'unified-list:navigate-page-up',
-  NAVIGATE_PAGE_DOWN: 'unified-list:navigate-page-down',
-  SELECT_FOCUSED: 'unified-list:select-focused',
-  SELECT_ALL: 'unified-list:select-all',
-  CLEAR_SELECTION: 'unified-list:clear-selection',
-  TOGGLE_SELECTION: 'unified-list:toggle-selection',
-  EXTEND_SELECTION_UP: 'unified-list:extend-selection-up',
-  EXTEND_SELECTION_DOWN: 'unified-list:extend-selection-down',
-  OPEN_ENTITY: 'unified-list:open-entity',
-  OPEN_ENTITY_PREVIEW: 'unified-list:open-entity-preview',
-  TOGGLE_PREVIEW: 'unified-list:toggle-preview',
-  MARK_DONE: 'unified-list:mark-done',
-  DELETE_SELECTED: 'unified-list:delete-selected',
-  TOGGLE_FILTER: 'unified-list:toggle-filter',
-  CLEAR_FILTERS: 'unified-list:clear-filters',
-  FOCUS_SEARCH: 'unified-list:focus-search',
-  CLEAR_SEARCH: 'unified-list:clear-search',
-  FETCH_MORE: 'unified-list:fetch-more',
-  REFRESH: 'unified-list:refresh',
-} as const;
-
-export type ListCommandName =
-  (typeof LegacyListCommands)[keyof typeof LegacyListCommands];
