@@ -6,6 +6,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
+import { Soup } from '../Soup';
 import { SettingsPanel } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 
@@ -55,7 +56,7 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <SoupV2 />, { viewId: 'signal' });
+registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
@@ -66,8 +67,6 @@ registerComponent(
 );
 registerComponent('settings', () => <SettingsPanel />);
 registerComponent('notification', () => <NotificationRoute />);
-
-registerComponent('soup', () => <SoupV2 />);
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -139,6 +138,9 @@ if (LOCAL_ONLY) {
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
+
+  // New unified list v2 - available for parallel development
+  registerComponent('soup-v2', () => <SoupV2 />);
 }
 
 if (DEV_MODE_ENV) {
