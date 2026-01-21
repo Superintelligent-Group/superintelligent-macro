@@ -102,7 +102,7 @@ export function createListController<T extends EntityConstraint>(
   // Entity lookup maps for O(1) access
   let entityMap = new Map<string, T>();
   let entityIndexMap = new Map<string, number>();
-  let lastEntityCount = -1;
+  let lastEntitiesRef: readonly T[] | null = null;
 
   /** Update lookup maps when entities change */
   const updateEntityMaps = (entities: readonly T[]) => {
@@ -116,16 +116,16 @@ export function createListController<T extends EntityConstraint>(
         entityIndexMap.set(entityId, i);
       }
     }
-    lastEntityCount = entities.length;
+    lastEntitiesRef = entities;
   };
 
   // Initialize maps
   updateEntityMaps(initialEntities);
 
-  /** Ensure maps are in sync */
+  /** Ensure maps are in sync (uses array identity for robust detection) */
   const ensureMapsSync = () => {
     const entities = state.entities();
-    if (entities.length !== lastEntityCount) {
+    if (entities !== lastEntitiesRef) {
       updateEntityMaps(entities);
     }
   };

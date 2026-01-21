@@ -89,17 +89,23 @@ export type SoupQueryResult = {
   refetch: () => void;
 };
 
-// Type filters that affect server-side query (vs client-side filters like signal/noise/unread)
-const TYPE_FILTERS = new Set([
-  'document',
-  'task',
-  'email',
-  'people',
-  'teams',
-  'agent',
-  'project',
-  'file',
+// Type filter ID to predicate mapping
+const TYPE_FILTER_MAP = new Map<
+  string,
+  (entity: EnhancedEntity) => boolean
+>([
+  ['document', documentFilter],
+  ['task', taskFilter],
+  ['email', emailFilter],
+  ['people', peopleFilter],
+  ['teams', teamsFilter],
+  ['agent', agentFilter],
+  ['project', projectFilter],
+  ['file', fileFilter],
 ]);
+
+// Type filters that affect server-side query (vs client-side filters like signal/noise/unread)
+const TYPE_FILTERS = new Set(TYPE_FILTER_MAP.keys());
 
 /** Extract only type filters from active filters set */
 function getActiveTypeFilters(activeFilters: Set<string>): Set<string> {
@@ -264,28 +270,15 @@ function getClientFilterFn(
     predicates.push(unreadFilter);
   }
 
-  // Type-specific filters (for more precise filtering)
+  // Type-specific filters - entity must match at least one active type filter
   const activeTypeFilters = getActiveTypeFilters(activeFilters);
 
   if (activeTypeFilters.size > 0) {
     predicates.push((entity) => {
-      // Document filter (excludes tasks)
-      if (activeFilters.has('document') && documentFilter(entity)) return true;
-      // Task filter
-      if (activeFilters.has('task') && taskFilter(entity)) return true;
-      // Email filter
-      if (activeFilters.has('email') && emailFilter(entity)) return true;
-      // People filter (DMs)
-      if (activeFilters.has('people') && peopleFilter(entity)) return true;
-      // Teams filter (group channels)
-      if (activeFilters.has('teams') && teamsFilter(entity)) return true;
-      // Agent filter (chats)
-      if (activeFilters.has('agent') && agentFilter(entity)) return true;
-      // Project filter
-      if (activeFilters.has('project') && projectFilter(entity)) return true;
-      // File filter
-      if (activeFilters.has('file') && fileFilter(entity)) return true;
-
+      for (const filterId of activeTypeFilters) {
+        const filterFn = TYPE_FILTER_MAP.get(filterId);
+        if (filterFn?.(entity)) return true;
+      }
       return false;
     });
   }

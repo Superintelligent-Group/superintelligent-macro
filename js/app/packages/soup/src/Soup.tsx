@@ -605,15 +605,13 @@ function SoupToolbar(props: SoupToolbarProps): JSX.Element {
     const next = new Set<string>(current);
 
     if (next.has(filterId)) {
-      // Deactivate filter
       next.delete(filterId);
     } else {
-      // Activate filter - handle mutual exclusivity via groups
+      // Handle mutual exclusivity via groups
       const filterConfig = store.filters().get(filterId);
       if (filterConfig?.group) {
         const group = store.groups().get(filterConfig.group);
         if (group && !group.allowMultiple) {
-          // Remove other filters in same group
           for (const otherId of group.filterIds) {
             if (otherId !== filterId) {
               next.delete(otherId);
@@ -624,7 +622,6 @@ function SoupToolbar(props: SoupToolbarProps): JSX.Element {
       next.add(filterId);
     }
 
-    // Update both the plugin store and the external state
     store.setActiveFilterIds(next);
     props.onFilterChange(next);
   };

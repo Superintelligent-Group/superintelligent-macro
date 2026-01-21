@@ -6,22 +6,10 @@
  */
 
 import type { EntityData, WithNotification } from '@macro-entity';
-import type { FilterConfig } from '@unified-list';
+import { type FilterConfig, unreadFilter } from '@unified-list';
 import { signalFilter, noiseFilter } from './filters';
 
 type EnhancedEntity = WithNotification<EntityData>;
-
-// ============================================================================
-// Notification Filters
-// ============================================================================
-
-/** Unread filter - entity has unread content */
-function unreadFilter(entity: EnhancedEntity): boolean {
-  if (entity.type === 'email') {
-    return !entity.isRead;
-  }
-  return entity.notifications?.()?.some((n) => !n.viewedAt) ?? false;
-}
 
 // ============================================================================
 // Entity Type Filters
