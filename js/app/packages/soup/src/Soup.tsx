@@ -75,7 +75,7 @@ const SERVER_SEARCH_DEBOUNCE_MS = 300;
 // ============================================================================
 
 /** Grouping mode options */
-export type GroupMode = 'none' | 'type' | 'status';
+type GroupMode = 'none' | 'type' | 'status';
 
 /** Get the group key for an entity (task is distinct from document) */
 function getEntityTypeGroup(entity: EnhancedEntity): string {

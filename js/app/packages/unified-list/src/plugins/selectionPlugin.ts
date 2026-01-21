@@ -268,35 +268,3 @@ export function createSelectionPlugin<T extends EntityConstraint>(
 
   return Object.assign(plugin, { store });
 }
-
-// ============================================================================
-// Selection Utilities
-// ============================================================================
-
-/** Calculate range selection IDs */
-export function calculateRangeSelection<T extends EntityConstraint>(
-  entities: readonly T[],
-  fromId: string,
-  toId: string,
-  existingSelection: ReadonlySet<string>
-): ReadonlySet<string> {
-  const fromIndex = entities.findIndex((e) => e.id === fromId);
-  const toIndex = entities.findIndex((e) => e.id === toId);
-
-  if (fromIndex === -1 || toIndex === -1) {
-    return existingSelection;
-  }
-
-  const startIndex = Math.min(fromIndex, toIndex);
-  const endIndex = Math.max(fromIndex, toIndex);
-
-  const newSelection = new Set(existingSelection);
-  for (let i = startIndex; i <= endIndex; i++) {
-    const entity = entities[i];
-    if (entity) {
-      newSelection.add(entity.id);
-    }
-  }
-
-  return newSelection;
-}

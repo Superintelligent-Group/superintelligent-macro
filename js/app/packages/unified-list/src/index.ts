@@ -136,9 +136,6 @@ export {
   // Plugin manager
   createPluginManager,
   mergeRegister,
-  composePlugins,
-  conditionalPlugin,
-  oncePlugin,
   type PluginManager,
 } from './core/pluginManager';
 
@@ -150,12 +147,7 @@ export {
   // Filter plugin
   createFilterPlugin,
   createFilterStore,
-  composeFilters,
-  composeFiltersOr,
-  negateFilter,
   createTypeFilter,
-  createPropertyFilter,
-  createTruthyFilter,
   entityTypeFilter,
   createFilterGroup,
   type FilterStore,
@@ -191,7 +183,6 @@ export {
   // Selection plugin
   createSelectionPlugin,
   createSelectionStore,
-  calculateRangeSelection,
   type SelectionStore,
   type SelectionPluginConfig,
 } from './plugins/selectionPlugin';
@@ -259,7 +250,7 @@ export type {
   GroupHeaderRenderer,
 } from './types/groupBy';
 
-export { isEntityItem, isHeaderItem, getDisplayItemKey } from './types/groupBy';
+export { isEntityItem, isHeaderItem } from './types/groupBy';
 
 // GroupBy components
 export { GroupHeader, GROUP_HEADER_HEIGHT } from './components/GroupHeader';
@@ -328,22 +319,13 @@ export {
 } from './components/entity';
 
 // ============================================================================
-// Filters (Generic entity type filters)
+// Filters (Generic entity filters)
 // NOTE: Signal/Noise filters have moved to @soup package
+// NOTE: Entity type filters have moved to @soup package
 // ============================================================================
 
 export {
   // Notification filters
   unreadFilter,
   notDoneFilter,
-  // Entity type filters
-  documentFilter,
-  taskFilter,
-  emailFilter,
-  channelFilter,
-  peopleFilter,
-  teamsFilter,
-  agentFilter,
-  projectFilter,
-  fileFilter,
 } from './filters';

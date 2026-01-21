@@ -249,50 +249,12 @@ export function createFilterPlugin<T extends EntityConstraint>(
 // Filter Utilities
 // ============================================================================
 
-/** Compose multiple predicates with AND logic */
-export function composeFilters<T>(
-  ...predicates: FilterPredicate<T>[]
-): FilterPredicate<T> {
-  if (predicates.length === 0) return () => true;
-  return (entity: T) => predicates.every((pred) => pred(entity));
-}
-
-/** Compose multiple predicates with OR logic */
-export function composeFiltersOr<T>(
-  ...predicates: FilterPredicate<T>[]
-): FilterPredicate<T> {
-  if (predicates.length === 0) return () => true;
-  return (entity: T) => predicates.some((pred) => pred(entity));
-}
-
-/** Negate a predicate */
-export function negateFilter<T>(
-  predicate: FilterPredicate<T>
-): FilterPredicate<T> {
-  return (entity: T) => !predicate(entity);
-}
-
 /** Create a type-matching predicate */
 export function createTypeFilter<T extends { type: string }>(
   types: readonly string[]
 ): FilterPredicate<T> {
   const typeSet = new Set(types);
   return (entity: T) => typeSet.has(entity.type);
-}
-
-/** Create a property equality predicate */
-export function createPropertyFilter<T, K extends keyof T>(
-  property: K,
-  value: T[K]
-): FilterPredicate<T> {
-  return (entity: T) => entity[property] === value;
-}
-
-/** Create a truthy property predicate */
-export function createTruthyFilter<T, K extends keyof T>(
-  property: K
-): FilterPredicate<T> {
-  return (entity: T) => Boolean(entity[property]);
 }
 
 // ============================================================================

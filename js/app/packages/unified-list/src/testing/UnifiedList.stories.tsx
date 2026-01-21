@@ -8,7 +8,6 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
 import { TestHarness } from './TestHarness';
 import {
-  type TestEntity,
   FIXTURE_SMALL_LIST,
   FIXTURE_MIXED_TYPES,
   FIXTURE_GROUPED_LIST,

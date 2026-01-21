@@ -24,6 +24,7 @@ import type { PostSoupRequest } from '@service-storage/generated/schemas';
 import type { SearchArgs } from '@service-search/client';
 import type { UnifiedSearchIndex } from '@service-search/generated/models';
 import type { EnhancedEntity } from '@unified-list/components/entity/types';
+import { unreadFilter, notDoneFilter } from '@unified-list';
 import type { EnhancingSearchFilter } from '@unified-list';
 import { SOUP_DEFAULTS, type EmailView } from './defaults';
 import { signalFilter, noiseFilter, explicitNoiseFilter } from './filters';
@@ -76,8 +77,6 @@ export type SoupQueryFilters = {
 export type SoupQueryResult = {
   /** Entities after server + client filtering */
   entities: Accessor<EnhancedEntity[]>;
-  /** Raw entities from server (before client filtering) */
-  rawEntities: Accessor<EnhancedEntity[]>;
   /** Loading state */
   isLoading: Accessor<boolean>;
   /** Whether there are more pages */
@@ -220,26 +219,6 @@ function buildRequestBody(
       project_ids: includeProjects ? [] : [NIL_UUID],
     },
   };
-}
-
-// ============================================================================
-// Client-side filter predicates (imported from @soup/filters)
-// ============================================================================
-
-/** Unread filter - entity has unread content */
-function unreadFilter(entity: EnhancedEntity): boolean {
-  if (entity.type === 'email') {
-    return !entity.isRead;
-  }
-  return entity.notifications?.()?.some((n) => !n.viewedAt) ?? false;
-}
-
-/** NotDone filter - entity has outstanding items */
-function notDoneFilter(entity: EnhancedEntity): boolean {
-  if (entity.type === 'email') {
-    return !entity.done;
-  }
-  return !!entity.notifications && entity.notifications().some((n) => !n.done);
 }
 
 /**
@@ -488,7 +467,6 @@ export function useSoupQuery(filters: SoupQueryFilters): SoupQueryResult {
 
   return {
     entities,
-    rawEntities,
     isLoading,
     hasMore,
     fetchNextPage,

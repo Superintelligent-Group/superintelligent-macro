@@ -72,13 +72,6 @@ export function isHeaderItem<T>(
   return item.type === 'header';
 }
 
-/** Get unique key for a display item (for reconciliation) */
-export function getDisplayItemKey<T extends { id: string }>(
-  item: DisplayItem<T>
-): string {
-  return item.type === 'header' ? `header:${item.groupId}` : item.entity.id;
-}
-
 // ============================================================================
 // Group Store Types
 // ============================================================================

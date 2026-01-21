@@ -5,14 +5,18 @@
  * with mock data, ensuring filters properly filter down the entity list.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRoot } from 'solid-js';
 import type { EntityData } from '@macro-entity';
 import { createListController } from '../core/controller';
 import { createPluginManager } from '../core/pluginManager';
-import { createFilterPlugin, type FilterStore } from '../plugins/filterPlugin';
+import { createFilterPlugin } from '../plugins/filterPlugin';
 import {
-  unreadFilter,
+  signalFilter,
+  noiseFilter,
+} from '@soup/filters';
+import {
+  createSoupFilterConfigs,
   documentFilter,
   taskFilter,
   emailFilter,
@@ -20,8 +24,7 @@ import {
   teamsFilter,
   agentFilter,
   projectFilter,
-} from '../filters/entityFilters';
-import { signalFilter, noiseFilter, createSoupFilterConfigs } from '@soup';
+} from '@soup/filterConfigs';
 import type { FilterGroup } from '../types';
 import type { EnhancedEntity } from '../components/entity/types';
 
@@ -220,7 +223,7 @@ describe('Soup Filter Plugin Integration', () => {
         pluginManager.use(filterPlugin);
 
         // Activate document filter
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'document',
         });
 
@@ -259,7 +262,7 @@ describe('Soup Filter Plugin Integration', () => {
         pluginManager.use(filterPlugin);
 
         // Activate task filter
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'task',
         });
 
@@ -294,7 +297,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'email',
         });
 
@@ -323,7 +326,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'people',
         });
 
@@ -356,7 +359,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'teams',
         });
 
@@ -389,7 +392,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'agent',
         });
 
@@ -418,7 +421,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'project',
         });
 
@@ -449,7 +452,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'signal',
         });
 
@@ -480,7 +483,7 @@ describe('Soup Filter Plugin Integration', () => {
         const pluginManager = createPluginManager(controller);
         pluginManager.use(filterPlugin);
 
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'noise',
         });
 
@@ -519,13 +522,13 @@ describe('Soup Filter Plugin Integration', () => {
         expect(store.activeFilterIds().size).toBe(0);
 
         // Toggle on
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'email',
         });
         expect(store.activeFilterIds().has('email')).toBe(true);
 
         // Toggle off
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'email',
         });
         expect(store.activeFilterIds().has('email')).toBe(false);
@@ -571,13 +574,13 @@ describe('Soup Filter Plugin Integration', () => {
         const store = filterPlugin.store;
 
         // Activate document filter
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'document',
         });
         expect(store.activeFilterIds().has('document')).toBe(true);
 
         // Activate email filter - should deactivate document
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'email',
         });
         expect(store.activeFilterIds().has('email')).toBe(true);
@@ -607,16 +610,16 @@ describe('Soup Filter Plugin Integration', () => {
         const store = filterPlugin.store;
 
         // Activate multiple filters
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'email',
         });
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'signal',
         });
         expect(store.activeFilterIds().size).toBe(2);
 
         // Clear all
-        controller.commands.dispatch('unified-list:clear-filters', undefined);
+        controller.commands.dispatch('list:clear-filters', undefined);
         expect(store.activeFilterIds().size).toBe(0);
 
         cleanup();
@@ -749,8 +752,13 @@ describe('Individual Filter Predicates', () => {
       expect(signalFilter(email)).toBe(false);
     });
 
-    it('should pass non-email entities', () => {
-      expect(signalFilter(createMockDocument('1', 'Test'))).toBe(true);
+    it('should pass non-email entities (channels always signal, tasks always signal)', () => {
+      // Channels are always signal
+      expect(signalFilter(createMockChannel('1', 'Test'))).toBe(true);
+      // Tasks are always signal
+      expect(signalFilter(createMockTask('1', 'Test'))).toBe(true);
+      // Documents without recent viewedAt are NOT signal (they're neutral)
+      expect(signalFilter(createMockDocument('1', 'Test'))).toBe(false);
     });
   });
 
@@ -814,7 +822,7 @@ describe('Pipeline Sort Order Integration', () => {
         ];
 
         // Activate document filter
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'document',
         });
 
@@ -963,7 +971,7 @@ describe('Pipeline Sort Order Integration', () => {
         ];
 
         // Filter to people (DMs)
-        controller.commands.dispatch('unified-list:toggle-filter', {
+        controller.commands.dispatch('list:toggle-filter', {
           filterId: 'people',
         });
 
@@ -994,11 +1002,16 @@ describe('Pipeline Sort Order Integration', () => {
       });
     });
 
-    it('should fail when entity is missing updatedAt (documents expected behavior)', () => {
+    it('should handle entity missing updatedAt (documents expected behavior)', () => {
       // This test documents the expected behavior when timestamps are missing
       // Entities without timestamps should sort to the end (oldest position)
 
       createRoot((dispose) => {
+        // Create entity and explicitly delete updatedAt to simulate broken data
+        const docNoTime = createMockDocument('doc-no-time', 'No Time');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delete (docNoTime as any).updatedAt;
+
         const entities: EnhancedEntity[] = [
           createEntityWithTimestamp(
             createMockDocument('doc-with-time', 'Has Time'),
@@ -1006,8 +1019,7 @@ describe('Pipeline Sort Order Integration', () => {
               updatedAt: now - 1000,
             }
           ),
-          // Intentionally missing updatedAt to simulate broken data
-          createMockDocument('doc-no-time', 'No Time'),
+          docNoTime,
           createEntityWithTimestamp(createMockDocument('doc-older', 'Older'), {
             updatedAt: now - 2000,
           }),

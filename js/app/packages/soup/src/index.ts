@@ -41,7 +41,18 @@ export {
 
 export { SOUP_DEFAULTS, type SortMethod, type EmailView } from './defaults';
 
-export { createSoupFilterConfigs } from './filterConfigs';
+export {
+  createSoupFilterConfigs,
+  // Entity type filters
+  documentFilter,
+  taskFilter,
+  emailFilter,
+  peopleFilter,
+  teamsFilter,
+  agentFilter,
+  projectFilter,
+  fileFilter,
+} from './filterConfigs';
 
 // ============================================================================
 // Filters
