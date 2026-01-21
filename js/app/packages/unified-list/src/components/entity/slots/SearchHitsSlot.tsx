@@ -25,6 +25,7 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
 import { tryMacroId, useDisplayName } from '@core/user';
 import { UserIcon } from '@core/component/UserIcon';
 import { formatTimestamp } from './TimestampSlot';
+import { ThreadBorder } from './ChildrenSlot';
 
 export type SearchHitsSlotConfig = {
   maxVisible?: number;
@@ -39,16 +40,6 @@ function isSearchEntity(
   entity: EntityData | WithSearch<EntityData>
 ): entity is WithSearch<EntityData> {
   return 'search' in entity && entity.search !== undefined;
-}
-
-/** Thread border connector line */
-function ThreadBorder(): JSX.Element {
-  return (
-    <div
-      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-      style={{ height: '6px' }}
-    />
-  );
 }
 
 /** Collapsible list row wrapper */

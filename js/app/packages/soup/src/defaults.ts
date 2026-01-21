@@ -19,8 +19,6 @@ export type EmailView =
 export const SOUP_DEFAULTS = {
   /** Default sort method */
   sortMethod: 'updated_at' as SortMethod,
-  /** Default sort order */
-  sortOrder: 'descending' as const,
   /** Default email view - 'all' shows all emails without inbox_visible filtering */
   emailView: 'all' as EmailView,
 } as const;

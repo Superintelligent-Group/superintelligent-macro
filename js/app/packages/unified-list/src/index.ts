@@ -64,10 +64,6 @@ export type {
   NavigationDirection,
   NavigationMode,
   NavigationInput,
-  // Rendering types
-  EntitySlot,
-  SlotRenderer,
-  EntityTemplate,
   // Query types
   QueryConfig,
   // Event types
@@ -269,20 +265,6 @@ export { isEntityItem, isHeaderItem, getDisplayItemKey } from './types/groupBy';
 export { GroupHeader, GROUP_HEADER_HEIGHT } from './components/GroupHeader';
 
 export {
-  EntityRow,
-  useEntityRowContext,
-  createUnreadIndicatorSlot,
-  createCheckboxSlot,
-  createTimestampSlot,
-  type EntityRowSlot,
-  type SlotRenderProps,
-  type SlotRenderer as EntitySlotRenderer,
-  type EntityRowLayout,
-  type EntityRowConfig,
-  type EntityRowProps,
-} from './components/EntityRow';
-
-export {
   UnifiedListView,
   useUnifiedList,
   type UnifiedListViewProps,
@@ -306,8 +288,8 @@ export {
 // ============================================================================
 
 export {
-  // Entity row components
-  EntityRow as SoupEntityRow,
+  // Entity row component
+  EntityRow,
   createDefaultEntityRowConfig,
   ENTITY_HEIGHT,
   // Slot factories
@@ -316,7 +298,7 @@ export {
   createTitleSlot,
   createSubtitleSlot,
   createBadgesSlot,
-  createTimestampSlot as createEntityTimestampSlot,
+  createTimestampSlot,
   createActionsSlot,
   createNotificationsSlot,
   createSearchHitsSlot,
@@ -327,12 +309,12 @@ export {
   ThreadBorder,
   // Types
   type EnhancedEntity,
-  type EntityRowConfig as SoupEntityRowConfig,
-  type EntityRowProps as SoupEntityRowProps,
+  type EntityRowConfig,
+  type EntityRowProps,
   type EntitySlotName,
   type EntitySlots,
   type SlotProps,
-  type SlotRenderer as EntitySlotRenderer2,
+  type SlotRenderer,
   type ChildrenSlotProps,
   type CollapsibleChildListProps,
   type ChildRowProps,

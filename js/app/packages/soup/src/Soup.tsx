@@ -42,7 +42,7 @@ import {
   createdAtSort,
   viewedAtSort,
   frecencySort,
-  SoupEntityRow as EntityRow,
+  EntityRow,
   ENTITY_HEIGHT,
   createDefaultEntityRowConfig,
   createGroupStore,

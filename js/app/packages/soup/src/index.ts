@@ -41,10 +41,7 @@ export {
 
 export { SOUP_DEFAULTS, type SortMethod, type EmailView } from './defaults';
 
-export {
-  createSoupFilterConfigs,
-  createSoupFilterGroups,
-} from './filterConfigs';
+export { createSoupFilterConfigs } from './filterConfigs';
 
 // ============================================================================
 // Filters
@@ -55,11 +52,7 @@ export {
   signalFilter,
   noiseFilter,
   explicitNoiseFilter,
-  // Configuration toggles (for settings UI)
-  PRIORITY_LABEL_TOGGLES,
-  PRIORITY_METADATA_TOGGLES,
-  DEPRIORITY_LABEL_TOGGLES,
-  DEPRIORITY_METADATA_TOGGLES,
+  // Configuration (for settings UI)
   PRIORITY_LABELS,
   DEPRIORITY_LABELS,
   PRIORITY_METADATA,

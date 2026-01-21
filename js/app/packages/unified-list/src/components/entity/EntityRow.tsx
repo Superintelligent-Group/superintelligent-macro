@@ -26,7 +26,6 @@ import { createTimestampSlot } from './slots/TimestampSlot';
 import { createActionsSlot } from './slots/ActionsSlot';
 import { createNotificationsSlot } from './slots/NotificationsSlot';
 import { createSearchHitsSlot } from './slots/SearchHitsSlot';
-import { createPropertiesSlot } from './slots/PropertiesSlot';
 import { ChildrenSlot } from './slots/ChildrenSlot';
 
 export const ENTITY_HEIGHT = 40;
@@ -110,11 +109,7 @@ export function EntityRow<T extends EntityData>(
           onClick: props.config.onClick,
           onPointerDown: props.config.onPointerDown,
         }),
-      properties:
-        configSlots.properties ??
-        createPropertiesSlot({
-          properties: props.config.properties,
-        }),
+      properties: configSlots.properties,
       timestamp: configSlots.timestamp ?? createTimestampSlot(),
       actions:
         configSlots.actions ??
@@ -308,7 +303,6 @@ export {
   createTitleSlot,
   createSubtitleSlot,
   createBadgesSlot,
-  createPropertiesSlot,
   createTimestampSlot,
   createActionsSlot,
   createNotificationsSlot,

@@ -28,7 +28,7 @@ function unreadFilter(entity: EnhancedEntity): boolean {
 // ============================================================================
 
 /** Document filter (markdown, canvas) - excludes tasks */
-function documentFilter(entity: EntityData): boolean {
+export function documentFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   if (entity.subType?.type === 'task') return false;
   const fileType = entity.fileType ?? '';
@@ -36,37 +36,37 @@ function documentFilter(entity: EntityData): boolean {
 }
 
 /** Task filter */
-function taskFilter(entity: EntityData): boolean {
+export function taskFilter(entity: EntityData): boolean {
   return entity.type === 'document' && entity.subType?.type === 'task';
 }
 
 /** Email filter */
-function emailFilter(entity: EntityData): boolean {
+export function emailFilter(entity: EntityData): boolean {
   return entity.type === 'email';
 }
 
 /** People filter (direct messages) */
-function peopleFilter(entity: EntityData): boolean {
+export function peopleFilter(entity: EntityData): boolean {
   return entity.type === 'channel' && entity.channelType === 'direct_message';
 }
 
 /** Teams filter (group channels) */
-function teamsFilter(entity: EntityData): boolean {
+export function teamsFilter(entity: EntityData): boolean {
   return entity.type === 'channel' && entity.channelType !== 'direct_message';
 }
 
 /** Chat/agent filter */
-function agentFilter(entity: EntityData): boolean {
+export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat';
 }
 
 /** Project/folder filter */
-function projectFilter(entity: EntityData): boolean {
+export function projectFilter(entity: EntityData): boolean {
   return entity.type === 'project';
 }
 
 /** File filter (non-markdown documents) */
-function fileFilter(entity: EntityData): boolean {
+export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
   return !['md', 'canvas'].includes(fileType);
@@ -152,29 +152,3 @@ export function createSoupFilterConfigs(): FilterConfig<EnhancedEntity>[] {
   ];
 }
 
-/** Create filter groups */
-export function createSoupFilterGroups() {
-  return [
-    {
-      id: 'focus',
-      label: 'Focus',
-      filterIds: ['signal', 'noise'],
-      allowMultiple: false, // Mutually exclusive
-    },
-    {
-      id: 'type',
-      label: 'Type',
-      filterIds: [
-        'document',
-        'task',
-        'email',
-        'people',
-        'teams',
-        'agent',
-        'project',
-        'file',
-      ],
-      allowMultiple: false, // Mutually exclusive
-    },
-  ];
-}

@@ -22,14 +22,21 @@ import {
 } from '@notifications';
 import type { PostSoupRequest } from '@service-storage/generated/schemas';
 import type { SearchArgs } from '@service-search/client';
-import type {
-  UnifiedSearchIndex,
-  UnifiedSearchRequestFilters,
-} from '@service-search/generated/models';
+import type { UnifiedSearchIndex } from '@service-search/generated/models';
 import type { EnhancedEntity } from '@unified-list/components/entity/types';
 import type { EnhancingSearchFilter } from '@unified-list';
 import { SOUP_DEFAULTS, type EmailView } from './defaults';
 import { signalFilter, noiseFilter, explicitNoiseFilter } from './filters';
+import {
+  documentFilter,
+  taskFilter,
+  emailFilter,
+  peopleFilter,
+  teamsFilter,
+  agentFilter,
+  projectFilter,
+  fileFilter,
+} from './filterConfigs';
 
 // NIL UUID used to exclude entity types from query
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -95,16 +102,18 @@ const TYPE_FILTERS = new Set([
   'file',
 ]);
 
+/** Extract only type filters from active filters set */
+function getActiveTypeFilters(activeFilters: Set<string>): Set<string> {
+  return new Set([...activeFilters].filter((f) => TYPE_FILTERS.has(f)));
+}
+
 /**
  * Build search service include array based on active filters.
  */
 function buildSearchIncludeArray(
   activeFilters: Set<string>
 ): UnifiedSearchIndex[] {
-  // Extract only type filters
-  const activeTypeFilters = new Set(
-    [...activeFilters].filter((f) => TYPE_FILTERS.has(f))
-  );
+  const activeTypeFilters = getActiveTypeFilters(activeFilters);
 
   // If no type filters, search all
   if (activeTypeFilters.size === 0) {
@@ -137,22 +146,6 @@ function buildSearchIncludeArray(
 }
 
 /**
- * Build search service filters based on active filters.
- */
-function buildSearchFilters(
-  _activeFilters: Set<string>
-): UnifiedSearchRequestFilters {
-  // For now, just use empty filters - can add project filtering etc later
-  return {
-    document: null,
-    chat: null,
-    channel: null,
-    email: null,
-    project: null,
-  };
-}
-
-/**
  * Build PostSoupRequest based on active filters.
  *
  * IMPORTANT: Only TYPE filters affect the server query.
@@ -167,10 +160,7 @@ function buildRequestBody(
   sortMethod: string,
   emailView?: string
 ): PostSoupRequest {
-  // Extract only type filters (ignore signal/noise/unread which are client-side)
-  const activeTypeFilters = new Set(
-    [...activeFilters].filter((f) => TYPE_FILTERS.has(f))
-  );
+  const activeTypeFilters = getActiveTypeFilters(activeFilters);
 
   // Determine which entity types to include based on TYPE filters only
   const includeDocuments =
@@ -252,47 +242,6 @@ function notDoneFilter(entity: EnhancedEntity): boolean {
   return !!entity.notifications && entity.notifications().some((n) => !n.done);
 }
 
-// ============================================================================
-// Entity type filters (client-side for precise filtering)
-// ============================================================================
-
-function documentFilter(entity: EntityData): boolean {
-  if (entity.type !== 'document') return false;
-  if (entity.subType?.type === 'task') return false;
-  const fileType = entity.fileType ?? '';
-  return fileType === 'md' || fileType === 'canvas';
-}
-
-function taskFilter(entity: EntityData): boolean {
-  return entity.type === 'document' && entity.subType?.type === 'task';
-}
-
-function emailFilter(entity: EntityData): boolean {
-  return entity.type === 'email';
-}
-
-function peopleFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' && entity.channelType === 'direct_message';
-}
-
-function teamsFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' && entity.channelType !== 'direct_message';
-}
-
-function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
-}
-
-function projectFilter(entity: EntityData): boolean {
-  return entity.type === 'project';
-}
-
-function fileFilter(entity: EntityData): boolean {
-  if (entity.type !== 'document') return false;
-  const fileType = entity.fileType ?? '';
-  return !['md', 'canvas'].includes(fileType);
-}
-
 /**
  * Get client-side filter function based on active filters.
  *
@@ -337,17 +286,9 @@ function getClientFilterFn(
   }
 
   // Type-specific filters (for more precise filtering)
-  const hasTypeFilter =
-    activeFilters.has('document') ||
-    activeFilters.has('task') ||
-    activeFilters.has('email') ||
-    activeFilters.has('people') ||
-    activeFilters.has('teams') ||
-    activeFilters.has('agent') ||
-    activeFilters.has('project') ||
-    activeFilters.has('file');
+  const activeTypeFilters = getActiveTypeFilters(activeFilters);
 
-  if (hasTypeFilter) {
+  if (activeTypeFilters.size > 0) {
     predicates.push((entity) => {
       // Document filter (excludes tasks)
       if (activeFilters.has('document') && documentFilter(entity)) return true;
@@ -421,7 +362,13 @@ export function useSoupQuery(filters: SoupQueryFilters): SoupQueryResult {
           (serverSearchText?.() ?? '').length > 0
             ? [serverSearchText?.() ?? '']
             : undefined,
-        filters: buildSearchFilters(activeFilters()),
+        filters: {
+          document: null,
+          chat: null,
+          channel: null,
+          email: null,
+          project: null,
+        },
         include: buildSearchIncludeArray(activeFilters()),
       },
     })

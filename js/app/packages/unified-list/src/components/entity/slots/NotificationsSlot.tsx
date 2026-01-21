@@ -15,6 +15,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryToTypedNotification } from '@notifications';
 import { formatTimestamp } from './TimestampSlot';
+import { ThreadBorder } from './ChildrenSlot';
 
 export type NotificationsSlotConfig = {
   maxVisible?: number;
@@ -23,16 +24,6 @@ export type NotificationsSlotConfig = {
   /** Called when expand/collapse state changes - use to trigger virtualizer re-measurement */
   onToggleExpand?: () => void;
 };
-
-/** Thread border connector line */
-function ThreadBorder(): JSX.Element {
-  return (
-    <div
-      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-      style={{ height: '6px' }}
-    />
-  );
-}
 
 /** Collapsible list row wrapper */
 function CollapsibleListRow(
