@@ -99,6 +99,8 @@ type MessageProps = {
   message: MessageType;
   lastViewed: Accessor<string | null | undefined>;
   isFocused: boolean;
+  isSelected: boolean;
+  onMouseMove?: () => void;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
@@ -483,6 +485,10 @@ export function MessageContainer(props: MessageProps) {
         messageContainerRef = el;
       }}
       data-message-id={message.id}
+      onMouseMove={() => {
+        if (isTouchDevice()) return;
+        props.onMouseMove?.();
+      }}
     >
       <div class="macro-message-width w-full">
         {/* Date separator */}
@@ -520,7 +526,7 @@ export function MessageContainer(props: MessageProps) {
           <ContextMenu.Trigger disabled={editing()}>
             <MessageComponent
               id={message.id}
-              focused={props.isFocused}
+              focused={props.isFocused || props.isSelected}
               senderId={message.sender_id}
               isFirstMessage={isFirstMessage()}
               isLastMessage={isLastMessage()}

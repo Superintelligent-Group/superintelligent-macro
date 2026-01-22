@@ -79,6 +79,8 @@ type MessageListContentContextValues = {
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
   getThreadState: (threadID: string) => ThreadView | undefined;
   orderedMessages: Accessor<Message[]>;
+  selectedMessageId: Accessor<string | undefined>;
+  setSelectedMessageId: Setter<string | undefined>;
 };
 
 const MessageListContentContext =
@@ -100,6 +102,8 @@ export type MessageListProps = {
   targetMessage: Accessor<TargetMessageInfo | undefined>;
   focusedMessageId: Accessor<string | undefined>;
   setFocusedMessageId: Setter<string | undefined>;
+  selectedMessageId: Accessor<string | undefined>;
+  setSelectedMessageId: Setter<string | undefined>;
   orderedMessages: Accessor<Message[]>;
   setOrderedMessages: Setter<Message[]>;
   setLastMessageRef?: Setter<HTMLDivElement | undefined>;
@@ -212,6 +216,8 @@ export function MessageList(props: MessageListProps) {
       return threadViewStore[threadID];
     },
     orderedMessages: props.orderedMessages,
+    selectedMessageId: props.selectedMessageId,
+    setSelectedMessageId: props.setSelectedMessageId,
   };
   return (
     <MessageListContentContext.Provider value={context}>
@@ -382,6 +388,7 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   const isFocused = createSelector(props.focusedMessageId);
+  const isSelected = createSelector(props.selectedMessageId);
 
   // Keep the message if:
   // 1. It's not deleted, OR
@@ -794,6 +801,10 @@ function MessageListImpl(props: MessageListProps) {
                       message={row.message}
                       lastViewed={lastViewed}
                       isFocused={isFocused(row.id)}
+                      isSelected={isSelected(row.id)}
+                      onMouseMove={() => {
+                        props.setSelectedMessageId(row.id);
+                      }}
                       index={() => normalizeIndex(i())}
                       orderedMessages={props.orderedMessages}
                       threadSiblings={viewThreads[

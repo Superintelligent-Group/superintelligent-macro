@@ -153,6 +153,19 @@ export function Channel(props: {
   const [focusedMessageId, setFocusedMessageId] = createSignal<
     string | undefined
   >(undefined);
+  const [selectedMessageId, setSelectedMessageId] = createSignal<
+    string | undefined
+  >(undefined);
+
+  // Sync focusedMessageId to selectedMessageId when DOM focus changes (keyboard navigation)
+  // This ensures keyboard navigation updates the visual selection
+  createEffect(
+    on(focusedMessageId, (focused) => {
+      if (focused) {
+        setSelectedMessageId(focused);
+      }
+    })
+  );
 
   onMount(() => {
     updateActivityOnOpen();
@@ -412,6 +425,8 @@ export function Channel(props: {
             messages={channelStoreData.messages}
             focusedMessageId={focusedMessageId}
             setFocusedMessageId={setFocusedMessageId}
+            selectedMessageId={selectedMessageId}
+            setSelectedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
             latestActivity={latestActivity()}
             orderedMessages={orderedMessages}
