@@ -69,7 +69,6 @@ export function EntityRow<T extends EntityData>(
     null
   );
 
-
   // Compute slot props
   const slotProps = createMemo<SlotProps<T>>(() => ({
     entity: props.entity,

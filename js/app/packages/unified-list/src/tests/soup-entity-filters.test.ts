@@ -41,7 +41,8 @@ type TestEntity = {
 };
 
 /** Cast test entity to EntityData for filter testing */
-const asEntity = (entity: TestEntity): EntityData => entity as unknown as EntityData;
+const asEntity = (entity: TestEntity): EntityData =>
+  entity as unknown as EntityData;
 
 const createDocument = (overrides: Partial<TestEntity> = {}): EntityData =>
   asEntity({

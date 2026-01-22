@@ -151,4 +151,3 @@ export type ExecuteActionPayload = {
 export type ToggleGroupPayload = {
   readonly groupId: string;
 };
-

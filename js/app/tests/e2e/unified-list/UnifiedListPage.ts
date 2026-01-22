@@ -361,7 +361,7 @@ export class UnifiedListPage {
 
   /** Toggle a filter by ID */
   async toggleFilter(filterId: string): Promise<void> {
-    await this.dispatchCommand('unified-list:toggle-filter', { filterId });
+    await this.dispatchCommand('list:toggle-filter', { filterId });
     await this.waitForStateUpdate();
   }
 

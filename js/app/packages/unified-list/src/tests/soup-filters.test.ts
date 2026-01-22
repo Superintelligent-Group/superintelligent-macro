@@ -11,10 +11,7 @@ import type { EntityData } from '@macro-entity';
 import { createListController } from '../core/controller';
 import { createPluginManager } from '../core/pluginManager';
 import { createFilterPlugin } from '../plugins/filterPlugin';
-import {
-  signalFilter,
-  noiseFilter,
-} from '@soup/filters';
+import { signalFilter, noiseFilter } from '@soup/filters';
 import {
   createSoupFilterConfigs,
   documentFilter,

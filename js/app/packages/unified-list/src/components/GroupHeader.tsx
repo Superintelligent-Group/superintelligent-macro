@@ -92,4 +92,3 @@ export function GroupHeader(props: GroupHeaderProps): JSX.Element {
     </div>
   );
 }
-

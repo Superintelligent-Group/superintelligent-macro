@@ -156,10 +156,7 @@ describe('State Management', () => {
     it('handles invalid IDs', () => {
       const initial = createInitialState<TestEntity>();
 
-      const transition = selectRange<TestEntity>(
-        'invalid',
-        'also-invalid'
-      );
+      const transition = selectRange<TestEntity>('invalid', 'also-invalid');
       const result = transition(initial);
 
       expect(result).toBe(initial);

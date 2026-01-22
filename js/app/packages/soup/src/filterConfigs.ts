@@ -139,4 +139,3 @@ export function createSoupFilterConfigs(): FilterConfig<EnhancedEntity>[] {
     },
   ];
 }
-

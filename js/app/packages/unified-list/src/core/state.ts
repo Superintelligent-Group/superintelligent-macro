@@ -428,4 +428,3 @@ export function when<T extends EntityConstraint>(
     return shouldApply ? transition(state) : state;
   };
 }
-

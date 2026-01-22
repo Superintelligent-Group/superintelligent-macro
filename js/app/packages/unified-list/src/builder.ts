@@ -372,4 +372,3 @@ export function createUnifiedList<
 
   return builder;
 }
-

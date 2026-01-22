@@ -54,7 +54,9 @@ function EmailTitle(props: {
   searchHighlightName?: string | null;
 }): JSX.Element {
   const userEmail = useEmail();
-  const [participantNames, setParticipantNames] = createSignal<Map<string, string>>(new Map());
+  const [participantNames, setParticipantNames] = createSignal<
+    Map<string, string>
+  >(new Map());
 
   const filteredParticipants = createMemo(() => {
     const me = userEmail();
@@ -64,9 +66,11 @@ function EmailTitle(props: {
     ) {
       return null; // Signal to use 'me'
     }
-    return props.entity.participants?.filter(
-      (p) => p.email && (!me || p.email !== me)
-    ) ?? [];
+    return (
+      props.entity.participants?.filter(
+        (p) => p.email && (!me || p.email !== me)
+      ) ?? []
+    );
   });
 
   const combinedParticipantNames = createMemo(() => {

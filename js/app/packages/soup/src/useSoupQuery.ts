@@ -90,10 +90,7 @@ export type SoupQueryResult = {
 };
 
 // Type filter ID to predicate mapping
-const TYPE_FILTER_MAP = new Map<
-  string,
-  (entity: EnhancedEntity) => boolean
->([
+const TYPE_FILTER_MAP = new Map<string, (entity: EnhancedEntity) => boolean>([
   ['document', documentFilter],
   ['task', taskFilter],
   ['email', emailFilter],
