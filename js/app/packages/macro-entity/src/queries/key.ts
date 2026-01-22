@@ -100,6 +100,14 @@ export const queryKeys = {
       'github-release',
       { ...args },
     ],
+    // Combined all entities
+    githubAllEntities: [...BASE_AUTH, 'github-all-entities'],
+    // Entities for a specific repo
+    githubRepoEntities: (args: { repoFullName: string }) => [
+      ...BASE_AUTH,
+      'github-repo-entities',
+      { ...args },
+    ],
   },
   channel: (args: KeyOptions) => [...BASE_ENTITY.channel, { ...args }],
   chat: (args?: InfiniteKeyOptions) => [

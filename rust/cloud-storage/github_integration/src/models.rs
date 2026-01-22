@@ -300,3 +300,99 @@ impl From<GitHubLink> for GitHubLinkInfo {
         }
     }
 }
+
+// ============ GitHub Search API Models ============
+
+/// GitHub search response wrapper
+#[derive(Debug, Deserialize)]
+pub struct GitHubSearchResponse<T> {
+    /// Total count of results
+    pub total_count: u64,
+    /// Whether the results are incomplete
+    pub incomplete_results: bool,
+    /// The search results
+    pub items: Vec<T>,
+}
+
+/// GitHub repository search result
+#[derive(Debug, Deserialize)]
+pub struct GitHubRepoSearchResult {
+    /// GitHub repository ID (numeric)
+    pub id: i64,
+    /// Repository name (without owner)
+    pub name: String,
+    /// Full repository name (owner/repo)
+    pub full_name: String,
+    /// Repository owner
+    pub owner: GitHubOwner,
+    /// Repository description
+    pub description: Option<String>,
+    /// Whether the repository is private
+    pub private: bool,
+    /// HTML URL to the repository
+    pub html_url: String,
+    /// When the repository was last updated
+    pub updated_at: String,
+}
+
+/// GitHub issue/PR search result
+#[derive(Debug, Deserialize)]
+pub struct GitHubIssueSearchResult {
+    /// Issue/PR number
+    pub number: u64,
+    /// Issue/PR title
+    pub title: String,
+    /// Issue/PR state (open, closed)
+    pub state: String,
+    /// HTML URL
+    pub html_url: String,
+    /// Author
+    pub user: GitHubUser,
+    /// When created
+    pub created_at: String,
+    /// When last updated
+    pub updated_at: String,
+    /// Labels
+    #[serde(default)]
+    pub labels: Vec<GitHubLabel>,
+    /// Pull request info (present if this is a PR)
+    pub pull_request: Option<GitHubPullRequestUrls>,
+    /// Whether this PR is a draft (only present for PRs)
+    #[serde(default)]
+    pub draft: bool,
+    /// Repository URL (used to extract repo info)
+    pub repository_url: String,
+}
+
+/// GitHub PR URLs in search results
+#[derive(Debug, Deserialize)]
+pub struct GitHubPullRequestUrls {
+    /// URL to the PR
+    pub url: String,
+    /// HTML URL
+    pub html_url: String,
+    /// Merged at timestamp (if merged)
+    pub merged_at: Option<String>,
+}
+
+/// GitHub commit search result
+#[derive(Debug, Deserialize)]
+pub struct GitHubCommitSearchResult {
+    /// Commit SHA
+    pub sha: String,
+    /// HTML URL to the commit
+    pub html_url: String,
+    /// Commit details
+    pub commit: GitHubCommitDetails,
+    /// Author user info (may be null for non-GitHub users)
+    pub author: Option<GitHubUser>,
+    /// Repository info
+    pub repository: GitHubSearchCommitRepo,
+}
+
+/// Repository info in commit search results
+#[derive(Debug, Deserialize)]
+pub struct GitHubSearchCommitRepo {
+    /// Full repository name (owner/repo)
+    pub full_name: String,
+}

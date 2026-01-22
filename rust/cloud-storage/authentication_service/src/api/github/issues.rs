@@ -20,6 +20,8 @@ pub struct GetGitHubIssuesQuery {
     pub per_page: u8,
     #[serde(default)]
     pub state: Option<String>,
+    #[serde(default)]
+    pub page: Option<u32>,
 }
 
 fn default_per_page() -> u8 {
@@ -109,6 +111,7 @@ pub async fn list_handler(
             &repo,
             query.state.as_deref(),
             Some(query.per_page),
+            query.page,
         )
         .await?;
 

@@ -24,13 +24,22 @@ export {
   createGitHubBranchQuery,
   createGitHubReleasesQuery,
   createGitHubReleaseQuery,
+  createGitHubRepoEntitiesQuery,
+  fetchRepoEntities,
+  searchGitHub,
+  searchResultsToEntities,
+  useUserId,
   type GitHubRepoEntity,
   type GitHubPullRequestEntity,
   type GitHubIssueEntity,
   type GitHubCommitEntity,
   type GitHubBranchEntity,
   type GitHubReleaseEntity,
+  type GitHubCombinedEntity,
+  type GitHubEntityType,
+  type GitHubSearchResponse,
 } from './queries/auth';
+export * from './cache/github';
 export { createChannelsQuery } from './queries/channel';
 export { useQueryClient } from './queries/client';
 export {

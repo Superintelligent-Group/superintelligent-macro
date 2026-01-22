@@ -29,9 +29,24 @@ import TagIcon from '@icon/regular/tag.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import type { EntityData, WithSearch } from '@macro-entity';
 import {
+  cacheEntities,
   createGitHubReposQuery,
   createUnifiedSearchInfiniteQuery,
+  fetchRepoEntities,
+  getAllCachedEntities,
+  getFetchedRepos,
+  markRepoFetched,
+  markSyncCompleted,
+  markSyncStarted,
+  needsFullSync,
+  searchGitHub,
+  searchResultsToEntities,
+  useUserId,
+  validateCacheForUser,
+  type CachedGitHubEntity,
   type EmailEntity,
+  type GitHubCombinedEntity,
+  type GitHubRepoEntity,
   useEmails,
 } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
@@ -322,7 +337,7 @@ export type MentionBins =
   | 'users'
   | 'dates'
   | 'emails'
-  | 'githubRepos';
+  | 'github';
 
 /** View all mode type */
 type ViewAllMode = MentionBins | null;
@@ -544,18 +559,207 @@ function MentionsMenuInner(props: {
   const emailUnifiedSearchInfiniteQuery =
     createUnifiedSearchInfiniteQuery(args);
 
-  // GitHub repos - conditional fetching based on search term
-  const shouldFetchGitHub = createMemo(() => {
-    const term = searchTerm();
-    return term.startsWith('gh:') || term.length >= 3;
-  });
+  // ============ GitHub Integration with IndexedDB Cache ============
 
+  // Get current user ID for cache validation
+  const userId = useUserId();
+
+  // Fetch repos query (still needed for repo list)
   const gitHubReposQuery = createGitHubReposQuery();
 
+  // Cache state
+  const [cachedEntities, setCachedEntities] = createSignal<CachedGitHubEntity[]>([]);
+  const [searchResults, setSearchResults] = createSignal<GitHubCombinedEntity[]>([]);
+  const [_isSearching, setIsSearching] = createSignal(false);
+
+  // Track background fetch state (using regular variables to avoid triggering effects)
+  let isFetchingBackground = false;
+  let lastSearchQuery = '';
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Load cache on mount and validate user
+  createEffect(() => {
+    const currentUserId = userId();
+    if (!currentUserId) return;
+
+    const loadCache = async () => {
+      // Validate cache belongs to current user (wipes if different user)
+      await validateCacheForUser(currentUserId);
+
+      // Load all cached entities
+      const cached = await getAllCachedEntities();
+      setCachedEntities(cached);
+    };
+
+    loadCache();
+  });
+
+  // Background sync: fetch all repos and their entities when cache is stale
+  createEffect(() => {
+    const repos = gitHubReposQuery.data;
+    if (!repos || repos.length === 0) return;
+    if (isFetchingBackground) return;
+
+    const runBackgroundSync = async () => {
+      // Check if we need a full sync
+      const shouldSync = await needsFullSync();
+      if (!shouldSync) {
+        // Just refresh stale individual items in background with jitter
+        refreshStaleEntities();
+        return;
+      }
+
+      isFetchingBackground = true;
+      await markSyncStarted();
+
+      // Get already fetched repos to avoid re-fetching
+      const alreadyFetched = new Set(await getFetchedRepos());
+
+      for (const repo of repos) {
+        if (alreadyFetched.has(repo.fullName)) continue;
+
+        const [owner, name] = repo.fullName.split('/');
+        if (!owner || !name) continue;
+
+        try {
+          const entities = await fetchRepoEntities(owner, name);
+
+          // Cache the entities
+          if (entities.length > 0) {
+            await cacheEntities(entities);
+
+            // Update local state with new entities
+            setCachedEntities((prev) => {
+              const existingIds = new Set(prev.map((e) => e.id));
+              const newEntities = entities.filter((e) => !existingIds.has(e.id));
+              return [
+                ...prev,
+                ...newEntities.map((e) => ({
+                  ...e,
+                  lastRefreshed: Date.now(),
+                  jitter: Math.random() * 2 * 60 * 60 * 1000,
+                })),
+              ];
+            });
+          }
+
+          await markRepoFetched(repo.fullName);
+        } catch (e) {
+          console.warn(`[GitHub Cache] Failed to fetch entities for ${repo.fullName}:`, e);
+        }
+
+        // Small delay between repos to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      await markSyncCompleted();
+      isFetchingBackground = false;
+    };
+
+    runBackgroundSync();
+  });
+
+  // Refresh stale entities with jittered timing
+  const refreshStaleEntities = async () => {
+    const repos = gitHubReposQuery.data;
+    if (!repos) return;
+
+    // Get a few stale repos to refresh (not all at once)
+    const alreadyFetched = await getFetchedRepos();
+    const staleRepos = alreadyFetched.slice(0, 3); // Refresh up to 3 repos
+
+    for (const repoFullName of staleRepos) {
+      // Add random jitter (0-30 seconds) to spread out requests
+      const jitter = Math.random() * 30 * 1000;
+      await new Promise((resolve) => setTimeout(resolve, jitter));
+
+      const [owner, name] = repoFullName.split('/');
+      if (!owner || !name) continue;
+
+      try {
+        const entities = await fetchRepoEntities(owner, name);
+        if (entities.length > 0) {
+          await cacheEntities(entities);
+
+          // Update local state
+          setCachedEntities((prev) => {
+            const entityMap = new Map(prev.map((e) => [e.id, e]));
+            for (const entity of entities) {
+              entityMap.set(entity.id, {
+                ...entity,
+                lastRefreshed: Date.now(),
+                jitter: Math.random() * 2 * 60 * 60 * 1000,
+              });
+            }
+            return Array.from(entityMap.values());
+          });
+        }
+      } catch (e) {
+        console.warn(`[GitHub Cache] Failed to refresh ${repoFullName}:`, e);
+      }
+    }
+  };
+
+  // Debounced search API call (100ms debounce, length >= 3)
+  createEffect(() => {
+    const term = searchTerm();
+    const searchText = term.startsWith('gh:') ? term.slice(3) : term;
+
+    // Clear previous timer
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+
+    // Don't search if too short
+    if (searchText.length < 3) {
+      setSearchResults([]);
+      lastSearchQuery = '';
+      return;
+    }
+
+    // Don't re-search same query
+    if (searchText === lastSearchQuery) return;
+
+    // Debounce the search
+    searchDebounceTimer = setTimeout(async () => {
+      lastSearchQuery = searchText;
+      setIsSearching(true);
+
+      try {
+        const results = await searchGitHub(searchText, 10);
+        const entities = searchResultsToEntities(results);
+        setSearchResults(entities);
+
+        // Also cache search results for future use
+        if (entities.length > 0) {
+          await cacheEntities(entities);
+        }
+      } catch (e) {
+        console.warn('[GitHub Search] Search failed:', e);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 100);
+  });
+
+  // Convert repos to Entity format (for repo-only results)
   const gitHubRepos = createMemo((): Entity<'githubRepo'>[] => {
-    if (!shouldFetchGitHub()) return [];
     if (gitHubReposQuery.status === 'success') {
-      return gitHubReposQuery.data.map(entityMapper('githubRepo'));
+      return gitHubReposQuery.data.map((repo: GitHubRepoEntity) => ({
+        kind: 'githubRepo' as const,
+        id: repo.id,
+        data: {
+          id: repo.id,
+          name: repo.name,
+          fullName: repo.fullName,
+          owner: repo.owner,
+          avatarUrl: repo.avatarUrl,
+          description: repo.description,
+          url: repo.url,
+        },
+      }));
     }
     if (
       gitHubReposQuery.error instanceof Error &&
@@ -564,6 +768,39 @@ function MentionsMenuInner(props: {
       return [];
     }
     return [];
+  });
+
+  // Convert cached + search entities to Entity format
+  const gitHubOtherEntities = createMemo((): Entity<'githubEntity'>[] => {
+    // Merge cached entities with search results, dedupe by ID
+    const entityMap = new Map<string, GitHubCombinedEntity>();
+
+    // Add cached entities first
+    for (const entity of cachedEntities()) {
+      if (entity.entityType !== 'repo') {
+        entityMap.set(entity.id, entity);
+      }
+    }
+
+    // Add search results (may override cached with fresher data)
+    for (const entity of searchResults()) {
+      if (entity.entityType !== 'repo') {
+        entityMap.set(entity.id, entity);
+      }
+    }
+
+    return Array.from(entityMap.values()).map((entity) => ({
+      kind: 'githubEntity' as const,
+      id: entity.id,
+      data: {
+        id: entity.id,
+        entityType: entity.entityType,
+        repoFullName: entity.repoFullName,
+        displayText: entity.displayText,
+        title: entity.title,
+        url: entity.url,
+      },
+    }));
   });
 
   const foundEmails = createMemo((): Entity<'email'>[] => {
@@ -773,15 +1010,17 @@ function MentionsMenuInner(props: {
     return merge(mail, otherMail);
   });
 
-  const gitHubRepoSearch = createFreshSearch<Entity<'githubRepo'>>(
+  const gitHubSearch = createFreshSearch<Entity<'githubRepo'> | Entity<'githubEntity'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText
   );
 
-  const filteredGitHubRepos = createMemo(() => {
+  const filteredGitHub = createMemo(() => {
     const term = searchTerm();
     const searchText = term.startsWith('gh:') ? term.slice(3) : term;
-    return gitHubRepoSearch(gitHubRepos(), searchText).map(
+    // Combine repos and other entities for unified search
+    const allGitHubItems = [...gitHubRepos(), ...gitHubOtherEntities()];
+    return gitHubSearch(allGitHubItems, searchText).map(
       (result) => result.item
     );
   });
@@ -802,7 +1041,7 @@ function MentionsMenuInner(props: {
     items: filteredItems().length,
     dates: dateSuggestions().length,
     emails: filteredEmails().length,
-    githubRepos: filteredGitHubRepos().length,
+    github: filteredGitHub().length,
   }));
 
   // The bins is the limited and rounded count for each bucket
@@ -822,8 +1061,8 @@ function MentionsMenuInner(props: {
           return dateSuggestions();
         case 'emails':
           return filteredEmails();
-        case 'githubRepos':
-          return filteredGitHubRepos();
+        case 'github':
+          return filteredGitHub();
         default:
           return [];
       }
@@ -835,7 +1074,7 @@ function MentionsMenuInner(props: {
       ...filteredItems().slice(0, bins().items),
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
-      ...filteredGitHubRepos().slice(0, bins().githubRepos),
+      ...filteredGitHub().slice(0, bins().github),
     ];
   });
 
@@ -853,7 +1092,7 @@ function MentionsMenuInner(props: {
     if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
-    const { users, items, dates, emails, githubRepos } = bins();
+    const { users, items, dates, emails, github } = bins();
 
     let currentIndex = 0;
 
@@ -885,9 +1124,9 @@ function MentionsMenuInner(props: {
       currentIndex += emails;
     }
 
-    if (githubRepos > 0) {
-      if (index < currentIndex + githubRepos) {
-        return 'githubRepos';
+    if (github > 0) {
+      if (index < currentIndex + github) {
+        return 'github';
       }
     }
 
@@ -1104,7 +1343,7 @@ function MentionsMenuInner(props: {
           items: 'Documents & Channels',
           dates: 'Dates',
           emails: 'Emails',
-          githubRepos: 'GitHub Repositories',
+          github: 'GitHub',
         }[currentViewAllMode];
 
         return (
@@ -1167,14 +1406,14 @@ function MentionsMenuInner(props: {
     const docs = filteredItems().slice(0, bins().items);
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
-    const githubReposList = filteredGitHubRepos().slice(0, bins().githubRepos);
+    const githubList = filteredGitHub().slice(0, bins().github);
     const totalLength = () =>
       users.length +
       docs.length +
       contacts.length +
       dates.length +
       emailList.length +
-      githubReposList.length;
+      githubList.length;
 
     const RenderOptions = () => {
       const options = [];
@@ -1288,17 +1527,17 @@ function MentionsMenuInner(props: {
         );
       }
 
-      if (githubReposList.length > 0) {
+      if (githubList.length > 0) {
         options.push(
           <ItemBin
-            label="GitHub Repositories"
-            binType="githubRepos"
-            totalCount={filteredGitHubRepos().length}
-            showingCount={githubReposList.length}
+            label="GitHub"
+            binType="github"
+            totalCount={filteredGitHub().length}
+            showingCount={githubList.length}
             onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'githubRepos'}
+            isSelected={selectedCategory() === 'github'}
           >
-            <For each={githubReposList}>
+            <For each={githubList}>
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}

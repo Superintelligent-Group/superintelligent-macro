@@ -12,10 +12,6 @@ import {
   GitHubMentionNode,
   type GitHubEntityType,
 } from '../nodes/GitHubMentionNode';
-import {
-  getFullNameFromRepoId,
-  GitHubRepoMentionNode,
-} from '../nodes/GitHubRepoMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 
@@ -324,65 +320,7 @@ export const E_GROUP_MENTION: ElementTransformer = {
   },
 };
 
-// Internal GitHub Repo Mentions
-export const I_GITHUB_REPO_MENTION: TextMatchTransformer = {
-  dependencies: [GitHubRepoMentionNode],
-  type: 'text-match',
-  regExp: /<m-github-repo-mention>(.*?)<\/m-github-repo-mention>/,
-  importRegExp: /<m-github-repo-mention>(.*?)<\/m-github-repo-mention>/,
-  export: (node) => {
-    if (!(node instanceof GitHubRepoMentionNode)) return null;
-    const data = JSON.stringify({
-      repoId: node.getRepoId(),
-      mentionUuid: node.getMentionUuid(),
-    });
-    return `<m-github-repo-mention>${data}</m-github-repo-mention>`;
-  },
-  replace: (node: TextNode, match: RegExpMatchArray) => {
-    try {
-      const data = JSON.parse(match[1]);
-      if (!('repoId' in data)) throw new Error('Missing field repoId');
-      const gitHubRepoMentionNode = new GitHubRepoMentionNode(
-        data.repoId,
-        data.mentionUuid
-      );
-      node.replace(gitHubRepoMentionNode);
-    } catch (e) {
-      console.error('Error in I_GITHUB_REPO_MENTION replace:', e);
-    }
-  },
-};
-
-// External GitHub Repo Mentions
-export const E_GITHUB_REPO_MENTION: ElementTransformer = {
-  dependencies: [GitHubRepoMentionNode],
-  type: 'element',
-  regExp: /$^/,
-  export: (node) => {
-    if (!(node instanceof GitHubRepoMentionNode)) return null;
-
-    const repoId = node.getRepoId();
-    if (!repoId) {
-      return null;
-    }
-
-    const fullName = getFullNameFromRepoId(repoId);
-    const url = `https://github.com/${fullName}`;
-
-    // For external representation, create a markdown link
-    return `[${fullName}](${url})`;
-  },
-  replace: (
-    _parentNode: ElementNode,
-    _children: Array<LexicalNode>,
-    _match: Array<string>,
-    _isImport: boolean
-  ) => {
-    return false;
-  },
-};
-
-// Internal GitHub Mentions (PR, Issue, Commit, Branch, Release)
+// Internal GitHub Mentions (Repo, PR, Issue, Commit, Branch, Release)
 export const I_GITHUB_MENTION: TextMatchTransformer = {
   dependencies: [GitHubMentionNode],
   type: 'text-match',
@@ -419,10 +357,12 @@ export const I_GITHUB_MENTION: TextMatchTransformer = {
  * Builds a GitHub URL from entity type and ID
  */
 function buildGitHubUrl(entityId: string, entityType: GitHubEntityType): string {
-  const repoPath = getRepoFromGitHubId(entityId);
+  const repoPath = getRepoFromGitHubId(entityId, entityType);
   const displayText = getDisplayTextFromGitHubId(entityId, entityType);
 
   switch (entityType) {
+    case 'repo':
+      return `https://github.com/${repoPath}`;
     case 'pr':
       return `https://github.com/${repoPath}/pull/${displayText.replace('#', '')}`;
     case 'issue':
@@ -436,7 +376,7 @@ function buildGitHubUrl(entityId: string, entityType: GitHubEntityType): string 
   }
 }
 
-// External GitHub Mentions (PR, Issue, Commit, Branch, Release)
+// External GitHub Mentions (Repo, PR, Issue, Commit, Branch, Release)
 export const E_GITHUB_MENTION: ElementTransformer = {
   dependencies: [GitHubMentionNode],
   type: 'element',
@@ -451,8 +391,13 @@ export const E_GITHUB_MENTION: ElementTransformer = {
     }
 
     const displayText = getDisplayTextFromGitHubId(entityId, entityType);
-    const repoPath = getRepoFromGitHubId(entityId);
+    const repoPath = getRepoFromGitHubId(entityId, entityType);
     const url = buildGitHubUrl(entityId, entityType);
+
+    // For repos, just show the full name
+    if (entityType === 'repo') {
+      return `[${repoPath}](${url})`;
+    }
 
     // For external representation, create a markdown link with repo context
     return `[${repoPath}${displayText.startsWith('#') ? '' : '@'}${displayText}](${url})`;

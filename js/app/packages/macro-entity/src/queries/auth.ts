@@ -352,6 +352,48 @@ export function createGitHubRepoQuery(repoId: string) {
   }));
 }
 
+// ============ Pagination Helper ============
+
+/**
+ * Fetches all pages from a GitHub API endpoint.
+ * Keeps fetching until an empty page or fewer results than per_page is returned.
+ */
+async function fetchAllPages<T>(
+  baseUrl: string,
+  baseParams: URLSearchParams
+): Promise<T[]> {
+  const perPage = 100;
+  const allResults: T[] = [];
+  let page = 1;
+
+  while (true) {
+    const params = new URLSearchParams(baseParams);
+    params.set('per_page', perPage.toString());
+    params.set('page', page.toString());
+
+    const url = `${baseUrl}?${params}`;
+    const response = await platformFetch(url, { credentials: 'include' });
+
+    if (!response.ok) {
+      if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
+      if (response.status === 404) throw new Error('REPO_NOT_FOUND');
+      throw new Error(`Failed to fetch: ${response.statusText}`);
+    }
+
+    const results = (await response.json()) as T[];
+    allResults.push(...results);
+
+    // Stop if we got fewer results than requested (last page)
+    if (results.length < perPage) {
+      break;
+    }
+
+    page++;
+  }
+
+  return allResults;
+}
+
 // ============ Pull Requests ============
 
 const fetchGitHubPullRequests = async (
@@ -359,20 +401,11 @@ const fetchGitHubPullRequests = async (
   repo: string,
   state?: string
 ) => {
+  const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`;
   const params = new URLSearchParams();
   if (state) params.set('state', state);
-  params.set('per_page', '30');
 
-  const url = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls${params.toString() ? `?${params}` : ''}`;
-  const response = await platformFetch(url, { credentials: 'include' });
-
-  if (!response.ok) {
-    if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
-    if (response.status === 404) throw new Error('REPO_NOT_FOUND');
-    throw new Error(`Failed to fetch GitHub PRs: ${response.statusText}`);
-  }
-
-  return (await response.json()) as GitHubPullRequestEntity[];
+  return fetchAllPages<GitHubPullRequestEntity>(baseUrl, params);
 };
 
 const fetchGitHubPullRequest = async (
@@ -470,20 +503,11 @@ const fetchGitHubIssues = async (
   repo: string,
   state?: string
 ) => {
+  const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`;
   const params = new URLSearchParams();
   if (state) params.set('state', state);
-  params.set('per_page', '30');
 
-  const url = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues${params.toString() ? `?${params}` : ''}`;
-  const response = await platformFetch(url, { credentials: 'include' });
-
-  if (!response.ok) {
-    if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
-    if (response.status === 404) throw new Error('REPO_NOT_FOUND');
-    throw new Error(`Failed to fetch GitHub issues: ${response.statusText}`);
-  }
-
-  return (await response.json()) as GitHubIssueEntity[];
+  return fetchAllPages<GitHubIssueEntity>(baseUrl, params);
 };
 
 const fetchGitHubIssue = async (
@@ -578,20 +602,11 @@ export function createGitHubIssueQuery(issueId: string) {
 // ============ Commits ============
 
 const fetchGitHubCommits = async (owner: string, repo: string, sha?: string) => {
+  const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`;
   const params = new URLSearchParams();
   if (sha) params.set('sha', sha);
-  params.set('per_page', '30');
 
-  const url = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits${params.toString() ? `?${params}` : ''}`;
-  const response = await platformFetch(url, { credentials: 'include' });
-
-  if (!response.ok) {
-    if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
-    if (response.status === 404) throw new Error('REPO_NOT_FOUND');
-    throw new Error(`Failed to fetch GitHub commits: ${response.statusText}`);
-  }
-
-  return (await response.json()) as GitHubCommitEntity[];
+  return fetchAllPages<GitHubCommitEntity>(baseUrl, params);
 };
 
 const fetchGitHubCommit = async (
@@ -683,19 +698,10 @@ export function createGitHubCommitQuery(commitId: string) {
 // ============ Branches ============
 
 const fetchGitHubBranches = async (owner: string, repo: string) => {
+  const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`;
   const params = new URLSearchParams();
-  params.set('per_page', '30');
 
-  const url = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?${params}`;
-  const response = await platformFetch(url, { credentials: 'include' });
-
-  if (!response.ok) {
-    if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
-    if (response.status === 404) throw new Error('REPO_NOT_FOUND');
-    throw new Error(`Failed to fetch GitHub branches: ${response.statusText}`);
-  }
-
-  return (await response.json()) as GitHubBranchEntity[];
+  return fetchAllPages<GitHubBranchEntity>(baseUrl, params);
 };
 
 const fetchGitHubBranch = async (
@@ -784,19 +790,10 @@ export function createGitHubBranchQuery(branchId: string) {
 // ============ Releases ============
 
 const fetchGitHubReleases = async (owner: string, repo: string) => {
+  const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`;
   const params = new URLSearchParams();
-  params.set('per_page', '30');
 
-  const url = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases?${params}`;
-  const response = await platformFetch(url, { credentials: 'include' });
-
-  if (!response.ok) {
-    if (response.status === 403) throw new Error('GITHUB_NOT_LINKED');
-    if (response.status === 404) throw new Error('REPO_NOT_FOUND');
-    throw new Error(`Failed to fetch GitHub releases: ${response.statusText}`);
-  }
-
-  return (await response.json()) as GitHubReleaseEntity[];
+  return fetchAllPages<GitHubReleaseEntity>(baseUrl, params);
 };
 
 const fetchGitHubRelease = async (
@@ -883,4 +880,282 @@ export function createGitHubReleaseQuery(releaseId: string) {
       return failureCount < 2;
     },
   }));
+}
+
+// ============ Combined GitHub Entities Search ============
+
+export type GitHubEntityType = 'repo' | 'pr' | 'issue' | 'commit' | 'branch' | 'release';
+
+export interface GitHubCombinedEntity {
+  id: string;
+  entityType: GitHubEntityType;
+  repoFullName: string;
+  displayText: string;
+  title?: string;
+  url: string;
+  /** Avatar URL for repos, or owner avatar for other entities */
+  avatarUrl?: string;
+}
+
+/**
+ * Fetches entities for a single repo (PRs, issues, commits, branches, releases).
+ */
+export async function fetchRepoEntities(
+  owner: string,
+  name: string
+): Promise<GitHubCombinedEntity[]> {
+  const results: GitHubCombinedEntity[] = [];
+
+  try {
+    const [prs, issues, commits, branches, releases] = await Promise.allSettled([
+      fetchGitHubPullRequests(owner, name, 'all'),
+      fetchGitHubIssues(owner, name, 'all'),
+      fetchGitHubCommits(owner, name),
+      fetchGitHubBranches(owner, name),
+      fetchGitHubReleases(owner, name),
+    ]);
+
+    // Add PRs
+    if (prs.status === 'fulfilled') {
+      for (const pr of prs.value) {
+        results.push({
+          id: pr.id,
+          entityType: 'pr',
+          repoFullName: pr.repoFullName,
+          displayText: `#${pr.number}`,
+          title: pr.title,
+          url: pr.url,
+        });
+      }
+    }
+
+    // Add Issues
+    if (issues.status === 'fulfilled') {
+      for (const issue of issues.value) {
+        results.push({
+          id: issue.id,
+          entityType: 'issue',
+          repoFullName: issue.repoFullName,
+          displayText: `#${issue.number}`,
+          title: issue.title,
+          url: issue.url,
+        });
+      }
+    }
+
+    // Add Commits
+    if (commits.status === 'fulfilled') {
+      for (const commit of commits.value) {
+        results.push({
+          id: commit.id,
+          entityType: 'commit',
+          repoFullName: commit.repoFullName,
+          displayText: commit.shortSha,
+          title: commit.message.split('\n')[0],
+          url: commit.url,
+        });
+      }
+    }
+
+    // Add Branches
+    if (branches.status === 'fulfilled') {
+      for (const branch of branches.value) {
+        results.push({
+          id: branch.id,
+          entityType: 'branch',
+          repoFullName: branch.repoFullName,
+          displayText: branch.name,
+          url: branch.url,
+        });
+      }
+    }
+
+    // Add Releases
+    if (releases.status === 'fulfilled') {
+      for (const release of releases.value) {
+        results.push({
+          id: release.id,
+          entityType: 'release',
+          repoFullName: release.repoFullName,
+          displayText: release.tagName,
+          title: release.name ?? undefined,
+          url: release.url,
+        });
+      }
+    }
+  } catch {
+    // Ignore errors for individual repos
+  }
+
+  return results;
+}
+
+/**
+ * Query hook for fetching entities for a specific repo.
+ * Used to progressively load entities in the background.
+ */
+export function createGitHubRepoEntitiesQuery(repoFullName: string) {
+  const [owner, name] = repoFullName.split('/');
+
+  return useQuery(() => ({
+    queryKey: queryKeys.auth.githubRepoEntities({ repoFullName }),
+    queryFn: async () => {
+      if (!owner || !name) return [];
+      return fetchRepoEntities(owner, name);
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!owner && !!name,
+    retry: (failureCount, error) => {
+      if (
+        error instanceof Error &&
+        (error.message === 'GITHUB_NOT_LINKED' ||
+          error.message === 'REPO_NOT_FOUND')
+      ) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+  }));
+}
+
+// ============ GitHub Search API ============
+
+export interface GitHubSearchResponse {
+  repos: GitHubSearchRepoResult[];
+  issues: GitHubSearchIssueResult[];
+  pullRequests: GitHubSearchPullRequestResult[];
+  commits: GitHubSearchCommitResult[];
+}
+
+export interface GitHubSearchRepoResult {
+  id: string;
+  name: string;
+  fullName: string;
+  owner: string;
+  avatarUrl: string;
+  description: string | null;
+  private: boolean;
+  url: string;
+}
+
+export interface GitHubSearchIssueResult {
+  id: string;
+  number: number;
+  title: string;
+  state: string;
+  url: string;
+  author: string;
+  authorAvatarUrl: string;
+  repoFullName: string;
+}
+
+export interface GitHubSearchPullRequestResult {
+  id: string;
+  number: number;
+  title: string;
+  state: string;
+  draft: boolean;
+  merged: boolean;
+  url: string;
+  author: string;
+  authorAvatarUrl: string;
+  repoFullName: string;
+}
+
+export interface GitHubSearchCommitResult {
+  id: string;
+  sha: string;
+  shortSha: string;
+  message: string;
+  url: string;
+  authorName: string;
+  authorLogin: string | null;
+  authorAvatarUrl: string | null;
+  repoFullName: string;
+}
+
+/**
+ * Searches GitHub for entities matching the query.
+ * Hits the backend /github/search endpoint which queries multiple GitHub Search APIs.
+ */
+export async function searchGitHub(
+  query: string,
+  perCategory = 10
+): Promise<GitHubSearchResponse> {
+  const params = new URLSearchParams({
+    q: query,
+    per_category: perCategory.toString(),
+  });
+
+  const url = `${authHost}/github/search?${params}`;
+  const response = await platformFetch(url, { credentials: 'include' });
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('GITHUB_NOT_LINKED');
+    }
+    throw new Error(`Failed to search GitHub: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Converts GitHub search results to GitHubCombinedEntity format for unified handling.
+ */
+export function searchResultsToEntities(
+  results: GitHubSearchResponse
+): GitHubCombinedEntity[] {
+  const entities: GitHubCombinedEntity[] = [];
+
+  // Add repos
+  for (const repo of results.repos) {
+    entities.push({
+      id: repo.id,
+      entityType: 'repo',
+      repoFullName: repo.fullName,
+      displayText: repo.fullName,
+      url: repo.url,
+      avatarUrl: repo.avatarUrl,
+    });
+  }
+
+  // Add issues
+  for (const issue of results.issues) {
+    entities.push({
+      id: issue.id,
+      entityType: 'issue',
+      repoFullName: issue.repoFullName,
+      displayText: `#${issue.number}`,
+      title: issue.title,
+      url: issue.url,
+    });
+  }
+
+  // Add PRs
+  for (const pr of results.pullRequests) {
+    entities.push({
+      id: pr.id,
+      entityType: 'pr',
+      repoFullName: pr.repoFullName,
+      displayText: `#${pr.number}`,
+      title: pr.title,
+      url: pr.url,
+    });
+  }
+
+  // Add commits
+  for (const commit of results.commits) {
+    entities.push({
+      id: commit.id,
+      entityType: 'commit',
+      repoFullName: commit.repoFullName,
+      displayText: commit.shortSha,
+      title: commit.message,
+      url: commit.url,
+    });
+  }
+
+  return entities;
 }

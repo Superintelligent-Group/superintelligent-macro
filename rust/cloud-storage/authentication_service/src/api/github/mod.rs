@@ -10,6 +10,7 @@ pub mod list;
 pub mod pulls;
 pub mod releases;
 pub mod repos;
+pub mod search;
 
 use axum::{
     Router,
@@ -28,6 +29,7 @@ pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
         .route("/credentials", get(get_credentials::handler))
         .route("/links", get(list::handler))
         .route("/link", delete(disconnect::handler))
+        .route("/search", get(search::handler))
         .route("/repos", get(repos::handler))
         .route("/repos/:owner/:repo", get(get_repo::handler))
         // Pull requests

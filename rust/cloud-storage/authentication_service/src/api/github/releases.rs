@@ -18,6 +18,8 @@ const DEFAULT_RELEASES_PER_PAGE: u8 = 30;
 pub struct GetGitHubReleasesQuery {
     #[serde(default = "default_per_page")]
     pub per_page: u8,
+    #[serde(default)]
+    pub page: Option<u32>,
 }
 
 fn default_per_page() -> u8 {
@@ -97,6 +99,7 @@ pub async fn list_handler(
             &owner,
             &repo,
             Some(query.per_page),
+            query.page,
         )
         .await?;
 

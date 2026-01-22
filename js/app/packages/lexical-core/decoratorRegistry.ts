@@ -46,10 +46,6 @@ import type {
   WatermarkNode,
 } from './nodes/WatermarkNode';
 import type {
-  GitHubRepoMentionDecoratorProps,
-  GitHubRepoMentionNode,
-} from './nodes/GitHubRepoMentionNode';
-import type {
   GitHubMentionDecoratorProps,
   GitHubMentionNode,
 } from './nodes/GitHubMentionNode';
@@ -110,10 +106,6 @@ export interface NodeDecoratorMap {
   WatermarkNode: {
     klass: typeof WatermarkNode;
     props: WatermarkDecoratorProps;
-  };
-  GitHubRepoMentionNode: {
-    klass: typeof GitHubRepoMentionNode;
-    props: GitHubRepoMentionDecoratorProps;
   };
   GitHubMentionNode: {
     klass: typeof GitHubMentionNode;

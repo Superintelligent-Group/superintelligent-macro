@@ -8,7 +8,6 @@ import {
   $createDateMentionNode,
   $createDocumentMentionNode,
   $createGitHubMentionNode,
-  $createGitHubRepoMentionNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
   $createUserMentionNode,
@@ -18,7 +17,6 @@ import {
   $isDateMentionNode,
   $isDocumentMentionNode,
   $isGitHubMentionNode,
-  $isGitHubRepoMentionNode,
   $isGroupMentionNode,
   $isUserMentionNode,
   $removeInlineSearch,
@@ -30,8 +28,6 @@ import {
   DocumentMentionNode,
   type GitHubMentionInfo,
   GitHubMentionNode,
-  type GitHubRepoMentionInfo,
-  GitHubRepoMentionNode,
   type GroupMentionInfo,
   GroupMentionNode,
   InlineSearchNode,
@@ -105,9 +101,6 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
 
-export const INSERT_GITHUB_REPO_MENTION_COMMAND: LexicalCommand<GitHubRepoMentionInfo> =
-  createCommand('INSERT_GITHUB_REPO_MENTION_COMMAND');
-
 export const INSERT_GITHUB_MENTION_COMMAND: LexicalCommand<GitHubMentionInfo> =
   createCommand('INSERT_GITHUB_MENTION_COMMAND');
 
@@ -140,7 +133,6 @@ export function $isMentionNode(
   | ContactMentionNode
   | DateMentionNode
   | GroupMentionNode
-  | GitHubRepoMentionNode
   | GitHubMentionNode {
   return (
     $isUserMentionNode(node) ||
@@ -148,7 +140,6 @@ export function $isMentionNode(
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
     $isGroupMentionNode(node) ||
-    $isGitHubRepoMentionNode(node) ||
     $isGitHubMentionNode(node)
   );
 }
@@ -204,10 +195,10 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemId: node.getGroupAlias(),
       groupAlias: node.getGroupAlias(),
     };
-  } else if ($isGitHubRepoMentionNode(node)) {
+  } else if ($isGitHubMentionNode(node)) {
     return {
       itemType: 'unknown',
-      itemId: node.getRepoId(),
+      itemId: node.getEntityId(),
     };
   } else {
     return {
@@ -291,7 +282,6 @@ function registerMentionsPlugin(
       GroupMentionNode,
       ContactMentionNode,
       DateMentionNode,
-      GitHubRepoMentionNode,
       GitHubMentionNode,
       InlineSearchNode,
     ])
@@ -447,27 +437,6 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const mentionNode = $createGroupMentionNode(payload);
-
-          $insertNodes([mentionNode]);
-          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
-            $wrapNodeInElement(mentionNode, $createParagraphNode);
-          }
-          mentionNode.selectEnd();
-        });
-        return true;
-      },
-      COMMAND_PRIORITY_NORMAL
-    ),
-
-    editor.registerCommand(
-      INSERT_GITHUB_REPO_MENTION_COMMAND,
-      (payload) => {
-        editor.update(() => {
-          const mentionNode = $createGitHubRepoMentionNode(payload);
-
-          if (payload.mentionUuid) {
-            mentionNode.setMentionUuid(payload.mentionUuid);
-          }
 
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
@@ -814,39 +783,6 @@ function registerMentionsPlugin(
                 itemType: 'group',
                 itemId: node.getGroupAlias(),
                 groupAlias: node.getGroupAlias(),
-              });
-            }
-          }
-        }
-        updateMentionsSignal();
-      }
-    ),
-
-    editor.registerMutationListener(
-      GitHubRepoMentionNode,
-      (mutatedNodes, { prevEditorState }) => {
-        for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(
-            prevEditorState,
-            nodeKey
-          ) as GitHubRepoMentionNode;
-          if (node && mutation === 'destroyed') {
-            const mentionUuid = node.getMentionUuid();
-            if (mentionUuid && sourceDocumentId) {
-              untrackMention(sourceDocumentId, mentionUuid);
-            }
-            if (onRemoveMention) {
-              onRemoveMention({
-                itemType: 'unknown',
-                itemId: node.getRepoId(),
-              });
-            }
-          }
-          if (node && mutation === 'created') {
-            if (onCreateMention) {
-              onCreateMention({
-                itemType: 'unknown',
-                itemId: node.getRepoId(),
               });
             }
           }

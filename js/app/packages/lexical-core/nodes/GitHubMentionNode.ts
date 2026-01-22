@@ -19,7 +19,13 @@ const VERSION = 1;
 /**
  * GitHub entity types that can be mentioned
  */
-export type GitHubEntityType = 'pr' | 'issue' | 'commit' | 'branch' | 'release';
+export type GitHubEntityType =
+  | 'repo'
+  | 'pr'
+  | 'issue'
+  | 'commit'
+  | 'branch'
+  | 'release';
 
 /**
  * Extracts the display text from a GitHub entity ID based on its type.
@@ -35,6 +41,10 @@ export function getDisplayTextFromGitHubId(
   const identifier = parts[parts.length - 1] || entityId;
 
   switch (entityType) {
+    case 'repo': {
+      // Format: owner/repo -> owner/repo
+      return identifier;
+    }
     case 'pr':
     case 'issue': {
       // Format: owner/repo#number -> #number
@@ -78,9 +88,17 @@ export function getDisplayTextFromGitHubId(
 /**
  * Gets the repo full name from any GitHub entity ID
  */
-export function getRepoFromGitHubId(entityId: string): string {
+export function getRepoFromGitHubId(
+  entityId: string,
+  entityType?: GitHubEntityType
+): string {
   const parts = entityId.split(':');
   const identifier = parts[parts.length - 1] || entityId;
+
+  // For repos, the identifier IS the full name
+  if (entityType === 'repo') {
+    return identifier;
+  }
 
   // Handle different separators
   let repoPath = identifier;

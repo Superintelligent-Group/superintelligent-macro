@@ -20,6 +20,8 @@ pub struct GetGitHubCommitsQuery {
     pub per_page: u8,
     #[serde(default)]
     pub sha: Option<String>,
+    #[serde(default)]
+    pub page: Option<u32>,
 }
 
 fn default_per_page() -> u8 {
@@ -100,6 +102,7 @@ pub async fn list_handler(
             &repo,
             query.sha.as_deref(),
             Some(query.per_page),
+            query.page,
         )
         .await?;
 

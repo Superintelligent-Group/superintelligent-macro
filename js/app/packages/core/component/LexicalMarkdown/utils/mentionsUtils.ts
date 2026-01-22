@@ -19,7 +19,6 @@ import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GITHUB_MENTION_COMMAND,
-  INSERT_GITHUB_REPO_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
@@ -155,10 +154,10 @@ export const getItemName = (item: CombinedEntity): string => {
       return `@${item.data.groupAlias}`;
     case 'githubRepo':
       return item.data.fullName;
-    case 'githubEntity':
-      return item.data.title
-        ? `${item.data.displayText} ${item.data.title}`
-        : item.data.displayText;
+    case 'githubEntity': {
+      const prefix = `${item.data.repoFullName}${item.data.displayText.startsWith('#') ? '' : '@'}${item.data.displayText}`;
+      return item.data.title ? `${prefix} ${item.data.title}` : prefix;
+    }
   }
 };
 
@@ -318,9 +317,10 @@ export async function handleGitHubRepoMention(
     }
   }
 
-  // Insert the mention node with only repoId and mentionUuid
-  editor.dispatchCommand(INSERT_GITHUB_REPO_MENTION_COMMAND, {
-    repoId: repo.id,
+  // Insert the mention node using the unified GitHubMentionNode with type 'repo'
+  editor.dispatchCommand(INSERT_GITHUB_MENTION_COMMAND, {
+    entityId: repo.id,
+    entityType: 'repo',
     mentionUuid: mentionId,
   });
 }

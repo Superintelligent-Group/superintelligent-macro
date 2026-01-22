@@ -4,8 +4,10 @@ use crate::{
     config::GitHubConfig,
     error::{GitHubIntegrationError, Result},
     models::{
-        GitHubBranch, GitHubCommit, GitHubEmail, GitHubExchangeTokenResponse, GitHubIssue,
-        GitHubPullRequest, GitHubRelease, GitHubRepository, GitHubUserInfo,
+        GitHubBranch, GitHubCommit, GitHubCommitSearchResult, GitHubEmail,
+        GitHubExchangeTokenResponse, GitHubIssue, GitHubIssueSearchResult, GitHubPullRequest,
+        GitHubRelease, GitHubRepoSearchResult, GitHubRepository, GitHubSearchResponse,
+        GitHubUserInfo,
     },
 };
 
@@ -304,6 +306,7 @@ impl GitHubOAuthClient {
         repo: &str,
         state: Option<&str>,
         per_page: Option<u8>,
+        page: Option<u32>,
     ) -> Result<Vec<GitHubPullRequest>> {
         let mut url = format!(
             "https://api.github.com/repos/{}/{}/pulls?",
@@ -315,6 +318,9 @@ impl GitHubOAuthClient {
         }
         if let Some(per_page) = per_page {
             url.push_str(&format!("per_page={}&", per_page));
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("page={}&", page));
         }
 
         url = url.trim_end_matches('&').trim_end_matches('?').to_string();
@@ -417,6 +423,7 @@ impl GitHubOAuthClient {
         repo: &str,
         state: Option<&str>,
         per_page: Option<u8>,
+        page: Option<u32>,
     ) -> Result<Vec<GitHubIssue>> {
         let mut url = format!(
             "https://api.github.com/repos/{}/{}/issues?",
@@ -428,6 +435,9 @@ impl GitHubOAuthClient {
         }
         if let Some(per_page) = per_page {
             url.push_str(&format!("per_page={}&", per_page));
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("page={}&", page));
         }
 
         url = url.trim_end_matches('&').trim_end_matches('?').to_string();
@@ -536,6 +546,7 @@ impl GitHubOAuthClient {
         repo: &str,
         sha: Option<&str>,
         per_page: Option<u8>,
+        page: Option<u32>,
     ) -> Result<Vec<GitHubCommit>> {
         let mut url = format!(
             "https://api.github.com/repos/{}/{}/commits?",
@@ -547,6 +558,9 @@ impl GitHubOAuthClient {
         }
         if let Some(per_page) = per_page {
             url.push_str(&format!("per_page={}&", per_page));
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("page={}&", page));
         }
 
         url = url.trim_end_matches('&').trim_end_matches('?').to_string();
@@ -648,6 +662,7 @@ impl GitHubOAuthClient {
         owner: &str,
         repo: &str,
         per_page: Option<u8>,
+        page: Option<u32>,
     ) -> Result<Vec<GitHubBranch>> {
         let mut url = format!(
             "https://api.github.com/repos/{}/{}/branches?",
@@ -656,6 +671,9 @@ impl GitHubOAuthClient {
 
         if let Some(per_page) = per_page {
             url.push_str(&format!("per_page={}&", per_page));
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("page={}&", page));
         }
 
         url = url.trim_end_matches('&').trim_end_matches('?').to_string();
@@ -757,6 +775,7 @@ impl GitHubOAuthClient {
         owner: &str,
         repo: &str,
         per_page: Option<u8>,
+        page: Option<u32>,
     ) -> Result<Vec<GitHubRelease>> {
         let mut url = format!(
             "https://api.github.com/repos/{}/{}/releases?",
@@ -765,6 +784,9 @@ impl GitHubOAuthClient {
 
         if let Some(per_page) = per_page {
             url.push_str(&format!("per_page={}&", per_page));
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("page={}&", page));
         }
 
         url = url.trim_end_matches('&').trim_end_matches('?').to_string();
@@ -854,6 +876,148 @@ impl GitHubOAuthClient {
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
         Ok(release)
+    }
+
+    // ============ Search Methods ============
+
+    /// Searches repositories
+    ///
+    /// See: <https://docs.github.com/en/rest/search/search#search-repositories>
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn search_repositories(
+        &self,
+        access_token: &str,
+        query: &str,
+        per_page: Option<u8>,
+    ) -> Result<GitHubSearchResponse<GitHubRepoSearchResult>> {
+        let per_page = per_page.unwrap_or(30);
+        let url = format!(
+            "https://api.github.com/search/repositories?q={}&per_page={}",
+            urlencoding::encode(query),
+            per_page
+        );
+
+        let response = self
+            .http_client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("User-Agent", "Macro-Auth-Service")
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GitHubIntegrationError::UserInfoFailed(format!(
+                "failed to search repositories: {}",
+                error_body
+            )));
+        }
+
+        let results: GitHubSearchResponse<GitHubRepoSearchResult> = response
+            .json()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        Ok(results)
+    }
+
+    /// Searches issues and pull requests
+    ///
+    /// See: <https://docs.github.com/en/rest/search/search#search-issues-and-pull-requests>
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn search_issues(
+        &self,
+        access_token: &str,
+        query: &str,
+        per_page: Option<u8>,
+    ) -> Result<GitHubSearchResponse<GitHubIssueSearchResult>> {
+        let per_page = per_page.unwrap_or(30);
+        let url = format!(
+            "https://api.github.com/search/issues?q={}&per_page={}",
+            urlencoding::encode(query),
+            per_page
+        );
+
+        let response = self
+            .http_client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("User-Agent", "Macro-Auth-Service")
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GitHubIntegrationError::UserInfoFailed(format!(
+                "failed to search issues: {}",
+                error_body
+            )));
+        }
+
+        let results: GitHubSearchResponse<GitHubIssueSearchResult> = response
+            .json()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        Ok(results)
+    }
+
+    /// Searches commits
+    ///
+    /// See: <https://docs.github.com/en/rest/search/search#search-commits>
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn search_commits(
+        &self,
+        access_token: &str,
+        query: &str,
+        per_page: Option<u8>,
+    ) -> Result<GitHubSearchResponse<GitHubCommitSearchResult>> {
+        let per_page = per_page.unwrap_or(30);
+        let url = format!(
+            "https://api.github.com/search/commits?q={}&per_page={}",
+            urlencoding::encode(query),
+            per_page
+        );
+
+        let response = self
+            .http_client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("User-Agent", "Macro-Auth-Service")
+            // Commit search requires this preview header
+            .header("Accept", "application/vnd.github.cloak-preview+json")
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GitHubIntegrationError::UserInfoFailed(format!(
+                "failed to search commits: {}",
+                error_body
+            )));
+        }
+
+        let results: GitHubSearchResponse<GitHubCommitSearchResult> = response
+            .json()
+            .await
+            .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
+
+        Ok(results)
     }
 }
 

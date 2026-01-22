@@ -12,6 +12,7 @@ import BranchIcon from '@icon/regular/git-branch.svg';
 import TagIcon from '@icon/regular/tag.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import {
+  createGitHubRepoQuery,
   createGitHubPullRequestQuery,
   createGitHubIssueQuery,
   createGitHubCommitQuery,
@@ -36,6 +37,8 @@ type GitHubMentionProps = ParentProps<GitHubMentionDecoratorProps>;
  */
 function getEntityIcon(entityType: GitHubEntityType): JSX.Element {
   switch (entityType) {
+    case 'repo':
+      return <GitHubIcon class="size-full" />;
     case 'pr':
       return <GitPullRequestIcon class="size-full" />;
     case 'issue':
@@ -56,10 +59,12 @@ function buildEntityUrl(
   entityId: string,
   entityType: GitHubEntityType
 ): string {
-  const repoPath = getRepoFromGitHubId(entityId);
+  const repoPath = getRepoFromGitHubId(entityId, entityType);
   const displayText = getDisplayTextFromGitHubId(entityId, entityType);
 
   switch (entityType) {
+    case 'repo':
+      return `https://github.com/${repoPath}`;
     case 'pr':
       return `https://github.com/${repoPath}/pull/${displayText.replace('#', '')}`;
     case 'issue':
@@ -78,6 +83,8 @@ function buildEntityUrl(
  */
 function useGitHubEntityQuery(entityId: string, entityType: GitHubEntityType) {
   switch (entityType) {
+    case 'repo':
+      return createGitHubRepoQuery(entityId);
     case 'pr':
       return createGitHubPullRequestQuery(entityId);
     case 'issue':
@@ -101,6 +108,8 @@ function getEntityTitle(
   if (!data) return null;
 
   switch (entityType) {
+    case 'repo':
+      return (data as { description?: string }).description || null;
     case 'pr':
     case 'issue':
       return (data as { title?: string }).title || null;
@@ -175,6 +184,7 @@ export function GitHubMention(props: GitHubMentionProps) {
     if (!err) return null;
     const msg = err instanceof Error ? err.message : '';
     if (
+      msg === 'REPO_NOT_FOUND' ||
       msg === 'PR_NOT_FOUND' ||
       msg === 'ISSUE_NOT_FOUND' ||
       msg === 'COMMIT_NOT_FOUND' ||
@@ -227,6 +237,27 @@ export function GitHubMention(props: GitHubMentionProps) {
             data-entity-id={props.entityId}
           >
             <Switch fallback={displayText}>
+              <Match when={props.entityType === 'repo'}>
+                <Show
+                  when={data() as { fullName?: string; description?: string }}
+                  fallback={displayText}
+                >
+                  {(repoData) => (
+                    <>
+                      {repoData().fullName || displayText}
+                      <Show when={repoData().description}>
+                        {' '}
+                        <span class="text-ink-muted">
+                          {repoData().description?.substring(0, 40)}
+                          {(repoData().description?.length ?? 0) > 40
+                            ? '...'
+                            : ''}
+                        </span>
+                      </Show>
+                    </>
+                  )}
+                </Show>
+              </Match>
               <Match when={props.entityType === 'pr'}>
                 <Show when={data() as { title?: string }} fallback={displayText}>
                   {(prData) => (

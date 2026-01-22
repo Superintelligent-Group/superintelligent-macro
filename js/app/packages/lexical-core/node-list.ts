@@ -27,7 +27,6 @@ import { DocumentCardNode } from './nodes/DocumentCardNode';
 import { DocumentMentionNode } from './nodes/DocumentMentionNode';
 import { EquationNode } from './nodes/EquationNode';
 import { GitHubMentionNode } from './nodes/GitHubMentionNode';
-import { GitHubRepoMentionNode } from './nodes/GitHubRepoMentionNode';
 import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
@@ -73,7 +72,6 @@ export const SupportedNodeTypes = [
   DateMentionNode,
   GroupMentionNode,
   GitHubMentionNode,
-  GitHubRepoMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,
   CodeHighlightNode,
