@@ -158,8 +158,6 @@ export type UnifiedListContextValue<T extends { id: string }> = {
   triggerMeasure: () => void;
 };
 
-// Use unknown for context to allow generic types
-// biome-ignore lint/suspicious/noExplicitAny: Required for generic context
 const UnifiedListContext = createContext<UnifiedListContextValue<any>>();
 
 /** Hook to access the list controller from child components */

@@ -29,7 +29,7 @@ test.describe('UnifiedList Virtualization', () => {
     }) => {
       await unifiedListPage.gotoStory('LargeVirtualizedList');
 
-      const initialRenderedCount = await unifiedListPage.getRenderedRowCount();
+      await unifiedListPage.getRenderedRowCount();
 
       // Navigate down many times to trigger virtualizer updates
       for (let i = 0; i < 20; i++) {
