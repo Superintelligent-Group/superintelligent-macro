@@ -14,7 +14,7 @@ import type { EntityData, ProjectEntity } from '@macro-entity';
 import type { SlotProps, SlotRenderer, EntityClickHandler } from '../types';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 // Import project utilities from macro-entity queries
 // These are internal exports not re-exported from the main index

@@ -8,7 +8,7 @@ import type { EntityData } from '@macro-entity';
 import type { SlotProps, SlotRenderer } from '../types';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { isTaskEntity } from '@macro-entity';
 
 export type IconSlotConfig = {

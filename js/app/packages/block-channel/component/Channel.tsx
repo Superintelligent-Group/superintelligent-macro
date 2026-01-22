@@ -20,7 +20,7 @@ import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useBlockId } from '@core/block';
-import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
+import type { EntityDragEvent } from '@macro-entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -33,7 +33,12 @@ import { blockHandleSignal } from '@core/signal/load';
 import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { ChannelDebouncedNotificationReadMarker } from '@notifications';
+import {
+  ChannelDebouncedNotificationReadMarker,
+  makeDebouncedChannelNotificationReadMarker,
+  createEffectOnEntityTypeNotification,
+  useEntityHasUnreadNotifications,
+} from '@notifications';
 import { useChannelQuery } from '@queries/channel/channel';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -57,6 +62,7 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
 import { Top } from './Top';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 false && fileFolderDrop;
 
@@ -181,7 +187,7 @@ export function Channel(props: {
     ]);
   }
 
-  onDragEnd((event: DragEventWithData) => {
+  onDragEnd((event: EntityDragEvent) => {
     if (!event.droppable) return;
     if (event.droppable?.id !== 'channel-input-' + channelId) return;
     if (event.droppable.node === containerRef) {
@@ -317,6 +323,50 @@ export function Channel(props: {
     })
   );
 
+  const debouncedMarkAsRead = makeDebouncedChannelNotificationReadMarker({
+    notificationSource: notificationSource,
+    channelId,
+    debounceTime: 500,
+  });
+
+  // Listen for any incoming notifications and while the panel is active,
+  // mark them as read
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'channel',
+    (notification) => {
+      if (
+        !splitContext.isPanelActive() ||
+        notification.entity_id !== channelId
+      ) {
+        return;
+      }
+
+      debouncedMarkAsRead();
+    }
+  );
+
+  const hasNotifications = useEntityHasUnreadNotifications(notificationSource, {
+    type: 'channel',
+    id: channelId,
+  });
+
+  const splitContext = useSplitPanelOrThrow();
+
+  // Track panel active state. When the panel is focused and it was not previously
+  // mark notifications as read if there are any
+  createEffect(
+    on(splitContext.isPanelActive, (isPanelActive, wasPanelActive) => {
+      if (wasPanelActive !== false) return;
+
+      if (!isPanelActive || !hasNotifications()) {
+        return;
+      }
+
+      debouncedMarkAsRead();
+    })
+  );
+
   return (
     <div
       class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
@@ -325,6 +375,7 @@ export function Channel(props: {
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
         channelId={channelId}
+        debounceTime={500}
       />
       <StaticMarkdownContext>
         <Suspense>

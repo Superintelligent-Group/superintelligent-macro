@@ -107,6 +107,10 @@
       "name": "email-service-stack",
       "version": "0.0.0",
     },
+    "stacks/email-sfs-delete-handler": {
+      "name": "email-sfs-delete-handler-stack",
+      "version": "0.0.0",
+    },
     "stacks/email-suppression": {
       "name": "email-suppression-stack",
       "version": "0.0.0",
@@ -629,6 +633,8 @@
     "eastasianwidth": ["eastasianwidth@0.2.0", "", {}, "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA=="],
 
     "email-service-stack": ["email-service-stack@workspace:stacks/email-service"],
+
+    "email-sfs-delete-handler-stack": ["email-sfs-delete-handler-stack@workspace:stacks/email-sfs-delete-handler"],
 
     "email-suppression-stack": ["email-suppression-stack@workspace:stacks/email-suppression"],
 

@@ -7,7 +7,7 @@ import type { EntityData, EmailEntity, WithSearch } from '@macro-entity';
 import type { SlotProps, SlotRenderer } from '../types';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
 
 export type TitleSlotConfig = {

@@ -429,6 +429,214 @@
         }
       }
     },
+    "/email/drafts/scheduled": {
+      "get": {
+        "tags": ["Draft Scheduling"],
+        "summary": "List scheduled drafts.",
+        "operationId": "get_scheduled_messages",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "The number of scheduled messages to skip.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of scheduled messages to return.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetScheduledResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/scheduled/{id}": {
+      "put": {
+        "tags": ["Draft Scheduling"],
+        "summary": "Schedule or update a scheduled draft.",
+        "operationId": "upsert_scheduled_message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft message to schedule",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertScheduledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertScheduledResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/scheduled/{message_id}": {
+      "delete": {
+        "tags": ["Draft Scheduling"],
+        "summary": "Remove the scheduled send from a draft.",
+        "operationId": "delete_scheduled_draft",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "The ID of the draft",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Scheduled send deleted successfully"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/drafts/{id}": {
       "delete": {
         "tags": ["Drafts"],
@@ -1291,53 +1499,6 @@
       }
     },
     "/email/sync": {
-      "post": {
-        "tags": ["Sync"],
-        "summary": "Enables inbox syncing for user.",
-        "operationId": "enable_sync",
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "delete": {
         "tags": ["Sync"],
         "summary": "Disables inbox syncing for user.",
@@ -1977,27 +2138,6 @@
           }
         }
       },
-      "ApiAttachmentMacro": {
-        "type": "object",
-        "required": ["dbId", "messageId", "itemId", "itemType"],
-        "properties": {
-          "dbId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemType": {
-            "type": "string"
-          },
-          "messageId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
       "ApiContact": {
         "type": "object",
         "required": ["id", "linkId"],
@@ -2102,13 +2242,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "attachments",
-              "macroAttachments",
-              "contacts",
-              "labels",
-              "metadata"
-            ],
+            "required": ["attachments", "contacts", "labels", "metadata"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -2130,12 +2264,6 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/ApiLabel"
-                }
-              },
-              "macroAttachments": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ApiAttachmentMacro"
                 }
               },
               "metadata": {
@@ -2299,28 +2427,6 @@
             "type": "integer",
             "format": "int32",
             "description": "File size in bytes."
-          }
-        }
-      },
-      "AttachmentMacro": {
-        "type": "object",
-        "description": "Attachments of a message created when sending a message/draft through Macro FE. references\na macro item (document, canvas, etc). These don't actually get sent to the provider when\nsending a message, but we store them so we can display the pills for the Macro objects in the FE\nwhen displaying the message.",
-        "required": ["item_id", "item_type"],
-        "properties": {
-          "db_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "item_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "item_type": {
-            "type": "string"
-          },
-          "message_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
           }
         }
       },
@@ -2490,6 +2596,10 @@
         "properties": {
           "draft": {
             "$ref": "#/components/schemas/MessageToSend"
+          },
+          "send_time": {
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -2601,6 +2711,18 @@
                 "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated."
               }
             ]
+          }
+        }
+      },
+      "GetScheduledResponse": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
           }
         }
       },
@@ -2812,7 +2934,6 @@
           "bcc",
           "labels",
           "attachments",
-          "attachments_macro",
           "attachments_draft",
           "created_at",
           "updated_at"
@@ -2830,12 +2951,6 @@
               "$ref": "#/components/schemas/AttachmentDraft"
             },
             "description": "Uploaded file attachments for the message, if it is a draft"
-          },
-          "attachments_macro": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
-            }
           },
           "bcc": {
             "type": "array",
@@ -2978,12 +3093,6 @@
             "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/AttachmentToSend"
-            }
-          },
-          "attachments_macro": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
             }
           },
           "bcc": {
@@ -3299,7 +3408,6 @@
           "isDraft",
           "isImportant",
           "attachments",
-          "attachmentsMacro",
           "participants",
           "sortTs",
           "createdAt",
@@ -3311,12 +3419,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Attachment"
-            }
-          },
-          "attachmentsMacro": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
             }
           },
           "createdAt": {
@@ -3433,6 +3535,31 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "UpsertScheduledRequest": {
+        "type": "object",
+        "required": ["send_time"],
+        "properties": {
+          "send_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The time to send the message (ISO 8601 format)"
+          }
+        }
+      },
+      "UpsertScheduledResponse": {
+        "type": "object",
+        "required": ["message_id", "send_time"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "send_time": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

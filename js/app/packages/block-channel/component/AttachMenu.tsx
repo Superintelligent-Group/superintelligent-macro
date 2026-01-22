@@ -19,7 +19,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import {
   createEffect,
   createMemo,
@@ -55,7 +55,7 @@ function truncate(str: string, maxLength: number = 30) {
 export function AttachMenu(props: AttachMenuProps) {
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const inputAttachments = () =>
     props.inputAttachmentsStore.store[props.inputAttachmentsStore.key] ?? [];
 
@@ -83,7 +83,7 @@ export function AttachMenu(props: AttachMenuProps) {
   };
 
   const baseHistory = createMemo(() => {
-    return [...history()].filter(
+    return [...(historyQuery.data ?? [])].filter(
       (item) => !inputAttachments().find((a) => a.id === item.id)
     );
   });
@@ -108,6 +108,8 @@ export function AttachMenu(props: AttachMenuProps) {
 
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
+      e.preventDefault();
+      e.stopPropagation();
       props.close();
     }
   };
@@ -116,13 +118,16 @@ export function AttachMenu(props: AttachMenuProps) {
     <Show when={props.open}>
       <div
         class="fixed inset-0 bg-transparent z-item-options-menu"
-        onClick={handleOverlayClick}
-        onMouseDown={handleOverlayClick}
+        onPointerDown={handleOverlayClick}
       >
         <div
           class="absolute z-item-options-menu"
           ref={setPopupRef}
-          use:clickOutside={props.close}
+          use:clickOutside={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            props.close();
+          }}
           style={{
             left: `${position().x}px`,
             top: `${position().y}px`,

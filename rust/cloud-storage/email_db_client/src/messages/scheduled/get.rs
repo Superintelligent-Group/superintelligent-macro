@@ -1,4 +1,4 @@
-use crate::messages::get::convert_db_messages_to_service;
+use crate::messages::get::convert_db_messages_to_service_concurrent;
 use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -17,9 +17,42 @@ where
     let record = sqlx::query_as!(
         service::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent
+        SELECT link_id, message_id, send_time, sent, processing
         FROM email_scheduled_messages
         WHERE link_id = $1 AND message_id = $2
+        "#,
+        link_id,
+        message_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(record)
+}
+
+/// Retrieves a scheduled message by link_id and message_id, and sets processing to true
+/// Returns the message with the OLD processing value (before it was set to true)
+/// Returns None if the message doesn't exist
+#[tracing::instrument(skip(db), err)]
+pub async fn get_and_start_processing_scheduled_message(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<service::message::ScheduledMessage>> {
+    let record = sqlx::query_as!(
+        service::message::ScheduledMessage,
+        r#"
+        WITH old AS (
+            SELECT link_id, message_id, send_time, sent, processing
+            FROM email_scheduled_messages
+            WHERE link_id = $1 AND message_id = $2
+        ), updated AS (
+            UPDATE email_scheduled_messages
+            SET processing = true, updated_at = NOW()
+            WHERE link_id = $1 AND message_id = $2
+        )
+        SELECT link_id, message_id, send_time, sent, processing
+        FROM old
         "#,
         link_id,
         message_id,
@@ -40,7 +73,7 @@ pub async fn get_scheduled_message_no_auth(
     let record = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent
+        SELECT link_id, message_id, send_time, sent, processing
         FROM email_scheduled_messages
         WHERE message_id = $1 and sent = false
         "#,
@@ -65,7 +98,38 @@ pub async fn get_scheduled_messages_by_link_id(
     }
 
     let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
-    convert_db_messages_to_service(pool, db_messages).await
+    convert_db_messages_to_service_concurrent(pool, db_messages).await
+}
+
+/// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.
+/// Only returns scheduled messages that have not been sent yet.
+#[tracing::instrument(skip(db), err)]
+pub async fn fetch_scheduled_messages_in_bulk(
+    db: &sqlx::PgPool,
+    message_ids: &[Uuid],
+) -> anyhow::Result<std::collections::HashMap<Uuid, db::message::ScheduledMessage>> {
+    if message_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let records = sqlx::query_as!(
+        db::message::ScheduledMessage,
+        r#"
+        SELECT link_id, message_id, send_time, sent, processing
+        FROM email_scheduled_messages
+        WHERE message_id = ANY($1) AND sent = false
+        "#,
+        message_ids,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut scheduled_map = std::collections::HashMap::new();
+    for record in records {
+        scheduled_map.insert(record.message_id, record);
+    }
+
+    Ok(scheduled_map)
 }
 
 /// Fetches unsent scheduled db messages for a link with pagination

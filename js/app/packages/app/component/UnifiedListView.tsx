@@ -34,8 +34,8 @@ import {
 import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -46,7 +46,6 @@ import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
-  createChannelsQuery,
   createDssInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -326,22 +325,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     )
   );
 
-  // Stable key for filter/sort state - changes trigger selection reset and scroll to top
-  const filterSortKey = createMemo(() =>
-    stringify({
-      viewId: selectedView(),
-      filters: view()?.filters,
-      sort: view()?.sort,
-    })
+  // Stable key for filter state - changes trigger selection reset
+  const filterKey = createMemo(() =>
+    stringify({ viewId: selectedView(), filters: view()?.filters })
   );
 
-  // Reset selection and scroll when filters or sort changes
+  // Reset selection and scroll when filters change
   createEffect(
     on(
-      filterSortKey,
-      (_current, prev) => {
+      filterKey,
+      () => {
         if (isTouchDevice()) return;
-        if (prev === undefined) return; // Skip initial run
 
         batch(() => {
           setViewDataStore(selectedView(), 'selectedEntity', undefined);
@@ -992,7 +986,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
-        channel_ids: [NIL_UUID],
+        channel_ids:
+          entityTypeFilter().includes('channel') ||
+          entityTypeFilter().length === 0
+            ? []
+            : [NIL_UUID],
       },
       document_filters: {
         document_ids:
@@ -1033,7 +1031,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
         ? 'important'
-        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.all
+        : focusFilters()?.includes('signal') ||
+            entityTypeFilter().includes('email')
           ? 'all'
           : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
             ? emailView()
@@ -1073,14 +1072,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       return arr.length === 1 && arr[0] === value;
     }
 
-    if (onlyHas(typeFilter, 'channel')) return true;
     if (isSearchActive() && onlyHas(typeFilter, 'email')) return true;
-    return false;
-  });
-
-  const disableChannelsQuery = createMemo(() => {
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
     return false;
   });
 
@@ -1143,9 +1135,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     UnifiedListComponent,
     isLoading,
   } = createRoot((dispose) => {
-    const channelsQuery = createChannelsQuery({
-      disabled: disableChannelsQuery,
-    });
     const dssInfiniteQuery = createDssInfiniteQuery(
       dssQueryParams,
       dssQueryRequestBody,
@@ -1192,9 +1181,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           },
         ],
         entityMapper,
-        entityQueries: [
-          { query: channelsQuery, operations: { filter: true, search: true } },
-        ],
         requiredFilter,
         optionalFilter,
         entitySort,
@@ -1877,6 +1863,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               searchText={searchText()}
               hasRefinementsFromBase={isViewConfigChanged()}
               entityMinHeight={ENTITY_HEIGHT}
+              viewType={view()?.viewType}
+              name={view()?.view}
+              splitId={splitContext.handle.id}
             >
               {(innerProps) => {
                 const displayDoneButton = () => {
@@ -1927,6 +1916,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       }}
                       entity={innerProps.entity}
                       properties={properties()}
+                      splitId={splitContext.handle.id}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
                       onDblClick={entityDblClickHandler}
@@ -2024,7 +2014,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             <Show when={contextAndModalState.selectedEntity}>
               {(selectedEntity) => (
                 <ContextMenuContent mobileFullScreen>
-                  <Show when={isTouchDevice() && isMobileWidth()}>
+                  <Show when={isMobile()}>
                     <Entity
                       entity={selectedEntity()}
                       timestamp={

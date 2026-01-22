@@ -18,7 +18,7 @@ import {
 } from '@macro-entity';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import type { Component } from 'solid-js';
 import {
@@ -49,7 +49,7 @@ const EntityPill: Component<{
   );
 
   return (
-    <div class="group relative h-6 px-1.5 text-[10px] text-ink border border-edge bg-panel font-mono flex items-center gap-1.5">
+    <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center gap-1.5">
       <span class="size-3 flex items-center justify-center shrink-0">
         {icon()}
       </span>
@@ -88,7 +88,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -133,7 +133,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     if (!entityType) {
       return [
         ...contacts().map(entityMapper('user')),
-        ...history().map(entityMapper('item')),
+        ...(historyQuery.data ?? []).map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
       ];
@@ -154,13 +154,13 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     // Item-based types: DOCUMENT, PROJECT, CHAT
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(entityType)) {
-      return history()
+      return (historyQuery.data ?? [])
         .filter((item) => item.type.toUpperCase() === entityType)
         .map(entityMapper('item'));
     }
 
     if (entityType === 'TASK') {
-      return history()
+      return (historyQuery.data ?? [])
         .filter(
           (item) => item.type === 'document' && item.subType?.type === 'task'
         )
@@ -281,7 +281,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
             <button
               type="button"
               onClick={handleAddClick}
-              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
+              class="h-6 px-2 text-xxs text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
             >
               {getPlaceholderText()}
             </button>
@@ -293,7 +293,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             placeholder="Search..."
-            class="h-6 px-2 min-w-16 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+            class="h-6 px-2 min-w-16 w-fit text-xxs text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
           />
           <div
             ref={dropdownRef}
@@ -302,7 +302,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
             <Show
               when={availableEntities().length > 0}
               fallback={
-                <div class="px-3 py-2 text-[10px] text-ink-muted text-center">
+                <div class="px-3 py-2 text-xxs text-ink-muted text-center">
                   {entities().length === 0
                     ? 'No entities available'
                     : searchQuery()
@@ -345,7 +345,7 @@ const DropdownEntityRow: Component<{
         e.stopPropagation();
         props.onSelect();
       }}
-      class="w-full px-2 py-1.5 text-[10px] text-ink hover:bg-hover text-left flex items-center gap-2"
+      class="w-full px-2 py-1.5 text-xxs text-ink hover:bg-hover text-left flex items-center gap-2"
     >
       <span class="size-3 flex items-center justify-center shrink-0">
         {icon()}

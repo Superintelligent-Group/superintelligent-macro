@@ -1,6 +1,6 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_service::config::{CloudfrontSignerPrivateKey, Config};
+use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKey::new()?)
+        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.
@@ -93,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
         .sfs_uploader_queue(&config.sfs_uploader_queue)
+        .sfs_delete_queue(&config.sfs_delete_queue)
         .contacts_queue(&config.contacts_queue)
         .email_link_manager_queue(&config.link_manager_queue);
 
@@ -126,6 +127,13 @@ async fn main() -> anyhow::Result<()> {
             )
         })
         .collect::<Vec<_>>();
+
+    let sfs_delete_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        config.sfs_delete_queue.clone(),
+        config.queue_max_messages,
+        config.queue_wait_time_seconds,
+    );
 
     let backfill_workers = (0..config.backfill_queue_workers)
         .map(|_| {
@@ -276,7 +284,7 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::info!(
         num_workers = config.inbox_sync_queue_workers,
-        "inbox_sync workers started"
+        "inbox_sync retry workers started"
     );
 
     // backfill user emails upon signup
@@ -370,6 +378,21 @@ async fn main() -> anyhow::Result<()> {
             num_workers = config.sfs_uploader_workers,
             "sfs uploader workers started"
         );
+    }
+
+    if cfg!(feature = "sfs_delete") {
+        let db_sfs_delete = db.clone();
+        let sfs_client_sfs_delete = sfs_client.clone();
+        // delete orphaned sfs attachments
+        tokio::spawn(async move {
+            email_service::pubsub::sfs_deleter::worker::run_worker(
+                sfs_delete_worker,
+                db_sfs_delete,
+                sfs_client_sfs_delete,
+            )
+            .await;
+        });
+        tracing::info!("sfs delete worker started");
     }
 
     tracing::info!("All workers started successfully");

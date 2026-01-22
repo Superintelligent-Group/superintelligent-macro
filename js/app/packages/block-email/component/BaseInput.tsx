@@ -19,8 +19,8 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -43,11 +43,10 @@ import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
-  AttachmentMacro,
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -101,9 +100,11 @@ import {
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { plural } from '@core/util/string';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 false && fileSelector;
+false && observedSize;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -115,50 +116,217 @@ const getRecipientDisplayName = (item: EmailRecipient): string => {
   }
 };
 
-function RecipientList(props: {
-  recipients: EmailRecipient[];
-  showTrailingComma: boolean;
+// Shared constants for recipient display - used in both measurement and rendering
+const RECIPIENT_SEPARATOR = ',\u00A0'; // comma + non-breaking space
+const MORE_SUFFIX_TEMPLATE = '+99 more'; // worst-case for measurement
+
+// Build the display text for a recipient (used for measurement)
+const buildRecipientText = (
+  prefix: string,
+  displayName: string,
+  showSeparator: boolean
+): string => {
+  return prefix + displayName + (showSeparator ? RECIPIENT_SEPARATOR : '');
+};
+
+function TruncatedRecipientList(props: {
+  toRecipients: EmailRecipient[];
+  ccRecipients: EmailRecipient[];
+  bccRecipients: EmailRecipient[];
+  onClick: () => void;
 }) {
+  let measureRef: HTMLSpanElement | undefined;
+
+  const [visibleCount, setVisibleCount] = createSignal<number>(0);
+  const [containerRect, setContainerRect] = createSignal<DOMRect | undefined>();
+
+  // Combine all recipients into a flat list with group info for display
+  const allRecipients = createMemo(() => {
+    const result: { recipient: EmailRecipient; prefix: string }[] = [];
+
+    // Add "to" recipients
+    props.toRecipients.forEach((r, i) => {
+      const prefix = i === 0 ? 'to ' : '';
+      result.push({ recipient: r, prefix });
+    });
+
+    // Add "cc" recipients (show "cc" prefix only if no "to" recipients)
+    props.ccRecipients.forEach((r, i) => {
+      const prefix = i === 0 && props.toRecipients.length === 0 ? 'cc ' : '';
+      result.push({ recipient: r, prefix });
+    });
+
+    // Add "bcc" recipients with label
+    props.bccRecipients.forEach((r, i) => {
+      const prefix = i === 0 ? 'bcc ' : '';
+      result.push({ recipient: r, prefix });
+    });
+
+    return result;
+  });
+
+  const totalCount = createMemo(() => allRecipients().length);
+
+  // Measure text width using hidden element
+  const measureText = (text: string): number => {
+    if (!measureRef) return 0;
+    measureRef.textContent = text;
+    return measureRef.offsetWidth;
+  };
+
+  // Calculate how many recipients fit in the container
+  const calculateVisibleCount = () => {
+    const width = containerRect()?.width ?? 0;
+    if (width <= 0 || !measureRef) return;
+
+    const recipients = allRecipients();
+    if (recipients.length === 0) {
+      setVisibleCount(0);
+      return;
+    }
+
+    // Reserve space for "+N more" suffix
+    const moreTextWidth = measureText(MORE_SUFFIX_TEMPLATE);
+    const availableWidth = width - moreTextWidth;
+
+    let usedWidth = 0;
+    let count = 0;
+
+    for (let i = 0; i < recipients.length; i++) {
+      const { recipient, prefix } = recipients[i];
+      const displayName = getRecipientDisplayName(recipient);
+      // Show separator if not the last recipient OR if there will be hidden recipients
+      const showSeparator = i < recipients.length - 1;
+      const text = buildRecipientText(prefix, displayName, showSeparator);
+      const textWidth = measureText(text);
+
+      // Check if this recipient fits (always show at least one)
+      if (usedWidth + textWidth <= availableWidth || i === 0) {
+        usedWidth += textWidth;
+        count++;
+      } else {
+        break;
+      }
+    }
+
+    setVisibleCount(count);
+  };
+
+  // Recalculate visible count when size or recipients change
+  createEffect(() => {
+    // Track dependencies
+    containerRect();
+    allRecipients();
+    // Use requestAnimationFrame to ensure measurement element is ready
+    requestAnimationFrame(() => {
+      calculateVisibleCount();
+    });
+  });
+
+  const visibleRecipients = createMemo(() => {
+    return allRecipients().slice(0, visibleCount());
+  });
+
+  const hiddenCount = createMemo(() => {
+    return totalCount() - visibleCount();
+  });
+
   return (
-    <For each={props.recipients}>
-      {(recipient, index) => (
-        <Tooltip
-          tooltip={
-            <div class="text-xs select-text cursor-text">
-              {recipient.data.email}
-            </div>
-          }
-          class="inline"
-        >
-          <span>
-            {getRecipientDisplayName(recipient) +
-              (index() < props.recipients.length - 1 || props.showTrailingComma
-                ? ', '
-                : '')}
-            &emsp;
-          </span>
-        </Tooltip>
-      )}
-    </For>
+    <div
+      use:observedSize={{ setSize: setContainerRect }}
+      class="flex items-center text-sm font-mono overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      onclick={props.onClick}
+    >
+      {/* Hidden measurement element - must have same font styles */}
+      <span
+        ref={measureRef}
+        class="absolute invisible whitespace-nowrap text-sm font-mono"
+        aria-hidden="true"
+      />
+
+      <Show
+        when={totalCount() > 0}
+        fallback={<span class="text-failure-ink">Recipients required</span>}
+      >
+        <For each={visibleRecipients()}>
+          {(item, index) => (
+            <>
+              <Tooltip
+                tooltip={
+                  <div class="text-xs select-text cursor-text">
+                    {item.recipient.data.email}
+                  </div>
+                }
+                class="inline shrink-0"
+              >
+                <span class="shrink-0">
+                  {item.prefix}
+                  {getRecipientDisplayName(item.recipient)}
+                </span>
+              </Tooltip>
+              <Show
+                when={
+                  index() < visibleRecipients().length - 1 || hiddenCount() > 0
+                }
+              >
+                <span>{RECIPIENT_SEPARATOR}</span>
+              </Show>
+            </>
+          )}
+        </For>
+        <Show when={hiddenCount() > 0}>
+          <span class="text-ink-muted shrink-0">+{hiddenCount()} more</span>
+        </Show>
+      </Show>
+    </div>
   );
 }
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless>;
+  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
+  isEditingExisting?: boolean;
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
-  preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
-  const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)
-  );
+  const form = createMemo(() => {
+    const replyingTo = props.replyingTo();
+
+    // If neither `replyingTo` or `draft` exist, we'll have an empty
+    // initial state
+    if (!replyingTo && !props.draft) {
+      return getOrInitEmailFormContext();
+    }
+
+    // If we have `replyingTo`, we're going to be
+    // creating a reply to a message so we can derive our state
+    // from the `replyingTo` and a possible existing draft
+    if (replyingTo && replyingTo.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'replying_to',
+        messageID: replyingTo.db_id,
+      });
+    }
+
+    // If we only have the draft available, then we're most likely
+    // editing a draft in a new thread with no other messages
+    if (props.draft && props.draft.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'draft',
+        messageID: props.draft.db_id,
+      });
+    }
+
+    // Fallback to empty state
+    return getOrInitEmailFormContext();
+  });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
 
@@ -166,7 +334,6 @@ export function BaseInput(props: {
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
-  const [showSubject, _] = createSignal(props.newMessage ?? false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -196,7 +363,6 @@ export function BaseInput(props: {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      await deleteDraftAndReset();
       refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
@@ -339,6 +505,7 @@ export function BaseInput(props: {
 
     const draftResponse = await saveEmailDraft({
       ...draftToSave,
+      db_id: savedDraftId(),
       link_id: linkId!,
       provider_thread_id: currentThread?.provider_id,
       thread_db_id: currentThread?.db_id,
@@ -482,10 +649,17 @@ export function BaseInput(props: {
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(currentEditor, {
-      replyType: effectiveReplyType(),
-      replyingTo: props.replyingTo(),
-    });
+    const replyingTo = props.replyingTo();
+
+    const prepared = prepareEmailBody(
+      currentEditor,
+      replyingTo
+        ? {
+            replyType: effectiveReplyType(),
+            replyingTo,
+          }
+        : undefined
+    );
     if (!prepared) {
       return;
     }
@@ -496,6 +670,7 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
     sendMutation.mutate({
       message: {
@@ -515,6 +690,9 @@ export function BaseInput(props: {
       },
     });
 
+    resetState();
+    clearDraftState();
+
     cleanupWatermark();
   };
 
@@ -525,18 +703,22 @@ export function BaseInput(props: {
     form().reset();
   };
 
+  const clearDraftState = () => {
+    const replyingToId = props.replyingTo()?.db_id;
+    if (replyingToId) {
+      ctx.drafts.deleteDraftForMessage(replyingToId);
+    }
+    props.setShowReply?.(false);
+  };
+
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
       await deleteEmailDraft(draftId);
       refetchThreadMessages();
     }
-    const replyingToId = props.replyingTo()?.db_id;
-    if (replyingToId) {
-      ctx.drafts.deleteDraftForMessage(replyingToId);
-    }
     resetState();
-    props.setShowReply?.(false);
+    clearDraftState();
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
@@ -640,7 +822,7 @@ export function BaseInput(props: {
   // Focus when external shouldFocus signal is set to true
   createEffect(() => {
     if (form().shouldFocusInput()) {
-      if (!isMobileWidth()) {
+      if (!isMobile()) {
         requestAnimationFrame(() => {
           editor()?.focus();
           form().setShouldFocusInput(false);
@@ -765,45 +947,12 @@ export function BaseInput(props: {
         <Show
           when={showExpandedRecipients()}
           fallback={
-            <div
-              class="flex flex-wrap items-center text-sm font-mono truncate overflow-hidden mt-1"
-              onclick={() => setShowExpandedRecipients(true)}
-            >
-              <Show
-                when={
-                  form().recipients().to.length +
-                    form().recipients().cc.length +
-                    form().recipients().bcc.length >
-                  0
-                }
-                fallback={
-                  <span class="text-failure-ink">Recipients required</span>
-                }
-              >
-                <Show
-                  when={
-                    form().recipients().to.length +
-                      form().recipients().cc.length >
-                    0
-                  }
-                >
-                  <span>to&nbsp;</span>
-                </Show>
-                <RecipientList
-                  recipients={form().recipients().to}
-                  showTrailingComma={form().recipients().cc.length > 0}
-                />
-                <RecipientList
-                  recipients={form().recipients().cc}
-                  showTrailingComma={false}
-                />
-                <Show when={form().recipients().bcc.length > 0}>, bcc: </Show>
-                <RecipientList
-                  recipients={form().recipients().bcc}
-                  showTrailingComma={false}
-                />
-              </Show>
-            </div>
+            <TruncatedRecipientList
+              toRecipients={form().recipients().to}
+              ccRecipients={form().recipients().cc}
+              bccRecipients={form().recipients().bcc}
+              onClick={() => setShowExpandedRecipients(true)}
+            />
           }
         >
           <div ref={setExpandedRecipientsRef} class="w-full">
@@ -887,8 +1036,10 @@ export function BaseInput(props: {
           </div>
         </Show>
       </div>
-      <div class={`${showSubject() ? 'flex' : 'hidden'} flex-row items-center`}>
-        <div class="text-xs min-w-16">Subject</div>
+      <div
+        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+      >
+        <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
           type="text"
           class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
@@ -1047,9 +1198,9 @@ export function BaseInput(props: {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
               tooltip="Show formatting toolbar"
-              class="aspect-square *:h-5 p-1"
+              class="aspect-square p-1"
             >
-              <TextAa />
+              <TextAa class="h-5" />
             </Button>
 
             <Tooltip
@@ -1092,9 +1243,9 @@ export function BaseInput(props: {
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
-                class="aspect-square *:h-5 p-1"
+                class="aspect-square p-1"
               >
-                <Trash />
+                <Trash class="h-5" />
               </Button>
             </Show>
           </div>

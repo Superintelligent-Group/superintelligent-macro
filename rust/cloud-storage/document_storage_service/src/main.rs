@@ -1,6 +1,8 @@
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey},
-    config::{CloudfrontSignerPrivateKeySecretName, DocumentPermissionJwtSecretKey},
+    config::{
+        DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+    },
     service::s3::S3,
 };
 use anyhow::Context;
@@ -8,12 +10,10 @@ use comms::{
     domain::service::ChannelServiceImpl,
     outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
 };
-use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
-use email_service_client::EmailServiceClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -53,7 +53,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKeySecretName::new()?)
+        .get_maybe_secret_value(
+            env,
+            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName::new()?,
+        )
         .await?;
 
     let document_permission_jwt_secret = secretsmanager_client
@@ -156,16 +159,6 @@ async fn main() -> anyhow::Result<()> {
 
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
-    let comms_service_client = CommsServiceClient::new(
-        dss_auth_key.as_ref().to_string(),
-        config.vars.comms_service_url.as_ref().to_string(),
-    );
-
-    let email_service_client = EmailServiceClient::new(
-        dss_auth_key.as_ref().to_string(),
-        config.vars.email_service_url.as_ref().to_string(),
-    );
-
     let conn_gateway_client = ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
         config.vars.connection_gateway_url.as_ref().to_string(),
@@ -207,13 +200,7 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let permission_checker = PermissionServiceImpl::new(
-        db.clone(),
-        CommsServiceClient::new(
-            dss_auth_key.as_ref().to_string(),
-            config.vars.comms_service_url.as_ref().to_string(),
-        ),
-    );
+    let permission_checker = PermissionServiceImpl::new(db.clone());
     let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
@@ -254,8 +241,6 @@ async fn main() -> anyhow::Result<()> {
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
-        email_service_client: Arc::new(email_service_client),
-        comms_service_client: Arc::new(comms_service_client),
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),

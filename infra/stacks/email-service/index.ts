@@ -42,6 +42,7 @@ const AUDIENCE = aws.secretsmanager
   .apply((secret) => secret.secretString);
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
+const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
 const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
   `redis_rate_limit_reqs_backfill`
@@ -109,6 +110,21 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
+const sfsDeleteLambdaStack = new pulumi.StackReference(
+  'email-sfs-delete-handler-stack',
+  {
+    name: `macro-inc/email-sfs-delete-handler/${stack}`,
+  }
+);
+
+const sfsDeleteQueueArn: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueArn')
+  .apply((arn) => arn as string);
+
+const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
+  .getOutput('sfsDeleteQueueName')
+  .apply((name) => name as string);
+
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
@@ -163,7 +179,6 @@ export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queu
 
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
-  fifoQueue: true,
 });
 
 export const scheduledQueueArn = pulumi.interpolate`${scheduled_queue.queue.arn}`;
@@ -186,6 +201,8 @@ const sfs_uploader_queue = new Queue('email-service-sfs-mapper', {
 
 export const sfsUploaderQueueArn = pulumi.interpolate`${sfs_uploader_queue.queue.arn}`;
 export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queue.name}`;
+
+export { sfsDeleteQueueArn, sfsDeleteQueueName };
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
@@ -236,6 +253,7 @@ const queueArns = [
   searchEventQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
+  sfsDeleteQueueArn,
   contactsQueueArn,
 ];
 
@@ -365,6 +383,10 @@ const containerEnvVars = [
     value: sfsUploaderQueueName,
   },
   {
+    name: 'SFS_DELETE_QUEUE',
+    value: sfsDeleteQueueName,
+  },
+  {
     name: 'GMAIL_GCP_QUEUE',
     value: pulumi.interpolate`${GMAIL_GCP_QUEUE}`,
   },
@@ -417,6 +439,10 @@ const containerEnvVars = [
     value: pulumi.interpolate`${searchEventQueueName}`,
   },
   {
+    name: 'SENT_UNDO_DELAY_SECS',
+    value: pulumi.interpolate`${SENT_UNDO_DELAY_SECS}`,
+  },
+  {
     name: 'REDIS_RATE_LIMIT_REQS',
     value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS}`,
   },
@@ -465,11 +491,11 @@ const containerEnvVars = [
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
   {
-    name: 'PRESIGNED_URL_TTL_SECS',
+    name: 'EMAIL_SERVICE_PRESIGNED_URL_TTL_SECS',
     value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
     value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
   },
   {
@@ -481,11 +507,11 @@ const containerEnvVars = [
     value: emailAttachmentBucket.bucket.id,
   },
   {
-    name: 'CLOUDFRONT_DISTRIBUTION_URL',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
     value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
     value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
   },
 ];

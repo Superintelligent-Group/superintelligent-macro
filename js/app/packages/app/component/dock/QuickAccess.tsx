@@ -14,7 +14,7 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import { NotificationEventType } from '@service-notification/generated/schemas';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
@@ -163,7 +163,7 @@ function QuickAccessItem(props: QuickAccessItemProps) {
         class="relative flex justify-center items-center bg-panel hover:bg-panel-highlight border border-edge rounded-full size-8 transition-colors cursor-pointer select-none shrink-0"
       >
         <Show when={unreadNotifications().length > 0}>
-          <div class="-top-1 -right-1 z-10 absolute bg-accent px-px rounded-full min-w-[1lh] font-mono font-bold text-[10px] text-panel text-center">
+          <div class="-top-1 -right-1 z-10 absolute bg-accent px-px rounded-full min-w-[1lh] font-mono font-bold text-xxs text-panel text-center">
             {unreadNotifications().length}
           </div>
         </Show>

@@ -33,8 +33,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
 import { toast } from '@core/component/Toast/Toast';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
@@ -42,7 +40,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { createFromMarkdownText } from '@core/util/md';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
@@ -72,6 +70,7 @@ import {
   useContext,
 } from 'solid-js';
 import { FormatTools } from './FormatTools';
+import { isMobile } from '@core/mobile/isMobile';
 
 const MENU_ID = 'markdown-popup';
 
@@ -445,13 +444,7 @@ export function MarkdownPopup(props: {
               }}
             />
           </Show>
-          <Show
-            when={
-              !isMobileWidth() &&
-              !isTouchDevice() &&
-              (canEdit() || canComment())
-            }
-          >
+          <Show when={!isMobile() && (canEdit() || canComment())}>
             <FormatTools withinPopup />
           </Show>
           <Show when={shouldShowCheckboxToTaskButton()}>

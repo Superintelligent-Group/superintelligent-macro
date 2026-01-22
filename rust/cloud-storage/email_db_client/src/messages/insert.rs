@@ -1,4 +1,4 @@
-use crate::attachments::{marco, provider};
+use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::messages::scheduled::delete::delete_scheduled_message;
 use crate::messages::scheduled::upsert::upsert_scheduled_message;
@@ -82,7 +82,7 @@ pub async fn insert_message_with_tx(
 }
 
 /// inserts message object into the database
-#[tracing::instrument(skip(tx, message))]
+#[tracing::instrument(skip(tx, message), err)]
 async fn insert_db_message(
     tx: &mut sqlx::PgConnection,
     message: &mut message::Message,
@@ -167,7 +167,7 @@ async fn insert_db_message(
 }
 
 /// Inserts a single message into the database with transaction handling
-#[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), level = "info")]
+#[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), err)]
 pub async fn insert_message(
     pool: &PgPool,
     thread_id: Uuid,
@@ -219,9 +219,10 @@ pub async fn insert_message(
 
 /// insert message that user created via macro frontend
 #[tracing::instrument(skip(tx, service_message), err)]
-pub async fn insert_message_to_send(
+pub async fn insert_message_to_send_db(
     tx: &mut sqlx::PgConnection,
     service_message: &mut message::MessageToSend,
+    send_time: Option<chrono::DateTime<Utc>>,
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
     is_draft: bool,
@@ -276,12 +277,10 @@ pub async fn insert_message_to_send(
         db_message_to_send.subject,
         from_contact_id,
         Utc::now(),
-        service_message
-            .attachments_macro.clone()
-            .is_some_and(|x| !x.is_empty()),
+        false,
         true,
         false,
-        !is_draft,
+        false,
         is_draft,
         db_message_to_send.body_text,
         db_message_to_send.body_html,
@@ -295,13 +294,11 @@ pub async fn insert_message_to_send(
 
     service_message.db_id = Some(message_db_id);
 
-    process_scheduled_message(tx, service_message, message_db_id, is_draft).await?;
-
-    if let Some(mut attachments) = service_message.attachments_macro.clone() {
-        marco::insert_macro_attachments(tx, message_db_id, &mut attachments).await?;
-    }
+    process_scheduled_message(tx, service_message, send_time, message_db_id).await?;
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
+
+    threads::update::update_thread_metadata(tx, thread_id, db_message_to_send.link_id).await?;
 
     Ok(())
 }
@@ -310,33 +307,23 @@ pub async fn insert_message_to_send(
 async fn process_scheduled_message(
     tx: &mut sqlx::PgConnection,
     service_message: &message::MessageToSend,
+    send_time: Option<chrono::DateTime<Utc>>,
     message_db_id: Uuid,
-    is_draft: bool,
 ) -> anyhow::Result<()> {
-    // if a draft is created with a specified send_time, upsert scheduled message row in database
-    let upsert_scheduled_time = is_draft && service_message.send_time.is_some();
-    // if a draft is created without a specified end_time, delete any existing scheduled entry.
-    // this handles the case where a user removes a previously set send_time from a draft
-    // if a user sends a message via the API, delete any existing scheduled entry for the message.
-    // this covers the case where a user scheduled a message to be sent, then ended up just
-    // sending it themselves.
-    let delete_scheduled = !(is_draft && service_message.send_time.is_some());
-
-    if upsert_scheduled_time {
+    if let Some(send_time) = send_time {
         upsert_scheduled_message(
             tx,
             ScheduledMessage {
                 link_id: service_message.link_id,
                 message_id: message_db_id,
-                send_time: service_message.send_time.unwrap(),
+                send_time,
                 sent: false,
+                processing: false,
             },
         )
         .await
         .context("Failed to insert scheduled message")?;
-    }
-
-    if delete_scheduled {
+    } else {
         delete_scheduled_message(tx, service_message.link_id, message_db_id)
             .await
             .context("Failed to delete scheduled message")?;

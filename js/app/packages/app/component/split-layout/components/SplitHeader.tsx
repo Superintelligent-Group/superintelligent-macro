@@ -5,8 +5,8 @@ import {
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -38,14 +38,14 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
       }
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <CaretLeft />
+      <CaretLeft class="h-4" />
     </Button>
   );
 }
@@ -55,7 +55,7 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -65,7 +65,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
-      <CaretRight />
+      <CaretRight class="h-4" />
     </Button>
   );
 }
@@ -77,7 +77,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 *:h-4"
+        class="p-1"
         tooltip={
           <LabelAndHotKey
             label={
@@ -90,7 +90,11 @@ function SplitSpotlightButton() {
         }
         onClick={() => context.handle.toggleSpotlight()}
       >
-        {context.handle.isSpotLight() ? <CollapseIcon /> : <ExpandIcon />}
+        {context.handle.isSpotLight() ? (
+          <CollapseIcon class="h-4" />
+        ) : (
+          <ExpandIcon class="h-4" />
+        )}
       </Button>
     </Show>
   );
@@ -98,15 +102,24 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return null;
+  const layout = useContext(SplitLayoutContext);
+  if (!context || !layout) return null;
+
+  const label = createMemo(() => {
+    const isOnlySplit = layout.manager.splits().length === 1;
+    const isNotUnifiedList = context.handle.content().id !== 'unified-list';
+    return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
+  });
 
   return (
     <Button
-      class="p-1 *:h-4"
-      tooltip={<LabelAndHotKey label="Close" />}
+      class="p-1"
+      tooltip={
+        <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
+      }
       onClick={context.handle.close}
     >
-      <CloseIcon />
+      <CloseIcon class="w-4 h-4" />
     </Button>
   );
 }
@@ -128,7 +141,7 @@ function _SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          class="p-1 *:h-4"
+          class="p-1"
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}
@@ -141,7 +154,7 @@ function _SplitPreviewToggle() {
           tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon />
+          <SplitIcon class="h-4" />
         </Button>
       </div>
     </Show>
@@ -171,7 +184,7 @@ function SplitSettingsButton() {
 
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       classList={{
         'bg-accent/20 text-accent': isSettingsSplitOpen(),
       }}
@@ -189,7 +202,7 @@ function SplitSettingsButton() {
         replaceSplit({ content: { type: 'component', id: 'settings' } });
       }}
     >
-      <IconGear />
+      <IconGear class="h-4" />
     </Button>
   );
 }
@@ -201,7 +214,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
+      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
       data-split-header
       ref={props.ref}
     >
@@ -223,7 +236,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         {/* space filler */}
         <div class="h-full grow-1" />
 
-        <Show when={!isTouchDevice() || !isMobileWidth()}>
+        <Show when={!isMobile()}>
           <div
             class="min-w-4 h-full shrink-0"
             ref={(ref) => {

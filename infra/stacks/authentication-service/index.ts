@@ -96,10 +96,17 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
+const STRIPE_PREMIUM_PRICE_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
+  .apply((secret) => secret.secretString);
 
 const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
   .apply((secret) => secret.arn);
+
+const MACRO_API_TOKEN_EXPIRY_SECONDS = config.require(
+  `macro_api_token_expiry_seconds`
+);
 
 const MACRO_API_TOKEN_PRIVATE_SECRET_KEY = config.require(
   `macro_api_token_private_secret_key`
@@ -269,12 +276,22 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
     },
     {
+      name: 'MACRO_API_TOKEN_EXPIRY_SECONDS',
+      value: MACRO_API_TOKEN_EXPIRY_SECONDS,
+    },
+    {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
     },
     {
       name: 'STRIPE_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PRICE_ID_KEY}`,
+    },
+    {
+      // NOTE: this is the fetched secret value of the STRIPE_PRICE_ID
+      // from above. Will unify these in a separate PR.
+      name: 'STRIPE_PREMIUM_PRICE_ID',
+      value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
     },
   ],
 });

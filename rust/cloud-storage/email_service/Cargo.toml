@@ -43,10 +43,12 @@ default = [
   "contacts_sync",
   "gmail_webhook_auth",
   "sfs_map",
+  "sfs_delete",
 ]
 gmail_webhook_auth = []
 local_queue = []
 sfs_map = []
+sfs_delete = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -59,6 +61,7 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
+chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
@@ -114,6 +117,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
   "gmail",
   "search",
+  "sfs_delete",
   "sfs_uploader"
 ] }
 sqs_worker = { path = "../sqs_worker" }

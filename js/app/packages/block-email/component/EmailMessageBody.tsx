@@ -10,7 +10,7 @@ import {
 } from '@core/email';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@core/context/user';
 import {
   type Accessor,
   createEffect,
@@ -219,7 +219,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }}
     >
       <div
-        class="text-sm relative"
+        class="relative"
         classList={{
           isPersonal: isPersonal(),
           'line-clamp-3': !props.isBodyExpanded(),

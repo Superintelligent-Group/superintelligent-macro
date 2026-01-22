@@ -9,8 +9,7 @@ import {
   $getNodeById,
   $isDiffNode,
 } from '@lexical-core';
-import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import type { LexicalEditor } from 'lexical';
 import {
   COMMAND_PRIORITY_CRITICAL,
@@ -20,7 +19,11 @@ import {
 import { createEffect } from 'solid-js';
 import { mapRegisterDelete } from '../shared/utils';
 
-type Diff = NamedTool<'MarkdownRewrite', 'response'>['data']['diffs'][number];
+interface Diff {
+  operation: string;
+  node_key: string;
+  markdown_text: string;
+}
 
 export type DiffPluginArgs = {
   revisionsSignal: ReturnType<typeof createBlockSignal<Diff[] | undefined>>;

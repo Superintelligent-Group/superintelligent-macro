@@ -6,6 +6,8 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMessages } from '@core/component/AI/component/message';
+import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
+import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   CreateAndSend,
@@ -17,6 +19,8 @@ import {
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { useBlockId } from '@core/block';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -27,7 +31,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { invalidateUserQuota } from '@service-auth/userQuota';
+import { invalidateUserQuota } from '@queries/auth';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
@@ -41,6 +45,7 @@ export function Chat(props: { data: ChatData }) {
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
+  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
   const [stream, setStream] = createSignal<MessageStream>();
   const cancelStream = () => {
@@ -85,6 +90,14 @@ export function Chat(props: { data: ChatData }) {
   if (loadedState.model) {
     setModel(loadedState.model);
   }
+
+  // Entity drag-and-drop support
+  const chatId = useBlockId();
+  const { droppable, isDraggingOver } = useEntityDropAttachment(
+    'chat-input-' + chatId,
+    attachments
+  );
+  false && droppable;
 
   registerToolHandler(stream);
   const { showPaywall } = usePaywallState();
@@ -148,6 +161,18 @@ export function Chat(props: { data: ChatData }) {
     },
   });
 
+  // Check for pending send data (e.g., from SoupChatInput) and send it
+  const pendingSend = getPendingSend();
+  if (pendingSend) {
+    buildChatSendRequest({
+      chatId: props.data.chat.id,
+      userRequest: pendingSend.content,
+      attachments: pendingSend.attachments,
+      model: pendingSend.model,
+      isPersistent: true,
+    }).then((request) => onSend(request));
+  }
+
   registerScopeSignalHotkey(scopeId, {
     hotkey: 'enter',
     description: 'Focus Chat Input',
@@ -177,14 +202,21 @@ export function Chat(props: { data: ChatData }) {
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
       uploadQueue={uploadQueue}
+      isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
-      <div class="size-full flex-1 min-h-0 p-2">
-        <div data-chat-scroll class="h-full min-h-0 overflow-auto">
+      <div class="size-full flex-1 min-h-0 p-2 relative">
+        <div class="absolute inset-0 pointer-events-none" use:droppable />
+        <div
+          data-chat-scroll
+          class="h-full min-h-0 overflow-auto scrollbar-hidden"
+          ref={setScrollRef}
+        >
           <div class="mx-auto w-full max-w-3xl">
             <ChatMessages />
           </div>
         </div>
+        <CustomScrollbar scrollContainer={scrollRef} />
       </div>
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">

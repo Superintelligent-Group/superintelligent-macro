@@ -1,15 +1,18 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import '@core/directive/dnd';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@core/context/user';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
+import { createDraggable } from '@thisbeyond/solid-dnd';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
@@ -20,6 +23,8 @@ import {
   createDeferred,
   createMemo,
   createSignal,
+  createUniqueId,
+  For,
   Match,
   onCleanup,
   onMount,
@@ -41,13 +46,14 @@ import {
 } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type {
+  ChannelContentHitData,
   ContentHitData,
   EmailContentHitData,
   SearchLocation,
   WithSearch,
 } from '../types/search';
+import type { EntityDragData } from '../types/drag';
 import { KeyPropertiesGrid } from './EntityPropertyValues';
-import { ChildrenSlot, type ChildRowConfig } from '@unified-list';
 
 export type EntityClickEvent = Parameters<
   JSX.EventHandler<HTMLDivElement, MouseEvent>
@@ -93,15 +99,194 @@ function SharedBadge(props: { ownerId: string }) {
   );
 }
 
-// ============================================================================
-// Helper Components for ChildrenSlot System
-// ============================================================================
+function GenericContentHit(props: { data: ContentHitData }) {
+  return (
+    <div class="text-ink-muted truncate flex items-center">
+      <StaticMarkdown
+        markdown={props.data.content}
+        theme={unifiedListMarkdownTheme}
+        singleLine={true}
+      />
+    </div>
+  );
+}
 
-/**
- * NotificationLabel - extracts action type from notification
- */
-function NotificationLabel(props: { notification: Notification }) {
-  const label = () => {
+function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
+  const [userName] = useDisplayName(tryMacroId(props.data.senderId));
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.data.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="shrink-0 truncate min-w-0 font-medium">{userName()}</div>
+        <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
+          {createFormattedDate(props.data.sentAt)}
+        </div>
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.data.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailMessageContentHit(props: {
+  allData: EmailContentHitData[];
+  data: EmailContentHitData;
+}) {
+  const isSingleMatch = createMemo(() => {
+    return props.allData.length === 1;
+  });
+  const isSingleSender = createMemo(() => {
+    const senders = props.allData.map((d) => d.sender);
+    if (senders.length === 1) return true;
+    if (new Set(senders).size === 1) return true;
+    return false;
+  });
+  const isSingleSentAt = createMemo(() => {
+    const sentAts = props.allData.map((d) => d.sentAt);
+    if (sentAts.length === 1) return true;
+    if (new Set(sentAts).size === 1) return true;
+    const formattedDates = sentAts.map(createFormattedDate);
+    if (new Set(formattedDates).size === 1) return true;
+    return false;
+  });
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.data.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
+        <Show when={!isSingleMatch() && !isSingleSender()}>
+          <div class="shrink-0 truncate min-w-0 font-medium">
+            {props.data.sender}
+          </div>
+        </Show>
+        <Show when={!isSingleMatch() && !isSingleSentAt()}>
+          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
+            {createFormattedDate(props.data.sentAt)}
+          </div>
+        </Show>
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.data.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThreadBorder() {
+  return (
+    <div
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
+      style={{ height: '6px' }}
+    />
+  );
+}
+
+function CollapsibleListRow(
+  props: ParentProps<{
+    onClick?: (e: EntityClickEvent) => void;
+    classList?: Record<string, boolean>;
+    enableHover?: boolean;
+    showThreadBorder?: boolean;
+    blockNavigation?: boolean;
+  }>
+) {
+  return (
+    <div
+      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
+      classList={{
+        'hover:bg-hover/50 hover:opacity-85':
+          props.enableHover ?? !!props.onClick,
+        ...props.classList,
+      }}
+      onClick={(e) => {
+        if (props.onClick) {
+          if (props.blockNavigation) {
+            e.stopPropagation();
+          }
+          props.onClick(e);
+        }
+      }}
+      data-blocks-navigation={props.blockNavigation}
+    >
+      <Show when={props.showThreadBorder}>
+        <ThreadBorder />
+      </Show>
+      {props.children}
+    </div>
+  );
+}
+
+function CollapsibleList<T>(props: {
+  items: T[];
+  visibleCount?: number;
+  children: (item: T, index?: number, count?: number) => any;
+  threadBorder?: boolean;
+}) {
+  const [showAll, setShowAll] = createSignal(false);
+  const visibleCount = () => props.visibleCount ?? 3;
+
+  const visibleItems = () => {
+    if (props.items.length <= visibleCount() || showAll()) {
+      return props.items;
+    }
+    return props.items.slice(0, visibleCount());
+  };
+
+  const count = () => props.items.length;
+  const hasMore = () => props.items.length > visibleCount();
+
+  return (
+    <>
+      <For each={visibleItems()}>
+        {(child, index) => props.children(child, index(), count())}
+      </For>
+      <Show when={hasMore()}>
+        <div class="h-5">
+          <Show when={props.threadBorder}>
+            <ThreadBorder />
+          </Show>
+          <button
+            class="block w-fit px-2 py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAll((prev) => !prev);
+            }}
+            data-blocks-navigation
+          >
+            <Show when={!showAll()} fallback={<>Collapse</>}>
+              + {props.items.length - visibleCount()} More
+            </Show>
+          </button>
+        </div>
+      </Show>
+    </>
+  );
+}
+
+function NotificationRow(props: {
+  notification: Notification;
+  onClick?: NotificationClickHandler;
+  entity: EntityData;
+}) {
+  const [userName] = useDisplayName(
+    tryMacroId(props.notification.senderId ?? '')
+  );
+
+  const ActionContent = () => {
     if (
       props.notification.notificationEventType === 'document_mention' ||
       props.notification.notificationEventType === 'channel_message_document'
@@ -120,23 +305,12 @@ function NotificationLabel(props: { notification: Notification }) {
     return 'message';
   };
 
-  return (
-    <span class="opacity-70 uppercase font-mono text-[0.625rem]">
-      {label()}
-    </span>
-  );
-}
-
-/**
- * NotificationContent - extracts message content from notification
- */
-function NotificationContent(props: { notification: Notification }) {
-  const content = () => {
+  const MessageContent = () => {
     if (
       props.notification.notificationEventType === 'document_mention' ||
       props.notification.notificationEventType === 'channel_message_document'
     ) {
-      return null;
+      return '';
     }
 
     const metadata = tryToTypedNotification(
@@ -146,121 +320,111 @@ function NotificationContent(props: { notification: Notification }) {
       !metadata ||
       !('messageContent' in metadata) ||
       metadata.messageContent === undefined
-    ) {
-      return null;
-    }
+    )
+      return '';
 
-    return metadata.messageContent.trim() ? (
-      <StaticMarkdown
-        markdown={metadata.messageContent}
-        theme={unifiedListMarkdownTheme}
-        singleLine={true}
-      />
-    ) : (
-      <span class="italic text-ink-disabled">Attached items</span>
+    return (
+      <Show
+        when={metadata.messageContent.trim()}
+        fallback={<span class="italic text-ink-disabled">Attached items</span>}
+      >
+        {(content) => (
+          <StaticMarkdown
+            markdown={content()}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        )}
+      </Show>
     );
   };
 
-  return <>{content()}</>;
-}
-
-/**
- * SearchHitUserIcon - renders user icon for channel/email search hits
- */
-function SearchHitUserIcon(props: { data: ContentHitData }) {
   return (
-    <Switch>
-      <Match when={props.data.type === 'channel' && props.data}>
-        {(data) => <UserIcon id={data().senderId} size="xs" />}
-      </Match>
-      <Match when={props.data.type === 'email' && props.data}>
-        {(data) => <UserIcon id={data().senderId} size="xs" />}
-      </Match>
-      <Match when={true}>
-        <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]" />
-      </Match>
-    </Switch>
+    <CollapsibleListRow
+      showThreadBorder
+      onClick={
+        props.onClick
+          ? (e) => {
+              props.onClick?.({
+                type: 'entity',
+                entity: {
+                  ...props.entity,
+                  notification: props.notification,
+                },
+                event: e,
+              });
+            }
+          : undefined
+      }
+    >
+      <div class="flex size-5 shrink-0 items-center justify-center mr-1">
+        <UserIcon id={props.notification.senderId!} size="xs" />
+      </div>
+      <div class="flex gap-1 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="w-[20cqw] shrink-0 truncate min-w-0">
+          {userName()}{' '}
+          <span class="opacity-70 uppercase font-mono text-[0.625rem] ml-2">
+            {ActionContent()}
+          </span>
+        </div>
+        <MessageContent />
+      </div>
+      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+        {createFormattedDate(props.notification.createdAt)}
+      </div>
+    </CollapsibleListRow>
   );
 }
 
-/**
- * SearchHitLabel - renders label for search hits (sender name or match count)
- */
-function SearchHitLabel(props: {
-  data: ContentHitData;
+function ContentHitRow(props: {
   allData: ContentHitData[];
-  index: number;
-  totalCount: number;
+  data: ContentHitData;
+  onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
+  index?: number;
+  count?: number;
 }) {
-  const isSingleMatch = () => props.allData.length === 1;
-  const isSingleSender = () => {
-    if (props.data.type !== 'email') return false;
-    const senders = (props.allData as EmailContentHitData[]).map(
-      (d) => d.sender
-    );
-    if (senders.length === 1) return true;
-    if (new Set(senders).size === 1) return true;
-    return false;
+  const match = (): [number, number] | undefined => {
+    if (props.index !== undefined && props.count !== undefined)
+      return [props.index, props.count];
   };
 
   return (
-    <Switch>
-      <Match when={props.data.type === 'channel' && props.data}>
-        {(data) => {
-          const [userName] = useDisplayName(tryMacroId(data().senderId));
-          return <span class="font-medium">{userName()}</span>;
-        }}
-      </Match>
-      <Match when={props.data.type === 'email' && props.data}>
-        {(data) => (
-          <Show when={!isSingleMatch() && !isSingleSender()}>
-            <span class="font-medium">{data().sender}</span>
-          </Show>
-        )}
-      </Match>
-      <Match when={true}>
-        <span class="font-mono text-xs text-ink-disabled/50">
-          {props.index + 1}/{props.totalCount}
-        </span>
-      </Match>
-    </Switch>
-  );
-}
-
-/**
- * SearchHitDate - renders date for channel/email search hits
- */
-function SearchHitDate(props: {
-  data: ContentHitData;
-  allData: ContentHitData[];
-}) {
-  const isSingleMatch = () => props.allData.length === 1;
-  const isSingleSentAt = () => {
-    if (props.data.type !== 'email') return false;
-    const sentAts = (props.allData as EmailContentHitData[]).map(
-      (d) => d.sentAt
-    );
-    if (sentAts.length === 1) return true;
-    if (new Set(sentAts).size === 1) return true;
-    const formattedDates = sentAts.map(createFormattedDate);
-    if (new Set(formattedDates).size === 1) return true;
-    return false;
-  };
-
-  return (
-    <Switch>
-      <Match when={props.data.type === 'channel' && props.data}>
-        {(data) => <>{createFormattedDate(data().sentAt)}</>}
-      </Match>
-      <Match when={props.data.type === 'email' && props.data}>
-        {(data) => (
-          <Show when={!isSingleMatch() && !isSingleSentAt()}>
-            {createFormattedDate(data().sentAt)}
-          </Show>
-        )}
-      </Match>
-      <Match when={true}>{null}</Match>
-    </Switch>
+    <CollapsibleListRow
+      blockNavigation
+      onClick={(e) => props.onClick(e, props.data.location)}
+      showThreadBorder={props.data.type === 'channel'}
+    >
+      <Switch>
+        <Match when={props.data.type === 'channel' && props.data}>
+          {(data) => <ChannelMessageContentHit data={data()} />}
+        </Match>
+        <Match when={props.data.type === 'email' && props.data}>
+          {(data) => (
+            <EmailMessageContentHit
+              allData={props.allData as EmailContentHitData[]}
+              data={data()}
+            />
+          )}
+        </Match>
+        <Match when={true}>
+          <div class="flex gap-2 items-center min-w-0 w-full">
+            <div class="flex size-5 shrink-0 items-center justify-center">
+              <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]"></div>
+            </div>
+            <Show when={match()}>
+              {(match) => {
+                return (
+                  <span class="font-mono text-xs touch:mobile-width:text-sm text-ink-disabled/50">
+                    {match()[0] + 1}/{match()[1]}
+                  </span>
+                );
+              }}
+            </Show>
+            <GenericContentHit data={props.data} />
+          </div>
+        </Match>
+      </Switch>
+    </CollapsibleListRow>
   );
 }
 
@@ -307,6 +471,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
   searchActive?: boolean;
+  splitId?: string;
 }
 
 const [hoveredComponentId, setHoveredComponentId] = createSignal<Symbol>(
@@ -350,13 +515,29 @@ export function EntityWithEverything(
     }
   });
 
-  const hasNotifications = () =>
-    !!props.entity.notifications && props.entity.notifications().length > 0;
+  /**
+   * TODO (seamus + teo) : These notifications are being attached to the wrong
+   *     entity - ie the channel and not the document being shared. this means
+   *     we have notification rows that point to a channel but do not have a
+   *     message_id to link to. These notifications result in 2 notifications
+   *     on a channel when an item is shared. One for the message, and this
+   *     weird busted one. Needs to be fixed in the service, then I will delete
+   *     this logic.
+   */
+  const validNotifications = () => {
+    return (
+      props.entity.notifications?.().filter((notification) => {
+        return (
+          notification.notificationEventType !== 'channel_message_document'
+        );
+      }) ?? []
+    );
+  };
+
+  const hasNotifications = () => validNotifications().length > 0;
 
   const notDoneNotifications = () => {
-    const notifications = props.entity.notifications?.();
-    if (!notifications) return [];
-    return notifications.filter(({ done }) => !done);
+    return validNotifications().filter(({ done }) => !done);
   };
 
   const isSearch = createMemo(
@@ -365,6 +546,15 @@ export function EntityWithEverything(
 
   const searchHighlightName = () =>
     isSearchEntity(props.entity) && props.entity.search.nameHighlight;
+
+  const displayName = createMemo(() => {
+    if (props.entity.type === 'document') {
+      return formatDocumentName(props.entity.name, props.entity.fileType, {
+        fullyQualifiedBlockName: true,
+      });
+    }
+    return props.entity.name;
+  });
 
   const contentHitData = () => {
     if (!isSearchEntity(props.entity)) return [];
@@ -429,7 +619,7 @@ export function EntityWithEverything(
       };
 
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
+        <div class="flex gap-1 items-center min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
             class="flex gap-2 items-center font-semibold shrink-0 @max-md/uList:w-full @max-md/uList:truncate"
@@ -477,10 +667,19 @@ export function EntityWithEverything(
               </div>
             </div>
             {/* Sender Name */}
-            <div class="truncate @max-md/uList:min-w-0">
-              {displayedNames() ??
-                props.entity.senderName ??
-                props.entity.senderEmail?.split('@')[0]}
+            <div class="truncate flex items-center gap-1 @max-md/uList:min-w-0">
+              <Show
+                when={props.entity.type === 'email' && props.entity.isDraft}
+              >
+                <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent-30 p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted px-2">
+                  DRAFT
+                </div>
+              </Show>
+              <span>
+                {displayedNames() ??
+                  props.entity.senderName ??
+                  props.entity.senderEmail?.split('@')[0]}
+              </span>
             </div>
             {/* Sender Email Address */}
             {/* <Show
@@ -509,7 +708,7 @@ export function EntityWithEverything(
                 </Show>
                 <Show
                   when={isSearch() && searchHighlightName()}
-                  fallback={props.entity.name}
+                  fallback={displayName()}
                 >
                   {(name) => (
                     <StaticMarkdown
@@ -527,14 +726,14 @@ export function EntityWithEverything(
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => (
-                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                     {createFormattedDate(date())}
                   </span>
                 )}
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
-            <div class="hidden @max-md/uList:block truncate w-full text-xs opacity-60">
+            <div class="hidden @max-md/uList:block truncate w-full text-xs touch:mobile-width:text-sm opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -565,7 +764,7 @@ export function EntityWithEverything(
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:w-full @max-md/uList:gap-1">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
+        <span class="flex gap-1 truncate font-medium shrink-0 items-center @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
           <div class="flex items-center gap-2 w-full @max-md/uList:justify-between @max-md/uList:min-w-0">
             {/* Icon inline with title in narrow mode */}
             <div class="hidden @max-md/uList:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
@@ -624,7 +823,7 @@ export function EntityWithEverything(
             >
               <Show
                 when={isSearch() && searchHighlightName()}
-                fallback={props.entity.name}
+                fallback={displayName()}
               >
                 {(name) => (
                   <StaticMarkdown
@@ -638,7 +837,7 @@ export function EntityWithEverything(
             {/* Timestamp inline with title in narrow mode */}
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -653,7 +852,7 @@ export function EntityWithEverything(
               </span>
               <Show when={latestMessage()}>
                 {(lastMessage) => (
-                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs">
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs @max-md/uList:touch:mobile-width:text-sm">
                     {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                     <Show
                       when={lastMessage().content.trim()}
@@ -681,10 +880,26 @@ export function EntityWithEverything(
     );
   });
 
-  const draggable = createDraggable(props.entity.id, props.entity);
+  const { isAltKey } = useDragOperation();
+  const operation = createMemo(() => {
+    switch (props.entity.type) {
+      case 'document':
+        return isAltKey() ? 'copy' : 'move';
+      case 'chat':
+        return isAltKey() ? 'copy' : 'move';
+      default:
+        return 'move';
+    }
+  });
+  const draggableId = `${props.entity.id}-${props.splitId ?? createUniqueId()}`;
+  const dragData: EntityDragData = {
+    dragType: 'entity',
+    splitId: props.splitId,
+    ...props.entity,
+    operation,
+  };
+  const draggable = createDraggable(draggableId, dragData);
   false && draggable;
-  const droppable = createDroppable(props.entity.id, props.entity);
-  false && droppable;
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -726,9 +941,8 @@ export function EntityWithEverything(
   return (
     <div
       use:draggable
-      use:droppable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30 mx-[1px]"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -757,7 +971,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-start suppress-css-bracket grid-cols-[2rem_1fr_auto] grid-rows-[auto_auto] @max-md/uList:flex @max-md/uList:flex-col pr-2 @max-md/uList:px-2 @max-md/uList:py-2"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/uList:flex @max-md/uList:flex-col pr-2 @max-md/uList:px-2 @max-md/uList:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
           props.onClick?.({ type: 'entity', entity: props.entity, event: e });
@@ -801,7 +1015,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="row-start-1 col-start-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/uList:hidden self-center"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/uList:hidden touch:hidden"
           onMouseDown={(e) => {
             e.stopPropagation();
           }}
@@ -838,21 +1052,20 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="row-start-1 col-start-2 min-h-10 min-w-[50px] flex flex-row items-center gap-2 self-center @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
           }}
         >
           {/* When the left checkbox column is hidden in narrow split containers, we still want
               unread indicators to be visible. */}
-          <Show
-            when={
-              props.showLeftColumnIndicator &&
-              !props.checked &&
-              !props.highlighted
-            }
-          >
-            <div class="flex size-4 items-center justify-center @min-md/split:hidden">
+          <Show when={props.showLeftColumnIndicator && !props.checked}>
+            <div
+              class="flex size-4 items-center justify-center @min-md/split:hidden"
+              classList={{
+                invisible: props.highlighted,
+              }}
+            >
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -909,12 +1122,7 @@ export function EntityWithEverything(
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
-        <div
-          class="row-start-1 col-start-3 ml-2 @md:ml-4 self-center min-w-0 @max-md/uList:col-auto @max-md/uList:row-auto @max-md/uList:ml-0 @max-md/uList:mt-1 @max-md/uList:self-start @max-md/uList:w-full"
-          classList={{
-            'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
-          }}
-        >
+        <div class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/uList:col-auto @max-md/uList:row-auto @max-md/uList:ml-0 @max-md/uList:mt-1 @max-md/uList:self-start @max-md/uList:w-full">
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
             <Show when={sharedData()}>
               {(shared) => (
@@ -943,7 +1151,7 @@ export function EntityWithEverything(
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
+                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -979,50 +1187,34 @@ export function EntityWithEverything(
             </Show>
           </div>
         </div>
-        {/* Content Hits from Search - using ChildrenSlot */}
+        {/* Content Hits from Search */}
         <Show when={isSearch() && contentHitData().length > 0}>
-          <ChildrenSlot
-            children={() => contentHitData()}
-            parentId={props.entity.id}
-            maxVisible={1}
-            rowConfig={
-              {
-                slots: {
-                  userIcon: ({ child }) => <SearchHitUserIcon data={child} />,
-                  label: ({ child, index, totalCount }) => (
-                    <SearchHitLabel
-                      data={child}
-                      allData={contentHitData()}
-                      index={index}
-                      totalCount={totalCount}
-                    />
-                  ),
-                  content: ({ child }) => (
-                    <StaticMarkdown
-                      markdown={child.content}
-                      theme={unifiedListMarkdownTheme}
-                      singleLine={true}
-                    />
-                  ),
-                  date: ({ child }) => (
-                    <SearchHitDate data={child} allData={contentHitData()} />
-                  ),
-                },
-                showThreadBorder: true,
-                onClick: (child, e) => {
-                  props.onClick?.({
-                    type: 'entity',
-                    entity: props.entity,
-                    event: e as unknown as EntityClickEvent,
-                    location: child.location,
-                  });
-                },
-                blocksNavigation: true,
-              } as ChildRowConfig<ContentHitData>
-            }
-          />
+          <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
+            <CollapsibleList
+              items={contentHitData()}
+              threadBorder
+              visibleCount={1}
+            >
+              {(data, index, count) => (
+                <ContentHitRow
+                  allData={contentHitData()}
+                  data={data}
+                  onClick={(e, location) => {
+                    props.onClick?.({
+                      type: 'entity',
+                      entity: props.entity,
+                      event: e,
+                      location,
+                    });
+                  }}
+                  index={index}
+                  count={count}
+                />
+              )}
+            </CollapsibleList>
+          </div>
         </Show>
-        {/* Notifications - using ChildrenSlot */}
+        {/* Notifications */}
         <Show
           when={
             props.showUnrollNotifications &&
@@ -1030,51 +1222,17 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <ChildrenSlot
-            children={() => notDoneNotifications()}
-            parentId={props.entity.id}
-            maxVisible={3}
-            rowConfig={
-              {
-                slots: {
-                  userIcon: ({ child }) => (
-                    <UserIcon id={child.senderId!} size="xs" />
-                  ),
-                  label: ({ child }) => {
-                    const [userName] = useDisplayName(
-                      tryMacroId(child.senderId ?? '')
-                    );
-                    return (
-                      <>
-                        {userName()} <NotificationLabel notification={child} />
-                      </>
-                    );
-                  },
-                  content: ({ child }) => (
-                    <NotificationContent notification={child} />
-                  ),
-                  date: ({ child }) => (
-                    <>{createFormattedDate(child.createdAt)}</>
-                  ),
-                },
-                showThreadBorder: true,
-                onClick: (child, e) => {
-                  props.onClickNotification?.({
-                    type: 'entity',
-                    entity: {
-                      ...props.entity,
-                      notification: child,
-                    },
-                    event: e as unknown as EntityClickEvent,
-                  });
-                },
-                blocksNavigation: true,
-                classList: {
-                  'opacity-70': false, // Will handle viewedAt separately
-                },
-              } as ChildRowConfig<Notification>
-            }
-          />
+          <div class="relative col-2 col-end-4 pb-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:mt-1">
+            <CollapsibleList items={notDoneNotifications()} threadBorder>
+              {(notification) => (
+                <NotificationRow
+                  notification={notification}
+                  onClick={props.onClickNotification}
+                  entity={props.entity}
+                />
+              )}
+            </CollapsibleList>
+          </div>
         </Show>
       </div>
     </div>
@@ -1192,7 +1350,7 @@ function EntityProject(props: {
       onPointerDown={(e) =>
         openProjectEntity({ event: e, eventHandler: props.onPointerdown })
       }
-      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+      class="flex gap-1 items-center text-xs touch:mobile-width:text-sm text-ink-extra-muted min-w-0"
       classList={{
         'hover:text-accent': projectQuery.isSuccess,
       }}

@@ -4,6 +4,7 @@
  */
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
+import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
@@ -22,6 +23,8 @@ export interface FreshSortConfig {
   useViewedAt?: boolean;
   /** Boost multiplier for channel items when query is present. Default: 1.0 (no boost) */
   channelBoost?: number;
+  /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
+  commaSeparatedChannelMatch?: boolean;
 }
 
 export interface TimestampedItem {
@@ -53,6 +56,7 @@ const DEFAULT_CONFIG: Required<FreshSortConfig> = {
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
+  commaSeparatedChannelMatch: false,
 };
 
 function extractTimestamp(
@@ -118,10 +122,19 @@ function calculateTimeScore(
   return Math.exp(-config.timeDecayFactor * normalizedAge);
 }
 
-function normalizeFuzzyScore(
+export function normalizeFuzzyScore(
   fuzzyScore: number,
-  maxPossibleScore: number = 1
+  maxPossibleScore: number
 ): number {
+  if (!Number.isFinite(fuzzyScore)) {
+    throw new Error(`fuzzyScore must be a finite number, got: ${fuzzyScore}`);
+  }
+  if (!Number.isFinite(maxPossibleScore) || maxPossibleScore <= 0) {
+    throw new Error(
+      `maxPossibleScore must be a finite positive number, got: ${maxPossibleScore}`
+    );
+  }
+
   return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
 }
 
@@ -145,13 +158,16 @@ export function freshSort<T extends TimestampedItem>(
   const normalizedTimeWeight = finalConfig.timeWeight / totalWeight;
   const normalizedBrevityWeight = finalConfig.brevityWeight / totalWeight;
 
-  const maxFuzzyScore = Math.max(...filterResults.map((r) => r.score));
+  const filterNoInfResults = filterResults.filter((r) => r.score !== Infinity);
+  const maxFuzzyScore =
+    filterNoInfResults.length > 0
+      ? Math.max(...filterNoInfResults.map((r) => r.score))
+      : 1;
 
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
+    const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
     const fuzzyScore =
-      maxFuzzyScore === 0
-        ? 0
-        : normalizeFuzzyScore(result.score, maxFuzzyScore);
+      maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(result.original, finalConfig.useViewedAt),
       finalConfig
@@ -193,6 +209,44 @@ export function createFreshSearch<T extends TimestampedItem>(
   extractor: (item: T) => string
 ) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
+    const finalConfig = { ...DEFAULT_CONFIG, ...config };
+    const hasComma = query.includes(',');
+    const hasSpace = query.includes(' ');
+    const useMultiTermChannelMatch =
+      finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
+
+    if (useMultiTermChannelMatch) {
+      // For comma or space-separated queries, handle channel items specially
+      const channelResults: FilterResult<T>[] = [];
+      const nonChannelItems: T[] = [];
+
+      for (const item of items) {
+        if (isChannelItem(item)) {
+          const name = extractor(item);
+          const score = fuzzyScoreCommaSpaceSeparated(query, name);
+          if (score >= 0) {
+            channelResults.push({
+              original: item,
+              string: name,
+              score: score * 100, // Scale to match fuzzy library scoring
+              index: 0,
+            });
+          }
+        } else {
+          nonChannelItems.push(item);
+        }
+      }
+
+      // Get fuzzy results for non-channel items using regular matching
+      const nonChannelResults = fuzzy.filter(query, nonChannelItems, {
+        extract: extractor,
+      });
+
+      // Combine results
+      const allResults = [...channelResults, ...nonChannelResults];
+      return freshSort(allResults, config);
+    }
+
     const fuzzyResults = fuzzy.filter(query, items, {
       extract: extractor,
     });
