@@ -68,7 +68,8 @@ export default defineConfig({
       {
         extends: './packages/unified-list/vitest.config.ts',
         test: {
-          include: ['packages/unified-list/**/*.{test,spec}.{ts,tsx}'],
+          include: ['packages/unified-list/src/**/*.{test,spec}.{ts,tsx}'],
+          exclude: ['packages/unified-list/tests/e2e/**'],
           name: 'unified-list',
         },
       },

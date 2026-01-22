@@ -6,7 +6,8 @@
  */
 
 import type { EntityData, WithNotification } from '@macro-entity';
-import { type FilterConfig, unreadFilter } from '@unified-list';
+import type { FilterConfig } from '@unified-list';
+import { unreadFilter } from '@unified-list/filters';
 import { signalFilter, noiseFilter } from './filters';
 
 type EnhancedEntity = WithNotification<EntityData>;

@@ -1,0 +1,9 @@
+{
+  "name": "@unified-list",
+  "private": true,
+  "scripts": {
+    "test": "bun run test:unit && bun run test:e2e",
+    "test:unit": "cd ../.. && bunx vitest run --project unified-list",
+    "test:e2e": "cd ../.. && bunx playwright test --config tests/e2e/unified-list.config.ts"
+  }
+}

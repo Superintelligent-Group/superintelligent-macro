@@ -79,76 +79,128 @@ const DEPRIORITY_METADATA_CONFIGS: SignalConfig<EmailMetadataKey>[] = [
 ];
 
 // ============================================================================
-// Persisted Toggles (Singleton)
+// Lazy Initialization (avoids creating signals at module load time)
 // ============================================================================
 
-/** Priority label toggles (persisted) */
-export const PRIORITY_LABEL_TOGGLES = createSignalToggles(
-  'priority_label',
-  PRIORITY_LABEL_CONFIGS
-);
+let _priorityLabelToggles: SignalToggle<string>[] | null = null;
+let _priorityMetadataToggles: SignalToggle<EmailMetadataKey>[] | null = null;
+let _depriorityLabelToggles: SignalToggle<string>[] | null = null;
+let _depriorityMetadataToggles: SignalToggle<EmailMetadataKey>[] | null = null;
 
-/** Priority metadata toggles (persisted) */
-export const PRIORITY_METADATA_TOGGLES = createSignalToggles(
-  'priority_metadata',
-  PRIORITY_METADATA_CONFIGS
-);
+let _priorityLabels: Accessor<Set<string>> | null = null;
+let _depriorityLabels: Accessor<Set<string>> | null = null;
+let _priorityMetadata: Accessor<Set<EmailMetadataKey>> | null = null;
+let _depriorityMetadata: Accessor<Set<EmailMetadataKey>> | null = null;
 
-/** Depriority label toggles (persisted) */
-export const DEPRIORITY_LABEL_TOGGLES = createSignalToggles(
-  'depriority_label',
-  DEPRIORITY_LABEL_CONFIGS
-);
+/** Priority label toggles (persisted) - lazy initialized */
+export const PRIORITY_LABEL_TOGGLES = (): SignalToggle<string>[] => {
+  if (!_priorityLabelToggles) {
+    _priorityLabelToggles = createSignalToggles(
+      'priority_label',
+      PRIORITY_LABEL_CONFIGS
+    );
+  }
+  return _priorityLabelToggles;
+};
 
-/** Depriority metadata toggles (persisted) */
-export const DEPRIORITY_METADATA_TOGGLES = createSignalToggles(
-  'depriority_metadata',
-  DEPRIORITY_METADATA_CONFIGS
-);
+/** Priority metadata toggles (persisted) - lazy initialized */
+export const PRIORITY_METADATA_TOGGLES =
+  (): SignalToggle<EmailMetadataKey>[] => {
+    if (!_priorityMetadataToggles) {
+      _priorityMetadataToggles = createSignalToggles(
+        'priority_metadata',
+        PRIORITY_METADATA_CONFIGS
+      );
+    }
+    return _priorityMetadataToggles;
+  };
+
+/** Depriority label toggles (persisted) - lazy initialized */
+export const DEPRIORITY_LABEL_TOGGLES = (): SignalToggle<string>[] => {
+  if (!_depriorityLabelToggles) {
+    _depriorityLabelToggles = createSignalToggles(
+      'depriority_label',
+      DEPRIORITY_LABEL_CONFIGS
+    );
+  }
+  return _depriorityLabelToggles;
+};
+
+/** Depriority metadata toggles (persisted) - lazy initialized */
+export const DEPRIORITY_METADATA_TOGGLES =
+  (): SignalToggle<EmailMetadataKey>[] => {
+    if (!_depriorityMetadataToggles) {
+      _depriorityMetadataToggles = createSignalToggles(
+        'depriority_metadata',
+        DEPRIORITY_METADATA_CONFIGS
+      );
+    }
+    return _depriorityMetadataToggles;
+  };
 
 // ============================================================================
-// Computed Sets (Reactive based on toggles)
+// Computed Sets (Reactive based on toggles) - lazy initialized
 // ============================================================================
 
 /** Labels that mark emails as priority (computed from enabled toggles) */
-export const PRIORITY_LABELS = createMemo(
-  () =>
-    new Set(
-      PRIORITY_LABEL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+export const PRIORITY_LABELS = (): Set<string> => {
+  if (!_priorityLabels) {
+    _priorityLabels = createMemo(
+      () =>
+        new Set(
+          PRIORITY_LABEL_TOGGLES()
+            .filter(({ enabled }) => enabled())
+            .map(({ key }) => key)
+        )
+    );
+  }
+  return _priorityLabels();
+};
 
 /** Labels that mark emails as depriority (computed from enabled toggles) */
-export const DEPRIORITY_LABELS = createMemo(
-  () =>
-    new Set(
-      DEPRIORITY_LABEL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+export const DEPRIORITY_LABELS = (): Set<string> => {
+  if (!_depriorityLabels) {
+    _depriorityLabels = createMemo(
+      () =>
+        new Set(
+          DEPRIORITY_LABEL_TOGGLES()
+            .filter(({ enabled }) => enabled())
+            .map(({ key }) => key)
+        )
+    );
+  }
+  return _depriorityLabels();
+};
 
 /** Metadata keys that mark emails as priority (computed from enabled toggles) */
-export const PRIORITY_METADATA = createMemo(
-  () =>
-    new Set<EmailMetadataKey>(
-      PRIORITY_METADATA_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+export const PRIORITY_METADATA = (): Set<EmailMetadataKey> => {
+  if (!_priorityMetadata) {
+    _priorityMetadata = createMemo(
+      () =>
+        new Set<EmailMetadataKey>(
+          PRIORITY_METADATA_TOGGLES()
+            .filter(({ enabled }) => enabled())
+            .map(({ key }) => key)
+        )
+    );
+  }
+  return _priorityMetadata();
+};
 
 /** Metadata keys that mark emails as depriority (computed from enabled toggles) */
-export const DEPRIORITY_METADATA = createMemo(
-  () =>
-    new Set<EmailMetadataKey>(
-      DEPRIORITY_METADATA_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
+export const DEPRIORITY_METADATA = (): Set<EmailMetadataKey> => {
+  if (!_depriorityMetadata) {
+    _depriorityMetadata = createMemo(
+      () =>
+        new Set<EmailMetadataKey>(
+          DEPRIORITY_METADATA_TOGGLES()
+            .filter(({ enabled }) => enabled())
+            .map(({ key }) => key)
+        )
+    );
+  }
+  return _depriorityMetadata();
+};
 
 // ============================================================================
 // Export toggles for settings UI
