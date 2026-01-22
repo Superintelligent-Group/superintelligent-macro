@@ -33,7 +33,7 @@ type TestControllerState = {
   isLoading: boolean;
   hasMore: boolean;
   scrollOffset: number;
-  visibleEntityIds: string[] | null;
+  visibleEntityIds: readonly string[] | null;
 };
 
 type TestStoresState = {
