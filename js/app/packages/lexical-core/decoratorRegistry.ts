@@ -49,6 +49,10 @@ import type {
   GitHubRepoMentionDecoratorProps,
   GitHubRepoMentionNode,
 } from './nodes/GitHubRepoMentionNode';
+import type {
+  GitHubMentionDecoratorProps,
+  GitHubMentionNode,
+} from './nodes/GitHubMentionNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.
@@ -110,6 +114,10 @@ export interface NodeDecoratorMap {
   GitHubRepoMentionNode: {
     klass: typeof GitHubRepoMentionNode;
     props: GitHubRepoMentionDecoratorProps;
+  };
+  GitHubMentionNode: {
+    klass: typeof GitHubMentionNode;
+    props: GitHubMentionDecoratorProps;
   };
 }
 

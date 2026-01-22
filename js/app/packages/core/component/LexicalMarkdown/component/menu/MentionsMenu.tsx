@@ -21,6 +21,11 @@ import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import GitHubIcon from '@icon/regular/github-logo.svg';
+import GitPullRequestIcon from '@icon/regular/git-pull-request.svg';
+import IssueIcon from '@icon/regular/circle-dashed.svg';
+import CommitIcon from '@icon/regular/git-commit.svg';
+import BranchIcon from '@icon/regular/git-branch.svg';
+import TagIcon from '@icon/regular/tag.svg';
 import UsersIcon from '@icon/regular/users.svg';
 import type { EntityData, WithSearch } from '@macro-entity';
 import {
@@ -71,6 +76,7 @@ import {
   handleChannelMention,
   handleDateMention,
   handleEmailMention,
+  handleGitHubEntityMention,
   handleGitHubRepoMention,
   handleGroupMention,
   handleUserMention,
@@ -112,7 +118,10 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return item.data.groupAlias;
     case 'githubRepo':
       return `${item.data.fullName} ${item.data.description ?? ''}`;
+    case 'githubEntity':
+      return `${item.data.repoFullName} ${item.data.displayText} ${item.data.title ?? ''}`;
   }
+  return '';
 };
 
 /**
@@ -163,6 +172,8 @@ function createItemHandler(dependencies: HandlerDependencies) {
         return await handleGroupMention(item.data, dependencies);
       case 'githubRepo':
         return await handleGitHubRepoMention(item.data, dependencies);
+      case 'githubEntity':
+        return await handleGitHubEntityMention(item.data, dependencies);
     }
   };
 }
@@ -387,6 +398,21 @@ export function MentionsMenuItem(props: {
             />
           </div>
         );
+      case 'githubEntity': {
+        const entityData = props.item.data;
+        switch (entityData.entityType) {
+          case 'pr':
+            return <GitPullRequestIcon class="size-4 text-ink-muted" />;
+          case 'issue':
+            return <IssueIcon class="size-4 text-ink-muted" />;
+          case 'commit':
+            return <CommitIcon class="size-4 text-ink-muted" />;
+          case 'branch':
+            return <BranchIcon class="size-4 text-ink-muted" />;
+          case 'release':
+            return <TagIcon class="size-4 text-ink-muted" />;
+        }
+      }
     }
   };
 

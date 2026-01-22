@@ -1,9 +1,14 @@
+pub mod branches;
 pub mod callback;
+pub mod commits;
 pub mod disconnect;
 pub mod get_credentials;
 pub mod get_repo;
 pub mod init;
+pub mod issues;
 pub mod list;
+pub mod pulls;
+pub mod releases;
 pub mod repos;
 
 use axum::{
@@ -25,6 +30,36 @@ pub fn router(jwt_args: JwtValidationArgs) -> Router<ApiContext> {
         .route("/link", delete(disconnect::handler))
         .route("/repos", get(repos::handler))
         .route("/repos/:owner/:repo", get(get_repo::handler))
+        // Pull requests
+        .route("/repos/:owner/:repo/pulls", get(pulls::list_handler))
+        .route(
+            "/repos/:owner/:repo/pulls/:number",
+            get(pulls::get_handler),
+        )
+        // Issues
+        .route("/repos/:owner/:repo/issues", get(issues::list_handler))
+        .route(
+            "/repos/:owner/:repo/issues/:number",
+            get(issues::get_handler),
+        )
+        // Commits
+        .route("/repos/:owner/:repo/commits", get(commits::list_handler))
+        .route(
+            "/repos/:owner/:repo/commits/:sha",
+            get(commits::get_handler),
+        )
+        // Branches
+        .route("/repos/:owner/:repo/branches", get(branches::list_handler))
+        .route(
+            "/repos/:owner/:repo/branches/:branch",
+            get(branches::get_handler),
+        )
+        // Releases
+        .route("/repos/:owner/:repo/releases", get(releases::list_handler))
+        .route(
+            "/repos/:owner/:repo/releases/tags/:tag",
+            get(releases::get_handler),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())

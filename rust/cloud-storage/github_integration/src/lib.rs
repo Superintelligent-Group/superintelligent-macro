@@ -14,8 +14,10 @@ pub mod service;
 pub use config::GitHubConfig;
 pub use error::{GitHubIntegrationError, Result};
 pub use models::{
-    GitHubCredentialsResponse, GitHubExchangeTokenResponse, GitHubLink, GitHubLinkInfo,
-    GitHubRepository, GitHubUserInfo, OAuthState,
+    GitHubBranch, GitHubBranchCommit, GitHubCommit, GitHubCommitAuthor, GitHubCommitDetails,
+    GitHubCredentialsResponse, GitHubExchangeTokenResponse, GitHubIssue, GitHubLabel,
+    GitHubLink, GitHubLinkInfo, GitHubPullRequest, GitHubPullRequestRef, GitHubRelease,
+    GitHubRepository, GitHubUser, GitHubUserInfo, OAuthState,
 };
 pub use oauth_client::GitHubOAuthClient;
 pub use service::{

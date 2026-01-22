@@ -14,7 +14,22 @@ export * from './contexts/soup';
 export {
   createGitHubReposQuery,
   createGitHubRepoQuery,
+  createGitHubPullRequestsQuery,
+  createGitHubPullRequestQuery,
+  createGitHubIssuesQuery,
+  createGitHubIssueQuery,
+  createGitHubCommitsQuery,
+  createGitHubCommitQuery,
+  createGitHubBranchesQuery,
+  createGitHubBranchQuery,
+  createGitHubReleasesQuery,
+  createGitHubReleaseQuery,
   type GitHubRepoEntity,
+  type GitHubPullRequestEntity,
+  type GitHubIssueEntity,
+  type GitHubCommitEntity,
+  type GitHubBranchEntity,
+  type GitHubReleaseEntity,
 } from './queries/auth';
 export { createChannelsQuery } from './queries/channel';
 export { useQueryClient } from './queries/client';

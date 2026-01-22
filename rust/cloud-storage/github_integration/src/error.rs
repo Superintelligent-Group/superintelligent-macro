@@ -28,6 +28,26 @@ pub enum GitHubIntegrationError {
     #[error("GitHub repository not found")]
     RepositoryNotFound,
 
+    /// GitHub pull request not found
+    #[error("GitHub pull request not found")]
+    PullRequestNotFound,
+
+    /// GitHub issue not found
+    #[error("GitHub issue not found")]
+    IssueNotFound,
+
+    /// GitHub commit not found
+    #[error("GitHub commit not found")]
+    CommitNotFound,
+
+    /// GitHub branch not found
+    #[error("GitHub branch not found")]
+    BranchNotFound,
+
+    /// GitHub release not found
+    #[error("GitHub release not found")]
+    ReleaseNotFound,
+
     /// Failed to link user in FusionAuth
     #[error("failed to link GitHub account in FusionAuth: {0}")]
     FusionAuthLinkingFailed(String),
@@ -76,6 +96,21 @@ impl IntoResponse for GitHubIntegrationError {
             }
             GitHubIntegrationError::RepositoryNotFound => {
                 (StatusCode::NOT_FOUND, "GitHub repository not found")
+            }
+            GitHubIntegrationError::PullRequestNotFound => {
+                (StatusCode::NOT_FOUND, "GitHub pull request not found")
+            }
+            GitHubIntegrationError::IssueNotFound => {
+                (StatusCode::NOT_FOUND, "GitHub issue not found")
+            }
+            GitHubIntegrationError::CommitNotFound => {
+                (StatusCode::NOT_FOUND, "GitHub commit not found")
+            }
+            GitHubIntegrationError::BranchNotFound => {
+                (StatusCode::NOT_FOUND, "GitHub branch not found")
+            }
+            GitHubIntegrationError::ReleaseNotFound => {
+                (StatusCode::NOT_FOUND, "GitHub release not found")
             }
             GitHubIntegrationError::InvalidOAuthState(_) => {
                 (StatusCode::BAD_REQUEST, "invalid OAuth state")

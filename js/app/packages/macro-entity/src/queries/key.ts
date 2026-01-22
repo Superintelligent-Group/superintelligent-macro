@@ -49,6 +49,57 @@ export const queryKeys = {
       'github-repo',
       { ...args },
     ],
+    // Pull Requests
+    githubPulls: (args: { owner: string; repo: string }) => [
+      ...BASE_AUTH,
+      'github-pulls',
+      { ...args },
+    ],
+    githubPull: (args: KeyOptions) => [...BASE_AUTH, 'github-pull', { ...args }],
+    // Issues
+    githubIssues: (args: { owner: string; repo: string }) => [
+      ...BASE_AUTH,
+      'github-issues',
+      { ...args },
+    ],
+    githubIssue: (args: KeyOptions) => [
+      ...BASE_AUTH,
+      'github-issue',
+      { ...args },
+    ],
+    // Commits
+    githubCommits: (args: { owner: string; repo: string }) => [
+      ...BASE_AUTH,
+      'github-commits',
+      { ...args },
+    ],
+    githubCommit: (args: KeyOptions) => [
+      ...BASE_AUTH,
+      'github-commit',
+      { ...args },
+    ],
+    // Branches
+    githubBranches: (args: { owner: string; repo: string }) => [
+      ...BASE_AUTH,
+      'github-branches',
+      { ...args },
+    ],
+    githubBranch: (args: KeyOptions) => [
+      ...BASE_AUTH,
+      'github-branch',
+      { ...args },
+    ],
+    // Releases
+    githubReleases: (args: { owner: string; repo: string }) => [
+      ...BASE_AUTH,
+      'github-releases',
+      { ...args },
+    ],
+    githubRelease: (args: KeyOptions) => [
+      ...BASE_AUTH,
+      'github-release',
+      { ...args },
+    ],
   },
   channel: (args: KeyOptions) => [...BASE_ENTITY.channel, { ...args }],
   chat: (args?: InfiniteKeyOptions) => [

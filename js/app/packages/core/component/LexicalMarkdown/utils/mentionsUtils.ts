@@ -18,10 +18,12 @@ import { v7 } from 'uuid';
 import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_GITHUB_MENTION_COMMAND,
   INSERT_GITHUB_REPO_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
+import type { GitHubEntityType } from '@lexical-core';
 
 export type GroupItem = {
   id: string;
@@ -53,6 +55,15 @@ export type GitHubRepoItem = {
   url: string;
 };
 
+export type GitHubEntityItem = {
+  id: string;
+  entityType: GitHubEntityType;
+  repoFullName: string;
+  displayText: string;
+  title?: string;
+  url: string;
+};
+
 export type EntityMap = {
   item: Item;
   user: IUser;
@@ -61,6 +72,7 @@ export type EntityMap = {
   email: EmailEntity;
   group: GroupItem;
   githubRepo: GitHubRepoItem;
+  githubEntity: GitHubEntityItem;
 };
 
 export type Entity<T extends keyof EntityMap> = {
@@ -98,7 +110,7 @@ export type UserMentionRecord = {
 };
 
 export const getCombinedEntityBlockName = (
-  item: CombinedEntity<'item' | 'channel' | 'email' | 'githubRepo'>,
+  item: CombinedEntity<'item' | 'channel' | 'email' | 'githubRepo' | 'githubEntity'>,
   icon?: boolean
 ): EntityWithValidIcon => {
   switch (item.kind) {
@@ -116,6 +128,7 @@ export const getCombinedEntityBlockName = (
     case 'channel':
       return 'channel';
     case 'githubRepo':
+    case 'githubEntity':
       return 'github';
   }
 };
@@ -142,6 +155,10 @@ export const getItemName = (item: CombinedEntity): string => {
       return `@${item.data.groupAlias}`;
     case 'githubRepo':
       return item.data.fullName;
+    case 'githubEntity':
+      return item.data.title
+        ? `${item.data.displayText} ${item.data.title}`
+        : item.data.displayText;
   }
 };
 
@@ -304,6 +321,59 @@ export async function handleGitHubRepoMention(
   // Insert the mention node with only repoId and mentionUuid
   editor.dispatchCommand(INSERT_GITHUB_REPO_MENTION_COMMAND, {
     repoId: repo.id,
+    mentionUuid: mentionId,
+  });
+}
+
+/**
+ * Handles GitHub entity mentions (PRs, issues, commits, branches, releases) by inserting
+ * them into the editor and creating foreign entity records.
+ * @param entity The GitHub entity to mention
+ * @param dependencies The dependencies required to handle the mention
+ */
+export async function handleGitHubEntityMention(
+  entity: GitHubEntityItem,
+  dependencies: HandlerDependencies
+) {
+  const {
+    editor,
+    blockName: parentBlockName,
+    blockId,
+    disableMentionTracking,
+  } = dependencies;
+
+  let mentionId: string | undefined;
+
+  // Create foreign entity and track mention (if enabled)
+  if (
+    blockId &&
+    parentBlockName !== 'channel' &&
+    parentBlockName !== 'chat' &&
+    !disableMentionTracking
+  ) {
+    try {
+      // Create/get foreign entity via API
+      const result = await authServiceClient.createForeignEntity({
+        namespacedIdentifier: entity.id,
+      });
+
+      if (isOk(result)) {
+        // Track the mention using the foreign entity type
+        mentionId = await trackMention(blockId, 'foreign', result[1].id);
+      } else {
+        // API returned error response - log and continue without tracking
+        console.warn('Failed to create foreign entity:', result[1]);
+      }
+    } catch (error) {
+      console.error('Failed to create foreign entity:', error);
+      // Continue without tracking - mention will still be created
+    }
+  }
+
+  // Insert the mention node
+  editor.dispatchCommand(INSERT_GITHUB_MENTION_COMMAND, {
+    entityId: entity.id,
+    entityType: entity.entityType,
     mentionUuid: mentionId,
   });
 }

@@ -7,6 +7,12 @@ import { ContactMentionNode } from '../nodes/ContactMentionNode';
 import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import {
+  getDisplayTextFromGitHubId,
+  getRepoFromGitHubId,
+  GitHubMentionNode,
+  type GitHubEntityType,
+} from '../nodes/GitHubMentionNode';
+import {
   getFullNameFromRepoId,
   GitHubRepoMentionNode,
 } from '../nodes/GitHubRepoMentionNode';
@@ -365,6 +371,91 @@ export const E_GITHUB_REPO_MENTION: ElementTransformer = {
 
     // For external representation, create a markdown link
     return `[${fullName}](${url})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal GitHub Mentions (PR, Issue, Commit, Branch, Release)
+export const I_GITHUB_MENTION: TextMatchTransformer = {
+  dependencies: [GitHubMentionNode],
+  type: 'text-match',
+  regExp: /<m-github-mention>(.*?)<\/m-github-mention>/,
+  importRegExp: /<m-github-mention>(.*?)<\/m-github-mention>/,
+  export: (node) => {
+    if (!(node instanceof GitHubMentionNode)) return null;
+    const data = JSON.stringify({
+      entityId: node.getEntityId(),
+      entityType: node.getEntityType(),
+      mentionUuid: node.getMentionUuid(),
+    });
+    return `<m-github-mention>${data}</m-github-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('entityId' in data) || !('entityType' in data)) {
+        throw new Error('Missing required fields');
+      }
+      const githubMentionNode = new GitHubMentionNode(
+        data.entityId,
+        data.entityType as GitHubEntityType,
+        data.mentionUuid
+      );
+      node.replace(githubMentionNode);
+    } catch (e) {
+      console.error('Error in I_GITHUB_MENTION replace:', e);
+    }
+  },
+};
+
+/**
+ * Builds a GitHub URL from entity type and ID
+ */
+function buildGitHubUrl(entityId: string, entityType: GitHubEntityType): string {
+  const repoPath = getRepoFromGitHubId(entityId);
+  const displayText = getDisplayTextFromGitHubId(entityId, entityType);
+
+  switch (entityType) {
+    case 'pr':
+      return `https://github.com/${repoPath}/pull/${displayText.replace('#', '')}`;
+    case 'issue':
+      return `https://github.com/${repoPath}/issues/${displayText.replace('#', '')}`;
+    case 'commit':
+      return `https://github.com/${repoPath}/commit/${displayText}`;
+    case 'branch':
+      return `https://github.com/${repoPath}/tree/${displayText}`;
+    case 'release':
+      return `https://github.com/${repoPath}/releases/tag/${displayText}`;
+  }
+}
+
+// External GitHub Mentions (PR, Issue, Commit, Branch, Release)
+export const E_GITHUB_MENTION: ElementTransformer = {
+  dependencies: [GitHubMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof GitHubMentionNode)) return null;
+
+    const entityId = node.getEntityId();
+    const entityType = node.getEntityType();
+    if (!entityId || !entityType) {
+      return null;
+    }
+
+    const displayText = getDisplayTextFromGitHubId(entityId, entityType);
+    const repoPath = getRepoFromGitHubId(entityId);
+    const url = buildGitHubUrl(entityId, entityType);
+
+    // For external representation, create a markdown link with repo context
+    return `[${repoPath}${displayText.startsWith('#') ? '' : '@'}${displayText}](${url})`;
   },
   replace: (
     _parentNode: ElementNode,

@@ -66,6 +66,171 @@ pub struct GitHubRepository {
     pub stargazers_count: i32,
 }
 
+/// GitHub user reference (used in PRs, issues, etc.)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubUser {
+    /// GitHub username
+    pub login: String,
+    /// Avatar URL
+    pub avatar_url: String,
+}
+
+/// GitHub label
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubLabel {
+    /// Label name
+    pub name: String,
+    /// Label color (hex)
+    pub color: String,
+}
+
+/// GitHub pull request information from GitHub API
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubPullRequest {
+    /// PR number
+    pub number: u64,
+    /// PR title
+    pub title: String,
+    /// PR state (open, closed)
+    pub state: String,
+    /// Whether the PR is a draft
+    #[serde(default)]
+    pub draft: bool,
+    /// Whether the PR is merged
+    #[serde(default)]
+    pub merged: bool,
+    /// HTML URL to the PR
+    pub html_url: String,
+    /// PR author
+    pub user: GitHubUser,
+    /// When the PR was created
+    pub created_at: String,
+    /// When the PR was last updated
+    pub updated_at: String,
+    /// Labels
+    #[serde(default)]
+    pub labels: Vec<GitHubLabel>,
+    /// Head branch ref
+    pub head: GitHubPullRequestRef,
+    /// Base branch ref
+    pub base: GitHubPullRequestRef,
+}
+
+/// GitHub pull request ref (head/base branch info)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubPullRequestRef {
+    /// Branch name
+    #[serde(rename = "ref")]
+    pub ref_name: String,
+    /// Commit SHA
+    pub sha: String,
+}
+
+/// GitHub issue information from GitHub API
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubIssue {
+    /// Issue number
+    pub number: u64,
+    /// Issue title
+    pub title: String,
+    /// Issue state (open, closed)
+    pub state: String,
+    /// HTML URL to the issue
+    pub html_url: String,
+    /// Issue author
+    pub user: GitHubUser,
+    /// When the issue was created
+    pub created_at: String,
+    /// When the issue was last updated
+    pub updated_at: String,
+    /// Labels
+    #[serde(default)]
+    pub labels: Vec<GitHubLabel>,
+    /// Pull request info (if this is a PR, this will be present)
+    pub pull_request: Option<serde_json::Value>,
+}
+
+/// GitHub commit information from GitHub API
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubCommit {
+    /// Commit SHA
+    pub sha: String,
+    /// HTML URL to the commit
+    pub html_url: String,
+    /// Commit details
+    pub commit: GitHubCommitDetails,
+    /// Author user info (may be null for non-GitHub users)
+    pub author: Option<GitHubUser>,
+    /// Committer user info (may be null for non-GitHub users)
+    pub committer: Option<GitHubUser>,
+}
+
+/// GitHub commit details
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubCommitDetails {
+    /// Commit message
+    pub message: String,
+    /// Author info
+    pub author: GitHubCommitAuthor,
+    /// Committer info
+    pub committer: GitHubCommitAuthor,
+}
+
+/// GitHub commit author/committer info
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubCommitAuthor {
+    /// Author name
+    pub name: String,
+    /// Author email
+    pub email: String,
+    /// Date of the commit
+    pub date: String,
+}
+
+/// GitHub branch information from GitHub API
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubBranch {
+    /// Branch name
+    pub name: String,
+    /// Branch commit info
+    pub commit: GitHubBranchCommit,
+    /// Whether this is a protected branch
+    #[serde(default)]
+    pub protected: bool,
+}
+
+/// GitHub branch commit reference
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubBranchCommit {
+    /// Commit SHA
+    pub sha: String,
+    /// URL to fetch commit details
+    pub url: String,
+}
+
+/// GitHub release information from GitHub API
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitHubRelease {
+    /// Release ID
+    pub id: i64,
+    /// Tag name
+    pub tag_name: String,
+    /// Release name/title
+    pub name: Option<String>,
+    /// Whether this is a draft
+    pub draft: bool,
+    /// Whether this is a prerelease
+    pub prerelease: bool,
+    /// HTML URL to the release
+    pub html_url: String,
+    /// Release author
+    pub author: GitHubUser,
+    /// When the release was created
+    pub created_at: String,
+    /// When the release was published
+    pub published_at: Option<String>,
+}
+
 /// Response returned when retrieving GitHub credentials
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
