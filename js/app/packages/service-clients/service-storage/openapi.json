@@ -8641,6 +8641,55 @@
           }
         ]
       },
+      "SoupForeignEntity": {
+        "type": "object",
+        "description": "A foreign entity in soup - represents external entities like GitHub Issues, PRs, etc.\n\nForeign entities are \"shells\" that reference external data via a namespaced identifier.\nThe frontend resolves the actual data (title, state, etc.) by parsing the namespaced\nidentifier and fetching from the appropriate service.",
+        "required": [
+          "id",
+          "namespacedIdentifier",
+          "path",
+          "identifier",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier (UUID)"
+          },
+          "identifier": {
+            "type": "string",
+            "description": "The identifier portion (e.g., \"owner/repo#123\")"
+          },
+          "namespacedIdentifier": {
+            "type": "string",
+            "description": "The full namespaced identifier (e.g., \"github::issue:owner/repo#123\")"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The path segments (e.g., [\"github\", \"issue\"])"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp"
+          },
+          "viewedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user last viewed this entity (if tracked)"
+          }
+        }
+      },
       "SoupItem": {
         "oneOf": [
           {
@@ -8705,6 +8754,19 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupForeignEntity"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["foreignEntity"]
               }
             }
           }

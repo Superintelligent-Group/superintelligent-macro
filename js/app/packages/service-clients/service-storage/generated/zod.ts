@@ -3481,6 +3481,40 @@ export const getItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['channel']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod
+                .string()
+                .datetime({})
+                .describe('Creation timestamp'),
+              id: zod.string().uuid().describe('Unique identifier (UUID)'),
+              identifier: zod
+                .string()
+                .describe('The identifier portion (e.g., \"owner/repo#123\")'),
+              namespacedIdentifier: zod
+                .string()
+                .describe(
+                  'The full namespaced identifier (e.g., \"github::issue:owner/repo#123\")'
+                ),
+              path: zod
+                .array(zod.string())
+                .describe('The path segments (e.g., [\"github\", \"issue\"])'),
+              updatedAt: zod
+                .string()
+                .datetime({})
+                .describe('Last update timestamp'),
+              viewedAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the user last viewed this entity (if tracked)'),
+            })
+            .describe(
+              'A foreign entity in soup - represents external entities like GitHub Issues, PRs, etc.\n\nForeign entities are \"shells\" that reference external data via a namespaced identifier.\nThe frontend resolves the actual data (title, state, etc.) by parsing the namespaced\nidentifier and fetching from the appropriate service.'
+            ),
+          tag: zod.enum(['foreignEntity']),
+        }),
       ])
       .and(
         zod.object({
@@ -4857,6 +4891,40 @@ export const postItemsSoupResponse = zod.object({
               })
             ),
           tag: zod.enum(['channel']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod
+                .string()
+                .datetime({})
+                .describe('Creation timestamp'),
+              id: zod.string().uuid().describe('Unique identifier (UUID)'),
+              identifier: zod
+                .string()
+                .describe('The identifier portion (e.g., \"owner/repo#123\")'),
+              namespacedIdentifier: zod
+                .string()
+                .describe(
+                  'The full namespaced identifier (e.g., \"github::issue:owner/repo#123\")'
+                ),
+              path: zod
+                .array(zod.string())
+                .describe('The path segments (e.g., [\"github\", \"issue\"])'),
+              updatedAt: zod
+                .string()
+                .datetime({})
+                .describe('Last update timestamp'),
+              viewedAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('When the user last viewed this entity (if tracked)'),
+            })
+            .describe(
+              'A foreign entity in soup - represents external entities like GitHub Issues, PRs, etc.\n\nForeign entities are \"shells\" that reference external data via a namespaced identifier.\nThe frontend resolves the actual data (title, state, etc.) by parsing the namespaced\nidentifier and fetching from the appropriate service.'
+            ),
+          tag: zod.enum(['foreignEntity']),
         }),
       ])
       .and(
