@@ -35,6 +35,7 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntityEntity,
   ProjectEntity,
 } from '../types/entity';
 import {
@@ -218,6 +219,7 @@ const selectData: (
   | ProjectEntity
   | EmailEntity
   | ChannelEntity
+  | ForeignEntityEntity
 )[] = (data, options) => {
   return data.pages.flatMap(({ items }) =>
     items
@@ -235,7 +237,8 @@ const selectData: (
           | ChatEntity
           | ProjectEntity
           | EmailEntity
-          | ChannelEntity => {
+          | ChannelEntity
+          | ForeignEntityEntity => {
           if (item.tag === 'chat') {
             return {
               ...item.data,
@@ -305,6 +308,36 @@ const selectData: (
                       item.data.latest_non_thread_message.created_at
                     ),
                   }
+                : undefined,
+            };
+            return out;
+          }
+
+          // Foreign entity handling - type assertions needed until schema is regenerated
+          if ((item as { tag: string }).tag === 'foreignEntity') {
+            const foreignItem = item as unknown as {
+              tag: 'foreignEntity';
+              data: {
+                id: string;
+                identifier: string;
+                namespacedIdentifier: string;
+                createdAt: string;
+                updatedAt: string;
+                viewedAt?: string;
+              };
+              frecency_score?: number;
+            };
+            const out: ForeignEntityEntity = {
+              type: 'foreign_entity',
+              id: foreignItem.data.id,
+              name: foreignItem.data.identifier,
+              namespacedIdentifier: foreignItem.data.namespacedIdentifier,
+              ownerId: '',
+              frecencyScore: foreignItem.frecency_score ?? 0,
+              updatedAt: Date.parse(foreignItem.data.updatedAt),
+              createdAt: Date.parse(foreignItem.data.createdAt),
+              viewedAt: foreignItem.data.viewedAt
+                ? Date.parse(foreignItem.data.viewedAt)
                 : undefined,
             };
             return out;

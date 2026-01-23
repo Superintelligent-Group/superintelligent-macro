@@ -45,6 +45,7 @@ pub enum ItemType {
     Project,
     Email,
     Channel,
+    ForeignEntity,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -60,6 +61,11 @@ pub enum EntityItem {
     Email { id: Uuid, subject: Option<String> },
     #[serde(rename_all = "camelCase")]
     Channel { id: Uuid, name: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    ForeignEntity {
+        id: Uuid,
+        namespaced_identifier: String,
+    },
 }
 
 impl EntityItem {
@@ -70,6 +76,7 @@ impl EntityItem {
             EntityItem::Project { .. } => ItemType::Project,
             EntityItem::Email { .. } => ItemType::Email,
             EntityItem::Channel { .. } => ItemType::Channel,
+            EntityItem::ForeignEntity { .. } => ItemType::ForeignEntity,
         }
     }
 }
@@ -96,6 +103,10 @@ impl From<SoupItem> for EntityItem {
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
                 name: channel.channel.channel.name.clone(),
+            },
+            SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
+                id: foreign_entity.id,
+                namespaced_identifier: foreign_entity.namespaced_identifier,
             },
         }
     }
@@ -206,6 +217,7 @@ pub(super) fn build_summary(
     let mut projects = 0;
     let mut emails = 0;
     let mut channels = 0;
+    let mut foreign_entities = 0;
 
     for item in items {
         match item {
@@ -214,6 +226,7 @@ pub(super) fn build_summary(
             EntityItem::Project { .. } => projects += 1,
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
+            EntityItem::ForeignEntity { .. } => foreign_entities += 1,
         }
     }
 
@@ -246,6 +259,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{channels} channel{}",
             if channels == 1 { "" } else { "s" }
+        ));
+    }
+    if foreign_entities > 0 {
+        parts.push(format!(
+            "{foreign_entities} external item{}",
+            if foreign_entities == 1 { "" } else { "s" }
         ));
     }
 

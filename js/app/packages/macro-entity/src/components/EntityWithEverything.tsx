@@ -512,8 +512,31 @@ export function EntityWithEverything(
         return getIconConfig('project');
       case 'email':
         return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-      case 'foreign_entity':
+      case 'foreign_entity': {
+        // Parse the namespaced identifier to determine the icon
+        // Format: namespace::type:identifier (e.g., github::issue:owner/repo#123)
+        const parts = props.entity.namespacedIdentifier.split('::');
+        if (parts[0] === 'github' && parts[1]) {
+          const typePart = parts[1].split(':')[0];
+          switch (typePart) {
+            case 'issue':
+              return getIconConfig('githubIssue');
+            case 'pr':
+              return getIconConfig('githubPr');
+            case 'branch':
+              return getIconConfig('githubBranch');
+            case 'commit':
+              return getIconConfig('githubCommit');
+            case 'release':
+              return getIconConfig('githubRelease');
+            case 'repo':
+              return getIconConfig('github');
+            default:
+              return getIconConfig('github');
+          }
+        }
         return getIconConfig('default');
+      }
     }
   });
 

@@ -29,6 +29,11 @@ import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
 import Check from '@icon/regular/check-fat.svg';
 import GitHubIcon from '@macro-icons/macro-github.svg';
+import GitPullRequest from '@phosphor-icons/core/duotone/git-pull-request-duotone.svg';
+import GitBranch from '@phosphor-icons/core/duotone/git-branch-duotone.svg';
+import GitCommit from '@phosphor-icons/core/duotone/git-commit-duotone.svg';
+import Bug from '@phosphor-icons/core/duotone/bug-duotone.svg';
+import Tag from '@phosphor-icons/core/duotone/tag-duotone.svg';
 import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelBuilding from '@macro-icons/pixel/building.svg';
 import PixelCanvas from '@macro-icons/pixel/canvas.svg';
@@ -86,7 +91,12 @@ export type EntityWithValidIcon =
   | 'emailRead'
   | 'archive'
   | 'html'
-  | 'github';
+  | 'github'
+  | 'githubIssue'
+  | 'githubPr'
+  | 'githubBranch'
+  | 'githubCommit'
+  | 'githubRelease';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -239,6 +249,36 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'GitHub Repository',
   },
+  githubIssue: {
+    icon: Bug,
+    foreground: 'text-github-issue',
+    background: 'bg-github-issue-bg',
+    prettyName: 'GitHub Issue',
+  },
+  githubPr: {
+    icon: GitPullRequest,
+    foreground: 'text-github-pr',
+    background: 'bg-github-pr-bg',
+    prettyName: 'GitHub Pull Request',
+  },
+  githubBranch: {
+    icon: GitBranch,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'GitHub Branch',
+  },
+  githubCommit: {
+    icon: GitCommit,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'GitHub Commit',
+  },
+  githubRelease: {
+    icon: Tag,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'GitHub Release',
+  },
 };
 
 // this will match fall-through cases like code files which match multiple extensions
@@ -291,6 +331,11 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   emailRead: PixelEmailRead,
   task: Check,
   github: GitHubIcon,
+  githubIssue: Bug,
+  githubPr: GitPullRequest,
+  githubBranch: GitBranch,
+  githubCommit: GitCommit,
+  githubRelease: Tag,
 };
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
@@ -318,6 +363,11 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   emailRead: WideEmail,
   task: WideTask,
   github: GitHubIcon,
+  githubIssue: Bug,
+  githubPr: GitPullRequest,
+  githubBranch: GitBranch,
+  githubCommit: GitCommit,
+  githubRelease: Tag,
 };
 
 export const ICON_SIZES = {

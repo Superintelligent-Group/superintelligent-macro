@@ -11,6 +11,16 @@ use crate::{
     },
 };
 
+/// Helper to check if a response status indicates an expired/invalid token
+fn check_token_expired(status: reqwest::StatusCode, error_body: &str) -> Option<GitHubIntegrationError> {
+    if status.as_u16() == 401 {
+        tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
+        Some(GitHubIntegrationError::TokenExpired)
+    } else {
+        None
+    }
+}
+
 /// Low-level GitHub OAuth client
 pub struct GitHubOAuthClient {
     http_client: reqwest::Client,
@@ -108,6 +118,65 @@ impl GitHubOAuthClient {
         Ok(token_response)
     }
 
+    /// Refreshes a GitHub access token using a refresh token
+    ///
+    /// This requires token expiration to be enabled in the GitHub App settings.
+    /// See: <https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens>
+    #[tracing::instrument(skip(self, config, refresh_token), err)]
+    pub async fn refresh_access_token(
+        &self,
+        config: &GitHubConfig,
+        refresh_token: &str,
+    ) -> Result<GitHubExchangeTokenResponse> {
+        #[derive(serde::Serialize)]
+        struct RefreshRequest<'a> {
+            client_id: &'a str,
+            client_secret: &'a str,
+            grant_type: &'a str,
+            refresh_token: &'a str,
+        }
+
+        let refresh_request = RefreshRequest {
+            client_id: &config.client_id,
+            client_secret: &config.client_secret,
+            grant_type: "refresh_token",
+            refresh_token,
+        };
+
+        let response = self
+            .http_client
+            .post("https://github.com/login/oauth/access_token")
+            .header("Accept", "application/json")
+            .json(&refresh_request)
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "failed to send GitHub refresh token request");
+                GitHubIntegrationError::TokenRefreshFailed(e.to_string())
+            })?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_else(|_| "unknown error".to_string());
+            tracing::error!(status=?status, body=?error_body, "token refresh failed");
+            return Err(GitHubIntegrationError::TokenRefreshFailed(format!(
+                "status {}: {}",
+                status, error_body
+            )));
+        }
+
+        let token_response: GitHubExchangeTokenResponse = response.json().await.map_err(|e| {
+            tracing::error!(error=?e, "failed to parse refresh token response");
+            GitHubIntegrationError::TokenRefreshFailed(e.to_string())
+        })?;
+
+        tracing::info!("successfully refreshed GitHub access token");
+
+        Ok(token_response)
+    }
+
     /// Gets user information from GitHub using an access token
     ///
     /// See: <https://docs.github.com/en/rest/users/users#get-the-authenticated-user>
@@ -124,11 +193,20 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !user_response.status().is_success() {
+        let status = user_response.status();
+
+        if !status.is_success() {
             let error_body = user_response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            // Check for 401 Unauthorized - token expired or invalid
+            if status.as_u16() == 401 {
+                tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
+                return Err(GitHubIntegrationError::TokenExpired);
+            }
+
             return Err(GitHubIntegrationError::UserInfoFailed(format!(
                 "failed to get user info: {}",
                 error_body
@@ -227,11 +305,20 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            // Check for 401 Unauthorized - token expired or invalid
+            if status.as_u16() == 401 {
+                tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
+                return Err(GitHubIntegrationError::TokenExpired);
+            }
+
             return Err(GitHubIntegrationError::UserInfoFailed(format!(
                 "failed to list repositories: {}",
                 error_body
@@ -275,6 +362,12 @@ impl GitHubOAuthClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            // Check for 401 Unauthorized - token expired or invalid
+            if status.as_u16() == 401 {
+                tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
+                return Err(GitHubIntegrationError::TokenExpired);
+            }
 
             // Return specific error for 404
             if status.as_u16() == 404 {
@@ -335,12 +428,17 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::RepositoryNotFound);
@@ -393,6 +491,10 @@ impl GitHubOAuthClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::PullRequestNotFound);
@@ -452,12 +554,17 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::RepositoryNotFound);
@@ -517,6 +624,10 @@ impl GitHubOAuthClient {
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
 
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
+
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::IssueNotFound);
             }
@@ -575,12 +686,17 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::RepositoryNotFound);
@@ -633,6 +749,10 @@ impl GitHubOAuthClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::CommitNotFound);
@@ -688,12 +808,17 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::RepositoryNotFound);
@@ -746,6 +871,10 @@ impl GitHubOAuthClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::BranchNotFound);
@@ -801,12 +930,17 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
 
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::RepositoryNotFound);
@@ -860,6 +994,10 @@ impl GitHubOAuthClient {
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
 
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
+
             if status.as_u16() == 404 {
                 return Err(GitHubIntegrationError::ReleaseNotFound);
             }
@@ -907,11 +1045,18 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
+
             return Err(GitHubIntegrationError::UserInfoFailed(format!(
                 "failed to search repositories: {}",
                 error_body
@@ -953,11 +1098,18 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
+
             return Err(GitHubIntegrationError::UserInfoFailed(format!(
                 "failed to search issues: {}",
                 error_body
@@ -1001,11 +1153,18 @@ impl GitHubOAuthClient {
             .await
             .map_err(|e| GitHubIntegrationError::UserInfoFailed(e.to_string()))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+
+        if !status.is_success() {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
+
+            if let Some(err) = check_token_expired(status, &error_body) {
+                return Err(err);
+            }
+
             return Err(GitHubIntegrationError::UserInfoFailed(format!(
                 "failed to search commits: {}",
                 error_body

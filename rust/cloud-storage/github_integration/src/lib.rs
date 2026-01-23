@@ -9,6 +9,7 @@ pub mod error;
 pub mod models;
 pub mod oauth_client;
 pub mod service;
+pub mod sync;
 
 // Re-export commonly used types
 pub use config::GitHubConfig;
@@ -23,4 +24,8 @@ pub use oauth_client::GitHubOAuthClient;
 pub use service::{
     get_github_credentials, get_user_repositories, get_user_repository, link_github_account,
     unlink_github_account, FusionAuthLinking, IdentityProviderLink,
+};
+pub use sync::{
+    delete_issue, delete_pull_request, issue_namespaced_id, pr_namespaced_id, sync_all_issues,
+    sync_all_pull_requests, sync_issue, sync_pull_request, sync_repository,
 };

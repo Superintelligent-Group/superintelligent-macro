@@ -21,5 +21,7 @@ utoipa = { workspace = true }
 uuid = { workspace = true }
 
 # Path dependencies
+foreign_entity_db_client = { path = "../foreign_entity_db_client" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }

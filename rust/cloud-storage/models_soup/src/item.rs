@@ -1,5 +1,6 @@
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
+use crate::foreign_entity::SoupForeignEntity;
 use crate::project::SoupProject;
 use crate::{chat::SoupChat, comms::SoupChannel};
 use chrono::{DateTime, Utc};
@@ -18,6 +19,7 @@ pub enum SoupItem {
     Project(SoupProject),
     EmailThread(SoupEnrichedEmailThreadPreview),
     Channel(SoupChannel),
+    ForeignEntity(SoupForeignEntity),
 }
 
 impl SoupItem {
@@ -39,6 +41,9 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
+            SoupItem::ForeignEntity(foreign_entity) => {
+                EntityType::ForeignEntity.with_entity_string(foreign_entity.id.to_string())
+            }
         }
     }
 
@@ -49,6 +54,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
+            SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
         }
     }
 }
@@ -112,6 +118,20 @@ impl SoupItem {
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
+            (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::ViewedAt) => {
+                foreign_entity.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::UpdatedAt) => {
+                foreign_entity.updated_at
+            }
+            (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::CreatedAt) => {
+                foreign_entity.created_at
+            }
+            (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::ViewedUpdated) => {
+                foreign_entity
+                    .viewed_at
+                    .unwrap_or(foreign_entity.updated_at)
+            }
         }
     }
 }
@@ -126,6 +146,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
+            SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
         }
     }
 }
@@ -147,7 +168,7 @@ impl SortOn<SimpleSortMethod> for SoupItem {
 impl SoupItem {
     /// Converts this item to an [`EntityReference`] for property lookups.
     ///
-    /// Returns `None` for item types that don't support properties (e.g., channels).
+    /// Returns `None` for item types that don't support properties (e.g., channels, foreign entities).
     pub fn to_entity_reference(&self) -> Option<EntityReference> {
         match self {
             SoupItem::Document(doc) => {
@@ -166,6 +187,7 @@ impl SoupItem {
                 PropertiesEntityType::Chat,
             )),
             SoupItem::Channel(_) => None,
+            SoupItem::ForeignEntity(_) => None,
         }
     }
 }

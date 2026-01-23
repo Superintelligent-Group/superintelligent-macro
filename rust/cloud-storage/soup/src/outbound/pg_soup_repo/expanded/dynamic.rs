@@ -14,6 +14,7 @@ use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
+    foreign_entity::SoupForeignEntity,
     item::SoupItem,
     project::SoupProject,
 };
@@ -92,19 +93,22 @@ static DOCUMENT_CLAUSE: &str = r#"
             WHEN 'created_at' THEN d."createdAt"
             ELSE d."updatedAt"
         END::timestamptz as "sort_ts",
-        CASE 
-            WHEN dt.sub_type = 'task' 
+        CASE
+            WHEN dt.sub_type = 'task'
                 AND ep_status.values->'value' ? $6
-            THEN true 
+            THEN true
             WHEN dt.sub_type = 'task'
             THEN false
-            ELSE NULL 
-        END as "is_completed"
+            ELSE NULL
+        END as "is_completed",
+        NULL as "namespaced_identifier",
+        NULL::text[] as "path",
+        NULL as "identifier"
     FROM "Document" d
     LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-    LEFT JOIN entity_properties ep_status 
+    LEFT JOIN entity_properties ep_status
         ON dt.sub_type = 'task'
-        AND ep_status.entity_id = d.id 
+        AND ep_status.entity_id = d.id
         AND ep_status.entity_type = 'TASK'
         AND ep_status.property_definition_id = $7
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
@@ -151,7 +155,10 @@ static CHAT_CLAUSE: &str = r#"
             WHEN 'created_at' THEN c."createdAt"
             ELSE c."updatedAt"
         END::timestamptz as "sort_ts",
-        NULL as "is_completed"
+        NULL as "is_completed",
+        NULL as "namespaced_identifier",
+        NULL::text[] as "path",
+        NULL as "identifier"
     FROM "Chat" c
     INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
     LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -182,7 +189,10 @@ static PROJECT_CLAUSE: &str = r#"
             WHEN 'created_at'  THEN p."createdAt"
             ELSE p."updatedAt"
         END::timestamptz as "sort_ts",
-        NULL as "is_completed"
+        NULL as "is_completed",
+        NULL as "namespaced_identifier",
+        NULL as "path",
+        NULL as "identifier"
     FROM "Project" p
     INNER JOIN UserAccessibleItems uai
         ON uai.item_id = p.id
@@ -192,6 +202,41 @@ static PROJECT_CLAUSE: &str = r#"
         AND uh."itemType" = 'project'
         AND uh."userId" = $1
     WHERE p."deletedAt" IS NULL
+"#;
+
+static FOREIGN_ENTITY_CLAUSE: &str = r#"
+    SELECT
+        'foreign_entity' as "item_type",
+        fe.id::text as "id",
+        NULL as "document_version_id",
+        '' as "user_id",
+        fe.identifier as "name",
+        NULL as "branched_from_id",
+        NULL as "branched_from_version_id",
+        NULL as "document_family_id",
+        NULL as "file_type",
+        fe.created_at::timestamptz as "created_at",
+        fe.updated_at::timestamptz as "updated_at",
+        NULL as "project_id",
+        NULL as "is_persistent",
+        NULL as "sha",
+        NULL as "sub_type",
+        uh."updatedAt"::timestamptz as "viewed_at",
+        CASE $2
+            WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", fe.updated_at)
+            WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+            WHEN 'created_at' THEN fe.created_at
+            ELSE fe.updated_at
+        END::timestamptz as "sort_ts",
+        NULL as "is_completed",
+        fe.namespaced_identifier as "namespaced_identifier",
+        fe.path as "path",
+        fe.identifier as "identifier"
+    FROM foreign_entities fe
+    LEFT JOIN "UserHistory" uh
+        ON uh."itemId" = fe.id::text
+        AND uh."itemType" = 'foreign_entity'
+        AND uh."userId" = $1
 "#;
 
 static SUFFIX: &str = r#"
@@ -307,6 +352,11 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
     builder.push(PROJECT_CLAUSE);
     builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
 
+    builder.push(" UNION ALL ");
+
+    // Foreign entity clause
+    builder.push(FOREIGN_ENTITY_CLAUSE);
+
     builder.push(") ");
 
     if exclude_frecency {
@@ -361,11 +411,23 @@ struct ProjectRow {
     viewed_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, FromRow)]
+struct ForeignEntityRow {
+    id: String,
+    namespaced_identifier: String,
+    path: Vec<String>,
+    identifier: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    viewed_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug)]
 enum SoupRow {
     Document(DocumentRow),
     Chat(ChatRow),
     Project(ProjectRow),
+    ForeignEntity(ForeignEntityRow),
 }
 
 impl<'a> FromRow<'a, PgRow> for SoupRow {
@@ -375,6 +437,7 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
             "document" => Ok(SoupRow::Document(DocumentRow::from_row(row)?)),
             "chat" => Ok(SoupRow::Chat(ChatRow::from_row(row)?)),
             "project" => Ok(SoupRow::Project(ProjectRow::from_row(row)?)),
+            "foreign_entity" => Ok(SoupRow::ForeignEntity(ForeignEntityRow::from_row(row)?)),
             _ => Err(sqlx::Error::TypeNotFound {
                 type_name: item_type.to_string(),
             }),
@@ -479,6 +542,23 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 properties: Default::default(),
+            }),
+            SoupRow::ForeignEntity(ForeignEntityRow {
+                id,
+                namespaced_identifier,
+                path,
+                identifier,
+                created_at,
+                updated_at,
+                viewed_at,
+            }) => SoupItem::ForeignEntity(SoupForeignEntity {
+                id: Uuid::parse_str(&id).map_err(type_err)?,
+                namespaced_identifier,
+                path,
+                identifier,
+                created_at,
+                updated_at,
+                viewed_at,
             }),
         })
     }

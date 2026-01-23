@@ -12,6 +12,14 @@ pub enum GitHubIntegrationError {
     #[error("OAuth token exchange failed: {0}")]
     TokenExchangeFailed(String),
 
+    /// OAuth token refresh failed
+    #[error("OAuth token refresh failed: {0}")]
+    TokenRefreshFailed(String),
+
+    /// GitHub access token has expired
+    #[error("GitHub access token has expired")]
+    TokenExpired,
+
     /// Failed to retrieve GitHub user information
     #[error("failed to retrieve GitHub user info: {0}")]
     UserInfoFailed(String),
@@ -126,6 +134,12 @@ impl IntoResponse for GitHubIntegrationError {
             }
             GitHubIntegrationError::TokenExchangeFailed(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "OAuth token exchange failed")
+            }
+            GitHubIntegrationError::TokenRefreshFailed(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "OAuth token refresh failed")
+            }
+            GitHubIntegrationError::TokenExpired => {
+                (StatusCode::UNAUTHORIZED, "GitHub access token has expired - please re-authenticate")
             }
             GitHubIntegrationError::UserInfoFailed(ref msg)
                 if msg.contains("verify") || msg.contains("email") => {

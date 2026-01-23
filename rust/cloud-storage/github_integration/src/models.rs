@@ -11,6 +11,12 @@ pub struct GitHubExchangeTokenResponse {
     pub token_type: String,
     /// The scopes granted to this token
     pub scope: String,
+    /// The refresh token (only present if token expiration is enabled in GitHub App settings)
+    pub refresh_token: Option<String>,
+    /// Seconds until access token expires (only present if token expiration is enabled)
+    pub expires_in: Option<i64>,
+    /// Seconds until refresh token expires (only present if token expiration is enabled)
+    pub refresh_token_expires_in: Option<i64>,
 }
 
 /// GitHub user information retrieved from GitHub API

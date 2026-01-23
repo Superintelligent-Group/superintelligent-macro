@@ -230,6 +230,13 @@
   --color-task: var(--theme-task);
   --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
 
+  /* GitHub entity colors */
+  --color-github-issue: oklch(0.65 0.2 140);  /* Green like GitHub's issue open color */
+  --color-github-issue-bg: color-mix(in srgb, var(--color-github-issue), var(--color-panel) 90%);
+
+  --color-github-pr: oklch(0.65 0.2 280);  /* Purple like GitHub's PR color */
+  --color-github-pr-bg: color-mix(in srgb, var(--color-github-pr), var(--color-panel) 90%);
+
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
   --color-accent-30:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  30deg));
@@ -245,7 +252,7 @@
   --color-accent-330: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 330deg));
 }
 
-@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default},{tauri-ios:}{hidden}");
+@source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,contact,default,github-issue,github-pr},{tauri-ios:}{hidden}");
 
 @custom-variant tauri (&:where(.tauri *));
 @custom-variant ios (&:where(.tauri-ios *));

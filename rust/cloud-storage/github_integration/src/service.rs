@@ -26,6 +26,29 @@ pub trait FusionAuthLinking: Send + Sync {
         token: &str,
     ) -> anyhow::Result<()>;
 
+    /// Updates the token for an existing identity provider link
+    ///
+    /// This is used to store refreshed tokens. FusionAuth's link API
+    /// will update the token if the link already exists.
+    async fn update_link_token(
+        &self,
+        user_id: &str,
+        identity_provider_id: &str,
+        identity_provider_user_id: &str,
+        display_name: &str,
+        token: &str,
+    ) -> anyhow::Result<()> {
+        // Default implementation just calls link_user, which updates if exists
+        self.link_user(
+            user_id,
+            identity_provider_id,
+            identity_provider_user_id,
+            display_name,
+            token,
+        )
+        .await
+    }
+
     /// Unlinks a user from a GitHub identity provider
     async fn unlink_user(
         &self,
