@@ -34,11 +34,14 @@ import type {
   FilterConfig,
   FilterGroup,
   FilterPredicate,
-  CleanupFn,
   PluginWithStore,
 } from '../core/types';
 import { CommandPriority } from '../core/types';
-import { ListCommands, type ToggleFilterPayload } from '../core/commands';
+import {
+  ListCommands,
+  mergeRegister,
+  type ToggleFilterPayload,
+} from '../core/commands';
 
 // ============================================================================
 // Filter Store Types
@@ -180,65 +183,54 @@ export function createFilterPlugin<T extends EntityConstraint>(
 
   // Plugin function
   const plugin: Plugin<T> = (controller: ListController<T>) => {
-    const cleanups: CleanupFn[] = [];
+    return mergeRegister(
+      controller.commands.register<ToggleFilterPayload>(
+        ListCommands.TOGGLE_FILTER,
+        (payload) => {
+          const { filterId } = payload;
+          const filterConfig = filterMap.get(filterId);
+          if (!filterConfig) return false;
 
-    // Register toggle filter command
-    const toggleReg = controller.commands.register<ToggleFilterPayload>(
-      ListCommands.TOGGLE_FILTER,
-      (payload) => {
-        const { filterId } = payload;
-        const filterConfig = filterMap.get(filterId);
-        if (!filterConfig) return false;
+          const currentActive = store.activeFilterIds();
+          const newActive = new Set(currentActive);
 
-        const currentActive = store.activeFilterIds();
-        const newActive = new Set(currentActive);
-
-        if (newActive.has(filterId)) {
-          // Deactivate filter
-          newActive.delete(filterId);
-        } else {
-          // Activate filter
-          // Handle mutual exclusivity via groups
-          if (filterConfig.group) {
-            const group = groupMap.get(filterConfig.group);
-            if (group && !group.allowMultiple) {
-              // Remove other filters in same group
-              for (const otherId of group.filterIds) {
-                if (otherId !== filterId) {
-                  newActive.delete(otherId);
+          if (newActive.has(filterId)) {
+            // Deactivate filter
+            newActive.delete(filterId);
+          } else {
+            // Activate filter
+            // Handle mutual exclusivity via groups
+            if (filterConfig.group) {
+              const group = groupMap.get(filterConfig.group);
+              if (group && !group.allowMultiple) {
+                // Remove other filters in same group
+                for (const otherId of group.filterIds) {
+                  if (otherId !== filterId) {
+                    newActive.delete(otherId);
+                  }
                 }
               }
             }
+            newActive.add(filterId);
           }
-          newActive.add(filterId);
-        }
 
-        store.setActiveFilterIds(newActive);
-        onFilterChange?.(newActive);
-        return true;
-      },
-      CommandPriority.NORMAL
+          store.setActiveFilterIds(newActive);
+          onFilterChange?.(newActive);
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.CLEAR_FILTERS,
+        () => {
+          const empty = new Set<string>();
+          store.setActiveFilterIds(empty);
+          onFilterChange?.(empty);
+          return true;
+        },
+        CommandPriority.NORMAL
+      )
     );
-    cleanups.push(toggleReg.unregister);
-
-    // Register clear filters command
-    const clearReg = controller.commands.register(
-      ListCommands.CLEAR_FILTERS,
-      () => {
-        const empty = new Set<string>();
-        store.setActiveFilterIds(empty);
-        onFilterChange?.(empty);
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(clearReg.unregister);
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-    };
   };
 
   // Attach store to plugin

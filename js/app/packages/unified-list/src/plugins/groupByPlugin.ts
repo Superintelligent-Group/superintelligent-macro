@@ -12,11 +12,11 @@ import { createSignal } from 'solid-js';
 import type {
   EntityConstraint,
   Plugin,
-  CleanupFn,
   ListController,
   PluginWithStore,
 } from '../core/types';
 import { CommandPriority } from '../core/types';
+import { mergeRegister } from '../core/commands';
 import type {
   GroupId,
   GroupKeyFn,
@@ -229,62 +229,45 @@ export function createGroupByPlugin<T extends EntityConstraint>(
     initialEnabled
   );
 
-  const plugin: Plugin<T> = (controller: ListController<T>): CleanupFn => {
-    const cleanups: CleanupFn[] = [];
-
-    // Register toggle group command
-    const toggleReg = controller.commands.register<{ groupId: GroupId }>(
-      GroupByCommands.TOGGLE_GROUP,
-      (payload) => {
-        store.toggleGroup(payload.groupId);
-        onCollapseChange?.(store.collapsedGroups());
-        return true;
-      },
-      CommandPriority.NORMAL
+  const plugin: Plugin<T> = (controller: ListController<T>) => {
+    return mergeRegister(
+      controller.commands.register<{ groupId: GroupId }>(
+        GroupByCommands.TOGGLE_GROUP,
+        (payload) => {
+          store.toggleGroup(payload.groupId);
+          onCollapseChange?.(store.collapsedGroups());
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        GroupByCommands.COLLAPSE_ALL_GROUPS,
+        () => {
+          store.collapseAll();
+          onCollapseChange?.(store.collapsedGroups());
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        GroupByCommands.EXPAND_ALL_GROUPS,
+        () => {
+          store.expandAll();
+          onCollapseChange?.(store.collapsedGroups());
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register<{ enabled: boolean }>(
+        GroupByCommands.SET_GROUP_BY_ENABLED,
+        (payload) => {
+          store.setEnabled(payload.enabled);
+          onEnabledChange?.(payload.enabled);
+          return true;
+        },
+        CommandPriority.NORMAL
+      )
     );
-    cleanups.push(toggleReg.unregister);
-
-    // Register collapse all command
-    const collapseReg = controller.commands.register(
-      GroupByCommands.COLLAPSE_ALL_GROUPS,
-      () => {
-        store.collapseAll();
-        onCollapseChange?.(store.collapsedGroups());
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(collapseReg.unregister);
-
-    // Register expand all command
-    const expandReg = controller.commands.register(
-      GroupByCommands.EXPAND_ALL_GROUPS,
-      () => {
-        store.expandAll();
-        onCollapseChange?.(store.collapsedGroups());
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(expandReg.unregister);
-
-    // Register set enabled command
-    const setEnabledReg = controller.commands.register<{ enabled: boolean }>(
-      GroupByCommands.SET_GROUP_BY_ENABLED,
-      (payload) => {
-        store.setEnabled(payload.enabled);
-        onEnabledChange?.(payload.enabled);
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(setEnabledReg.unregister);
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-    };
   };
 
   return Object.assign(plugin, { store });

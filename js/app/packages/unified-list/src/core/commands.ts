@@ -120,6 +120,32 @@ export { ListCommands } from './types';
 export type { ListCommand } from './types';
 
 // ============================================================================
+// Merge Register Utility
+// ============================================================================
+
+/**
+ * Merge multiple command registrations into a single cleanup function.
+ * Simplifies plugin cleanup by combining all unregister calls.
+ *
+ * @example
+ * ```ts
+ * return mergeRegister(
+ *   controller.commands.register(ListCommands.NAVIGATE_UP, handleUp),
+ *   controller.commands.register(ListCommands.NAVIGATE_DOWN, handleDown),
+ * );
+ * ```
+ */
+export function mergeRegister(
+  ...registrations: CommandRegistration[]
+): () => void {
+  return () => {
+    for (const reg of registrations) {
+      reg.unregister();
+    }
+  };
+}
+
+// ============================================================================
 // Command Payload Types
 // ============================================================================
 

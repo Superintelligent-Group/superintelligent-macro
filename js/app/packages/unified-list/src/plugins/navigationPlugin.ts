@@ -9,13 +9,9 @@
  */
 
 import { createEffect, on } from 'solid-js';
-import type {
-  EntityConstraint,
-  Plugin,
-  CleanupFn,
-  ListController,
-} from '../core/types';
+import type { EntityConstraint, Plugin, ListController } from '../core/types';
 import { CommandPriority, ListCommands } from '../core/types';
+import { mergeRegister } from '../core/commands';
 import type { NavigationInput } from '../types';
 
 // ============================================================================
@@ -48,9 +44,7 @@ export function createNavigationPlugin<T extends EntityConstraint>(
     autoSelectFirst = false,
   } = config;
 
-  return (controller: ListController<T>): CleanupFn => {
-    const cleanups: CleanupFn[] = [];
-
+  return (controller: ListController<T>) => {
     /**
      * Get visible entity IDs in display order.
      * Uses visibleEntityIds if set (for grouping), otherwise falls back to entities.
@@ -86,172 +80,151 @@ export function createNavigationPlugin<T extends EntityConstraint>(
       return getVisibleIds().indexOf(entityId);
     };
 
-    /** Navigate up one item */
-    const upReg = controller.commands.register(
-      ListCommands.NAVIGATE_UP,
-      () => {
-        const visibleIds = getVisibleIds();
-        const currentId = controller.state.focusedId();
+    return mergeRegister(
+      controller.commands.register(
+        ListCommands.NAVIGATE_UP,
+        () => {
+          const visibleIds = getVisibleIds();
+          const currentId = controller.state.focusedId();
 
-        if (visibleIds.length === 0) return false;
+          if (visibleIds.length === 0) return false;
 
-        const currentIndex = currentId
-          ? getVisibleIndex(currentId)
-          : visibleIds.length;
+          const currentIndex = currentId
+            ? getVisibleIndex(currentId)
+            : visibleIds.length;
 
-        const prevIndex = Math.max(currentIndex - 1, 0);
-        const prevId = visibleIds[prevIndex];
-        if (!prevId) return false;
+          const prevIndex = Math.max(currentIndex - 1, 0);
+          const prevId = visibleIds[prevIndex];
+          if (!prevId) return false;
 
-        controller.setters.setFocusedId(prevId);
-        onNavigate?.(prevId);
+          controller.setters.setFocusedId(prevId);
+          onNavigate?.(prevId);
 
-        if (autoScroll) {
-          controller.scrollToEntity(prevId);
-        }
+          if (autoScroll) {
+            controller.scrollToEntity(prevId);
+          }
 
-        return true;
-      },
-      CommandPriority.NORMAL
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.NAVIGATE_DOWN,
+        () => {
+          const visibleIds = getVisibleIds();
+          const currentId = controller.state.focusedId();
+
+          if (visibleIds.length === 0) return false;
+
+          const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
+
+          const nextIndex = Math.min(currentIndex + 1, visibleIds.length - 1);
+          const nextId = visibleIds[nextIndex];
+          if (!nextId) return false;
+
+          controller.setters.setFocusedId(nextId);
+          onNavigate?.(nextId);
+
+          if (autoScroll) {
+            controller.scrollToEntity(nextId);
+          }
+
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.NAVIGATE_FIRST,
+        () => {
+          const visibleIds = getVisibleIds();
+          const firstId = visibleIds[0];
+          if (!firstId) return false;
+
+          controller.setters.setFocusedId(firstId);
+          onNavigate?.(firstId);
+
+          if (autoScroll) {
+            controller.scrollToEntity(firstId);
+          }
+
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.NAVIGATE_LAST,
+        () => {
+          const visibleIds = getVisibleIds();
+          const lastId = visibleIds[visibleIds.length - 1];
+          if (!lastId) return false;
+
+          controller.setters.setFocusedId(lastId);
+          onNavigate?.(lastId);
+
+          if (autoScroll) {
+            controller.scrollToEntity(lastId);
+          }
+
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.NAVIGATE_PAGE_UP,
+        () => {
+          const visibleIds = getVisibleIds();
+          const currentId = controller.state.focusedId();
+
+          if (visibleIds.length === 0) return false;
+
+          const currentIndex = currentId
+            ? getVisibleIndex(currentId)
+            : visibleIds.length;
+
+          const targetIndex = Math.max(currentIndex - pageSize, 0);
+          const targetId = visibleIds[targetIndex];
+          if (!targetId) return false;
+
+          controller.setters.setFocusedId(targetId);
+          onNavigate?.(targetId);
+
+          if (autoScroll) {
+            controller.scrollToEntity(targetId);
+          }
+
+          return true;
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.NAVIGATE_PAGE_DOWN,
+        () => {
+          const visibleIds = getVisibleIds();
+          const currentId = controller.state.focusedId();
+
+          if (visibleIds.length === 0) return false;
+
+          const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
+
+          const targetIndex = Math.min(
+            currentIndex + pageSize,
+            visibleIds.length - 1
+          );
+          const targetId = visibleIds[targetIndex];
+          if (!targetId) return false;
+
+          controller.setters.setFocusedId(targetId);
+          onNavigate?.(targetId);
+
+          if (autoScroll) {
+            controller.scrollToEntity(targetId);
+          }
+
+          return true;
+        },
+        CommandPriority.NORMAL
+      )
     );
-    cleanups.push(upReg.unregister);
-
-    /** Navigate down one item */
-    const downReg = controller.commands.register(
-      ListCommands.NAVIGATE_DOWN,
-      () => {
-        const visibleIds = getVisibleIds();
-        const currentId = controller.state.focusedId();
-
-        if (visibleIds.length === 0) return false;
-
-        const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
-
-        const nextIndex = Math.min(currentIndex + 1, visibleIds.length - 1);
-        const nextId = visibleIds[nextIndex];
-        if (!nextId) return false;
-
-        controller.setters.setFocusedId(nextId);
-        onNavigate?.(nextId);
-
-        if (autoScroll) {
-          controller.scrollToEntity(nextId);
-        }
-
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(downReg.unregister);
-
-    /** Navigate to start */
-    const firstReg = controller.commands.register(
-      ListCommands.NAVIGATE_FIRST,
-      () => {
-        const visibleIds = getVisibleIds();
-        const firstId = visibleIds[0];
-        if (!firstId) return false;
-
-        controller.setters.setFocusedId(firstId);
-        onNavigate?.(firstId);
-
-        if (autoScroll) {
-          controller.scrollToEntity(firstId);
-        }
-
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(firstReg.unregister);
-
-    /** Navigate to end */
-    const lastReg = controller.commands.register(
-      ListCommands.NAVIGATE_LAST,
-      () => {
-        const visibleIds = getVisibleIds();
-        const lastId = visibleIds[visibleIds.length - 1];
-        if (!lastId) return false;
-
-        controller.setters.setFocusedId(lastId);
-        onNavigate?.(lastId);
-
-        if (autoScroll) {
-          controller.scrollToEntity(lastId);
-        }
-
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(lastReg.unregister);
-
-    /** Navigate page up */
-    const pageUpReg = controller.commands.register(
-      ListCommands.NAVIGATE_PAGE_UP,
-      () => {
-        const visibleIds = getVisibleIds();
-        const currentId = controller.state.focusedId();
-
-        if (visibleIds.length === 0) return false;
-
-        const currentIndex = currentId
-          ? getVisibleIndex(currentId)
-          : visibleIds.length;
-
-        const targetIndex = Math.max(currentIndex - pageSize, 0);
-        const targetId = visibleIds[targetIndex];
-        if (!targetId) return false;
-
-        controller.setters.setFocusedId(targetId);
-        onNavigate?.(targetId);
-
-        if (autoScroll) {
-          controller.scrollToEntity(targetId);
-        }
-
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(pageUpReg.unregister);
-
-    /** Navigate page down */
-    const pageDownReg = controller.commands.register(
-      ListCommands.NAVIGATE_PAGE_DOWN,
-      () => {
-        const visibleIds = getVisibleIds();
-        const currentId = controller.state.focusedId();
-
-        if (visibleIds.length === 0) return false;
-
-        const currentIndex = currentId ? getVisibleIndex(currentId) : -1;
-
-        const targetIndex = Math.min(
-          currentIndex + pageSize,
-          visibleIds.length - 1
-        );
-        const targetId = visibleIds[targetIndex];
-        if (!targetId) return false;
-
-        controller.setters.setFocusedId(targetId);
-        onNavigate?.(targetId);
-
-        if (autoScroll) {
-          controller.scrollToEntity(targetId);
-        }
-
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(pageDownReg.unregister);
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-    };
   };
 }
 

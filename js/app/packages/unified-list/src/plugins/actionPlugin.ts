@@ -8,14 +8,14 @@
  */
 
 import type {
+  CleanupFn,
   EntityConstraint,
   Plugin,
-  CleanupFn,
   ListController,
   PluginWithStore,
 } from '../core/types';
 import { CommandPriority, ListCommands } from '../core/types';
-import type { OpenEntityPayload } from '../core/commands';
+import { mergeRegister, type OpenEntityPayload } from '../core/commands';
 import type { EntityAction } from '../types';
 
 // ============================================================================
@@ -121,97 +121,79 @@ export function createActionPlugin<T extends EntityConstraint>(
     registry.register(action);
   }
 
-  const plugin: Plugin<T> = (controller: ListController<T>): CleanupFn => {
-    const cleanups: CleanupFn[] = [];
-
-    // Register open entity command
-    const openReg = controller.commands.register<OpenEntityPayload | undefined>(
-      ListCommands.OPEN_ENTITY,
-      (payload) => {
-        // If payload has entityId, try to get that entity
-        const entity = payload?.entityId
-          ? controller.getEntityById(payload.entityId)
-          : undefined;
-        if (!entity) {
-          // If no entity from payload, use focused entity
-          const focused = controller.getFocusedEntity();
-          if (!focused) return false;
-          onOpenEntity?.(focused, {
+  const plugin: Plugin<T> = (controller: ListController<T>) => {
+    return mergeRegister(
+      controller.commands.register<OpenEntityPayload | undefined>(
+        ListCommands.OPEN_ENTITY,
+        (payload) => {
+          // If payload has entityId, try to get that entity
+          const entity = payload?.entityId
+            ? controller.getEntityById(payload.entityId)
+            : undefined;
+          if (!entity) {
+            // If no entity from payload, use focused entity
+            const focused = controller.getFocusedEntity();
+            if (!focused) return false;
+            onOpenEntity?.(focused, {
+              preview: false,
+              newSplit: payload?.newSplit,
+            });
+            return true;
+          }
+          onOpenEntity?.(entity, {
             preview: false,
             newSplit: payload?.newSplit,
           });
           return true;
-        }
-        onOpenEntity?.(entity, {
-          preview: false,
-          newSplit: payload?.newSplit,
-        });
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(openReg.unregister);
-
-    // Register open preview command
-    const previewReg = controller.commands.register(
-      ListCommands.OPEN_ENTITY_PREVIEW,
-      () => {
-        const focused = controller.getFocusedEntity();
-        if (!focused) return false;
-        onOpenEntity?.(focused, { preview: true });
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(previewReg.unregister);
-
-    // Register mark done command
-    const markDoneReg = controller.commands.register(
-      ListCommands.MARK_DONE,
-      () => {
-        const entities = getSelectedOrFocusedEntities(controller);
-        if (!entities) return false;
-
-        if (registry.canExecute('mark_done', entities)) {
-          registry.execute('mark_done', entities);
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.OPEN_ENTITY_PREVIEW,
+        () => {
+          const focused = controller.getFocusedEntity();
+          if (!focused) return false;
+          onOpenEntity?.(focused, { preview: true });
           return true;
-        }
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.MARK_DONE,
+        () => {
+          const entities = getSelectedOrFocusedEntities(controller);
+          if (!entities) return false;
 
-        onMarkDone?.(entities);
-        return true;
-      },
-      CommandPriority.NORMAL
-    );
-    cleanups.push(markDoneReg.unregister);
+          if (registry.canExecute('mark_done', entities)) {
+            registry.execute('mark_done', entities);
+            return true;
+          }
 
-    // Register delete command
-    const deleteReg = controller.commands.register(
-      ListCommands.DELETE_SELECTED,
-      () => {
-        const entities = getSelectedOrFocusedEntities(controller);
-        if (!entities) return false;
-
-        if (registry.canExecute('delete', entities)) {
-          registry.execute('delete', entities);
+          onMarkDone?.(entities);
           return true;
-        }
+        },
+        CommandPriority.NORMAL
+      ),
+      controller.commands.register(
+        ListCommands.DELETE_SELECTED,
+        () => {
+          const entities = getSelectedOrFocusedEntities(controller);
+          if (!entities) return false;
 
-        onDelete?.(entities);
-        return true;
-      },
-      CommandPriority.NORMAL
+          if (registry.canExecute('delete', entities)) {
+            registry.execute('delete', entities);
+            return true;
+          }
+
+          onDelete?.(entities);
+          return true;
+        },
+        CommandPriority.NORMAL
+      )
     );
-    cleanups.push(deleteReg.unregister);
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-    };
   };
 
-  // Expose both `store` (new pattern) and `registry` (backwards compat)
-  return Object.assign(plugin, { store: registry, registry });
+  return Object.assign(plugin, { store: registry });
 }
 
 // ============================================================================
