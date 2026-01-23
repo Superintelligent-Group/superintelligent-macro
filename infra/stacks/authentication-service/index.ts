@@ -106,6 +106,9 @@ const githubClientIdArn: pulumi.Output<string> = aws.secretsmanager
   .apply((secret) => secret.arn);
 
 const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
+const STRIPE_PREMIUM_PRICE_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
+  .apply((secret) => secret.secretString);
 
 const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
@@ -303,6 +306,12 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'STRIPE_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PRICE_ID_KEY}`,
+    },
+    {
+      // NOTE: this is the fetched secret value of the STRIPE_PRICE_ID
+      // from above. Will unify these in a separate PR.
+      name: 'STRIPE_PREMIUM_PRICE_ID',
+      value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
     },
   ],
 });
