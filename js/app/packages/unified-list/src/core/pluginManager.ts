@@ -35,10 +35,6 @@ import type {
   ListController,
 } from './types';
 
-// ============================================================================
-// Utility: Merge Register
-// ============================================================================
-
 /** Merge multiple cleanup functions into one */
 export function mergeRegister(...cleanups: CleanupFn[]): CleanupFn {
   return () => {
@@ -47,10 +43,6 @@ export function mergeRegister(...cleanups: CleanupFn[]): CleanupFn {
     }
   };
 }
-
-// ============================================================================
-// Plugin Manager Types
-// ============================================================================
 
 export type PluginManager<T extends EntityConstraint> = {
   /** Register a plugin and return manager for chaining */
@@ -71,10 +63,6 @@ export type PluginManager<T extends EntityConstraint> = {
   /** Get the underlying controller */
   getController(): ListController<T>;
 };
-
-// ============================================================================
-// Plugin Manager Factory
-// ============================================================================
 
 /** Create a plugin manager for a list controller */
 export function createPluginManager<T extends EntityConstraint>(

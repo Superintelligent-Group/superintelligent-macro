@@ -20,10 +20,6 @@ import type {
   GetEntityId,
 } from './types';
 
-// ============================================================================
-// Initial State Factory
-// ============================================================================
-
 /** Create initial list state */
 export function createInitialState<T extends EntityConstraint>(): ListState<T> {
   return {
@@ -36,10 +32,6 @@ export function createInitialState<T extends EntityConstraint>(): ListState<T> {
     visibleEntityIds: null,
   };
 }
-
-// ============================================================================
-// Reactive State Factory
-// ============================================================================
 
 /** Create reactive state with Solid.js signals */
 export function createReactiveState<T extends EntityConstraint>(
@@ -165,10 +157,6 @@ export function removeEntity<T extends EntityConstraint>(
     };
   };
 }
-
-// ============================================================================
-// Pure State Transitions: Focus/Navigation
-// ============================================================================
 
 /** Set focused ID */
 export function setFocusedId<T extends EntityConstraint>(
