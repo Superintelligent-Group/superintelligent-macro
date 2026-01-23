@@ -313,51 +313,40 @@ const selectData: (
             return out;
           }
 
-          // Foreign entity handling - type assertions needed until schema is regenerated
-          if ((item as { tag: string }).tag === 'foreignEntity') {
-            const foreignItem = item as unknown as {
-              tag: 'foreignEntity';
-              data: {
-                id: string;
-                identifier: string;
-                namespacedIdentifier: string;
-                createdAt: string;
-                updatedAt: string;
-                viewedAt?: string;
-              };
-              frecency_score?: number;
-            };
+          if (item.tag === 'foreignEntity') {
             const out: ForeignEntityEntity = {
               type: 'foreign_entity',
-              id: foreignItem.data.id,
-              name: foreignItem.data.identifier,
-              namespacedIdentifier: foreignItem.data.namespacedIdentifier,
+              id: item.data.id,
+              name: item.data.identifier,
+              namespacedIdentifier: item.data.namespacedIdentifier,
               ownerId: '',
-              frecencyScore: foreignItem.frecency_score ?? 0,
-              updatedAt: Date.parse(foreignItem.data.updatedAt),
-              createdAt: Date.parse(foreignItem.data.createdAt),
-              viewedAt: foreignItem.data.viewedAt
-                ? Date.parse(foreignItem.data.viewedAt)
+              frecencyScore: item.frecency_score ?? 0,
+              updatedAt: Date.parse(item.data.updatedAt),
+              createdAt: Date.parse(item.data.createdAt),
+              viewedAt: item.data.viewedAt
+                ? Date.parse(item.data.viewedAt)
                 : undefined,
             };
             return out;
           }
 
+          // At this point, item.tag must be 'document'
+          const docItem = item;
           return {
-            ...item.data,
-            type: item.tag,
-            frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
-            fileType: item.data.fileType ?? undefined,
-            projectId: item.data.projectId ?? undefined,
+            ...docItem.data,
+            type: docItem.tag,
+            frecencyScore: docItem.frecency_score,
+            viewedAt: docItem.data.viewedAt ?? undefined,
+            fileType: docItem.data.fileType ?? undefined,
+            projectId: docItem.data.projectId ?? undefined,
             subType:
-              item.data.subType === null || item.data.subType === undefined
+              docItem.data.subType === null || docItem.data.subType === undefined
                 ? undefined
                 : {
-                    type: item.data.subType.type as 'task',
-                    is_completed: item.data.subType.is_completed,
+                    type: docItem.data.subType.type as 'task',
+                    is_completed: docItem.data.subType.is_completed,
                   },
-            name: resolveDocumentEntityName(item.data),
+            name: resolveDocumentEntityName(docItem.data),
           };
         }
       )
