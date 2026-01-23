@@ -55,7 +55,11 @@ export const queryKeys = {
       'github-pulls',
       { ...args },
     ],
-    githubPull: (args: KeyOptions) => [...BASE_AUTH, 'github-pull', { ...args }],
+    githubPull: (args: KeyOptions) => [
+      ...BASE_AUTH,
+      'github-pull',
+      { ...args },
+    ],
     // Issues
     githubIssues: (args: { owner: string; repo: string }) => [
       ...BASE_AUTH,

@@ -332,12 +332,7 @@ export function computeBins<T extends string>(
 }
 
 /** The current bins enum */
-export type MentionBins =
-  | 'items'
-  | 'users'
-  | 'dates'
-  | 'emails'
-  | 'github';
+export type MentionBins = 'items' | 'users' | 'dates' | 'emails' | 'github';
 
 /** View all mode type */
 type ViewAllMode = MentionBins | null;
@@ -568,8 +563,12 @@ function MentionsMenuInner(props: {
   const gitHubReposQuery = createGitHubReposQuery();
 
   // Cache state
-  const [cachedEntities, setCachedEntities] = createSignal<CachedGitHubEntity[]>([]);
-  const [searchResults, setSearchResults] = createSignal<GitHubCombinedEntity[]>([]);
+  const [cachedEntities, setCachedEntities] = createSignal<
+    CachedGitHubEntity[]
+  >([]);
+  const [searchResults, setSearchResults] = createSignal<
+    GitHubCombinedEntity[]
+  >([]);
   const [_isSearching, setIsSearching] = createSignal(false);
 
   // Track background fetch state (using regular variables to avoid triggering effects)
@@ -631,7 +630,9 @@ function MentionsMenuInner(props: {
             // Update local state with new entities
             setCachedEntities((prev) => {
               const existingIds = new Set(prev.map((e) => e.id));
-              const newEntities = entities.filter((e) => !existingIds.has(e.id));
+              const newEntities = entities.filter(
+                (e) => !existingIds.has(e.id)
+              );
               return [
                 ...prev,
                 ...newEntities.map((e) => ({
@@ -645,7 +646,10 @@ function MentionsMenuInner(props: {
 
           await markRepoFetched(repo.fullName);
         } catch (e) {
-          console.warn(`[GitHub Cache] Failed to fetch entities for ${repo.fullName}:`, e);
+          console.warn(
+            `[GitHub Cache] Failed to fetch entities for ${repo.fullName}:`,
+            e
+          );
         }
 
         // Small delay between repos to avoid rate limiting
@@ -1010,10 +1014,9 @@ function MentionsMenuInner(props: {
     return merge(mail, otherMail);
   });
 
-  const gitHubSearch = createFreshSearch<Entity<'githubRepo'> | Entity<'githubEntity'>>(
-    { timeWeight: 0, brevityWeight: 0.3 },
-    getItemSearchText
-  );
+  const gitHubSearch = createFreshSearch<
+    Entity<'githubRepo'> | Entity<'githubEntity'>
+  >({ timeWeight: 0, brevityWeight: 0.3 }, getItemSearchText);
 
   const filteredGitHub = createMemo(() => {
     const term = searchTerm();

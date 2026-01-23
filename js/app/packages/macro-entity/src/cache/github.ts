@@ -52,7 +52,9 @@ function openDB(): Promise<IDBDatabase> {
         const entitiesStore = db.createObjectStore(ENTITIES_STORE, {
           keyPath: 'id',
         });
-        entitiesStore.createIndex('entityType', 'entityType', { unique: false });
+        entitiesStore.createIndex('entityType', 'entityType', {
+          unique: false,
+        });
         entitiesStore.createIndex('repoFullName', 'repoFullName', {
           unique: false,
         });
@@ -154,14 +156,18 @@ export async function validateCacheForUser(userId: string): Promise<boolean> {
  * Clears all cached data.
  */
 export async function clearCache(): Promise<void> {
-  return withTransaction([ENTITIES_STORE, META_STORE], 'readwrite', async (tx) => {
-    const entitiesStore = tx.objectStore(ENTITIES_STORE);
-    const metaStore = tx.objectStore(META_STORE);
-    await Promise.all([
-      requestToPromise(entitiesStore.clear()),
-      requestToPromise(metaStore.clear()),
-    ]);
-  });
+  return withTransaction(
+    [ENTITIES_STORE, META_STORE],
+    'readwrite',
+    async (tx) => {
+      const entitiesStore = tx.objectStore(ENTITIES_STORE);
+      const metaStore = tx.objectStore(META_STORE);
+      await Promise.all([
+        requestToPromise(entitiesStore.clear()),
+        requestToPromise(metaStore.clear()),
+      ]);
+    }
+  );
 }
 
 // ============ Entity Operations ============

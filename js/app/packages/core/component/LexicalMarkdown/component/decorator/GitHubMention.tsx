@@ -131,7 +131,7 @@ function getEntityTitle(
  */
 function getEntityUrlFromData(
   data: unknown,
-  entityType: GitHubEntityType
+  _entityType: GitHubEntityType
 ): string | null {
   if (!data) return null;
   return (data as { url?: string }).url || null;
@@ -259,7 +259,10 @@ export function GitHubMention(props: GitHubMentionProps) {
                 </Show>
               </Match>
               <Match when={props.entityType === 'pr'}>
-                <Show when={data() as { title?: string }} fallback={displayText}>
+                <Show
+                  when={data() as { title?: string }}
+                  fallback={displayText}
+                >
                   {(prData) => (
                     <>
                       {displayText}{' '}

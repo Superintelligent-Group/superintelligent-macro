@@ -109,7 +109,9 @@ export type UserMentionRecord = {
 };
 
 export const getCombinedEntityBlockName = (
-  item: CombinedEntity<'item' | 'channel' | 'email' | 'githubRepo' | 'githubEntity'>,
+  item: CombinedEntity<
+    'item' | 'channel' | 'email' | 'githubRepo' | 'githubEntity'
+  >,
   icon?: boolean
 ): EntityWithValidIcon => {
   switch (item.kind) {

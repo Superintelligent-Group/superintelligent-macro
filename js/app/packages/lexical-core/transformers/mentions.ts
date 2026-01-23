@@ -356,7 +356,10 @@ export const I_GITHUB_MENTION: TextMatchTransformer = {
 /**
  * Builds a GitHub URL from entity type and ID
  */
-function buildGitHubUrl(entityId: string, entityType: GitHubEntityType): string {
+function buildGitHubUrl(
+  entityId: string,
+  entityType: GitHubEntityType
+): string {
   const repoPath = getRepoFromGitHubId(entityId, entityType);
   const displayText = getDisplayTextFromGitHubId(entityId, entityType);
 

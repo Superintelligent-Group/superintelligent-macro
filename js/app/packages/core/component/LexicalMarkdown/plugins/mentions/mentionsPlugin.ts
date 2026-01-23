@@ -795,10 +795,7 @@ function registerMentionsPlugin(
       GitHubMentionNode,
       (mutatedNodes, { prevEditorState }) => {
         for (const [nodeKey, mutation] of mutatedNodes) {
-          const node = nodeByKey(
-            prevEditorState,
-            nodeKey
-          ) as GitHubMentionNode;
+          const node = nodeByKey(prevEditorState, nodeKey) as GitHubMentionNode;
           if (node && mutation === 'destroyed') {
             const mentionUuid = node.getMentionUuid();
             if (mentionUuid && sourceDocumentId) {

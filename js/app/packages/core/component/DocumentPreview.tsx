@@ -586,7 +586,8 @@ export function PopupPreview(props: {
                                 targetType={
                                   type === 'document'
                                     ? (subType?.type ?? fileType)
-                                    : type === 'foreign' || type === 'foreign_entity'
+                                    : type === 'foreign' ||
+                                        type === 'foreign_entity'
                                       ? 'default'
                                       : type
                                 }

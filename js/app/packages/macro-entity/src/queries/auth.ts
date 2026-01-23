@@ -487,7 +487,8 @@ export function createGitHubPullRequestQuery(prId: string) {
     retry: (failureCount, error) => {
       if (
         error instanceof Error &&
-        (error.message === 'GITHUB_NOT_LINKED' || error.message === 'PR_NOT_FOUND')
+        (error.message === 'GITHUB_NOT_LINKED' ||
+          error.message === 'PR_NOT_FOUND')
       ) {
         return false;
       }
@@ -601,7 +602,11 @@ export function createGitHubIssueQuery(issueId: string) {
 
 // ============ Commits ============
 
-const fetchGitHubCommits = async (owner: string, repo: string, sha?: string) => {
+const fetchGitHubCommits = async (
+  owner: string,
+  repo: string,
+  sha?: string
+) => {
   const baseUrl = `${authHost}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`;
   const params = new URLSearchParams();
   if (sha) params.set('sha', sha);
@@ -884,7 +889,13 @@ export function createGitHubReleaseQuery(releaseId: string) {
 
 // ============ Combined GitHub Entities Search ============
 
-export type GitHubEntityType = 'repo' | 'pr' | 'issue' | 'commit' | 'branch' | 'release';
+export type GitHubEntityType =
+  | 'repo'
+  | 'pr'
+  | 'issue'
+  | 'commit'
+  | 'branch'
+  | 'release';
 
 export interface GitHubCombinedEntity {
   id: string;
@@ -907,13 +918,15 @@ export async function fetchRepoEntities(
   const results: GitHubCombinedEntity[] = [];
 
   try {
-    const [prs, issues, commits, branches, releases] = await Promise.allSettled([
-      fetchGitHubPullRequests(owner, name, 'all'),
-      fetchGitHubIssues(owner, name, 'all'),
-      fetchGitHubCommits(owner, name),
-      fetchGitHubBranches(owner, name),
-      fetchGitHubReleases(owner, name),
-    ]);
+    const [prs, issues, commits, branches, releases] = await Promise.allSettled(
+      [
+        fetchGitHubPullRequests(owner, name, 'all'),
+        fetchGitHubIssues(owner, name, 'all'),
+        fetchGitHubCommits(owner, name),
+        fetchGitHubBranches(owner, name),
+        fetchGitHubReleases(owner, name),
+      ]
+    );
 
     // Add PRs
     if (prs.status === 'fulfilled') {
