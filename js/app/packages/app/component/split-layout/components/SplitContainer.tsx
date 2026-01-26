@@ -1,5 +1,6 @@
 import MacroJump from '@app/component/MacroJump';
 import { MobileDock } from '@app/component/mobile/MobileDock';
+import { activeElement } from '@app/signal/focus';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -20,6 +21,14 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
+
+function isTextInputFocused(element: Element | null): boolean {
+  if (!element) return false;
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return true;
+  if ((element as HTMLElement).isContentEditable) return true;
+  return false;
+}
 
 export function SplitContainer(
   props: ParentProps<{
@@ -59,6 +68,25 @@ export function SplitContainer(
     const splits = globalSplitManager()?.splits?.();
     return Boolean(splits && splits.length > 1);
   }
+
+  const isUnifiedList = () => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'unified-list';
+  };
+
+  const showEscapeIndicator = createMemo(() => {
+    // Don't show if already on unified list (escape wouldn't go to soup)
+    if (isUnifiedList()) return false;
+    // Don't show if panel is not active
+    if (!panel.handle.isActive()) return false;
+    // Don't show if a text input or markdown area is focused
+    const focused = activeElement();
+    const splitRef = ref();
+    if (focused && splitRef?.contains(focused) && isTextInputFocused(focused)) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <SplitModalProvider>
@@ -101,7 +129,12 @@ export function SplitContainer(
             }
             edgeMutedColor="transparent"
           >
-            <div class="flex flex-col min-h-0 size-full bg-panel">
+            <div
+              class="flex flex-col min-h-0 size-full bg-panel"
+              classList={{
+                'border-l border-accent': showEscapeIndicator(),
+              }}
+            >
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
               <div class="@container/split size-full overflow-hidden">
