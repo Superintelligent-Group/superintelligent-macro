@@ -137,6 +137,15 @@ if (LOCAL_ONLY) {
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
+
+  registerComponent(
+    'entity-debugger',
+    lazy(() =>
+      import(
+        '../../../macro-entity/src/components/EntityDebugger'
+      ).then((m) => ({ default: m.EntityDebugger }))
+    )
+  );
 }
 
 if (DEV_MODE_ENV) {
