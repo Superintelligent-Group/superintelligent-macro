@@ -1,3 +1,4 @@
+import { activeElement } from '@app/signal/focus';
 import type { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -23,6 +24,14 @@ import {
 } from './split-layout/context';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+
+function isTextInputFocused(element: Element | null): boolean {
+  if (!element) return false;
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return true;
+  if ((element as HTMLElement).isContentEditable) return true;
+  return false;
+}
 
 type PreviewPanel = {
   selectedEntity: EntityData | undefined;
@@ -114,9 +123,24 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     // Keeping this effect slot in case we need future layout hacks.
   });
 
+  const showEscapeIndicator = createMemo(() => {
+    // Only show if the panel is active
+    if (!props.splitPanelContext.isPanelActive()) return false;
+    // Don't show if a text input or markdown area is focused within the preview
+    const focused = activeElement();
+    const container = containerRef();
+    if (focused && container?.contains(focused) && isTextInputFocused(focused)) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <div
       class="flex flex-col size-full"
+      classList={{
+        'shadow-[inset_2px_0_0_0_var(--color-accent)]': showEscapeIndicator(),
+      }}
       onFocusIn={(event) => {
         if (interactedWith()) return;
         const relatedTarget = event.relatedTarget;

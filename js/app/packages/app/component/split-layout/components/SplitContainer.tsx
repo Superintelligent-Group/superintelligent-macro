@@ -79,6 +79,9 @@ export function SplitContainer(
     if (isUnifiedList()) return false;
     // Don't show if panel is not active
     if (!panel.handle.isActive()) return false;
+    // Don't show on main split when in preview mode (indicator goes on preview panel instead)
+    const [previewState] = panel.previewState;
+    if (previewState()) return false;
     // Don't show if a text input or markdown area is focused
     const focused = activeElement();
     const splitRef = ref();
@@ -132,7 +135,7 @@ export function SplitContainer(
             <div
               class="flex flex-col min-h-0 size-full bg-panel"
               classList={{
-                'border-l border-accent': showEscapeIndicator(),
+                'shadow-[inset_2px_0_0_0_var(--color-accent)]': showEscapeIndicator(),
               }}
             >
               <SplitHeader ref={setHeaderRef} />
