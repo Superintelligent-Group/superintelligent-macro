@@ -37,6 +37,19 @@ export const isChannelCategoryActive = (
 };
 
 /**
+ * Pure predicate: is a multi-category channel filter active?
+ * Checks if typeFilter is exactly ['channel'] and categoryFilter matches targetCategories.
+ */
+export const isChannelMultiCategoryActive = (
+  typeFilter: readonly ExpandedEntityType[],
+  categoryFilter: readonly ('people' | 'groups')[],
+  targetCategories: readonly ('people' | 'groups')[]
+): boolean => {
+  if (typeFilter.length !== 1 || typeFilter[0] !== 'channel') return false;
+  return sameSet(categoryFilter, targetCategories);
+};
+
+/**
  * Pure predicate: is a specific entity type filter active (exclusive)?
  * Checks if typeFilter is exactly [type].
  */

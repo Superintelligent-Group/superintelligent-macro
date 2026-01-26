@@ -24,6 +24,14 @@ export type EntityTypeFilterConfig =
       shortcut: string;
     }
   | {
+      kind: 'channelMultiCategory';
+      channelCategories: ('people' | 'groups')[];
+      label: string;
+      iconType: string;
+      enabled: boolean;
+      shortcut: string;
+    }
+  | {
       kind: 'documentPreset';
       type: 'document';
       documentTypes: DocumentTypeFilter[];
@@ -64,8 +72,8 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
     shortcut: 'p',
   },
   {
-    kind: 'channelCategory',
-    channelCategory: 'groups',
+    kind: 'channelMultiCategory',
+    channelCategories: ['groups', 'people'],
     label: 'Messages',
     iconType: 'directMessage',
     enabled: true,

@@ -12,9 +12,11 @@ import {
 } from '../utils/filterConfigs';
 import {
   isChannelCategoryActive,
+  isChannelMultiCategoryActive,
   isDocumentPresetActive,
   isEntityTypeFilterActive,
   isFocusFilterActive,
+  sameSet,
 } from '../utils/filterHelpers';
 
 export interface UseFilterActionsParams {
@@ -47,6 +49,12 @@ export function useFilterActions(params: UseFilterActionsParams) {
       entityTypeFilter(),
       channelCategoryFilter() ?? [],
       category
+    );
+  const isChannelMultiCatActive = (categories: ('people' | 'groups')[]) =>
+    isChannelMultiCategoryActive(
+      entityTypeFilter(),
+      channelCategoryFilter() ?? [],
+      categories
     );
 
   const clearTopbarTypeFilters = () => {
@@ -138,6 +146,30 @@ export function useFilterActions(params: UseFilterActionsParams) {
     );
   };
 
+  const toggleChannelMultiCategoryFilter = (
+    categories: ('people' | 'groups')[]
+  ) => {
+    const isActive =
+      entityTypeFilter().length === 1 &&
+      entityTypeFilter()[0] === 'channel' &&
+      sameSet(channelCategoryFilter() ?? [], categories);
+
+    if (isActive) {
+      clearTopbarTypeFilters();
+      return;
+    }
+
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      produce((filters) => {
+        filters.typeFilter = ['channel'];
+        filters.channelCategoryFilter = [...categories];
+        filters.documentTypeFilter = [];
+      })
+    );
+  };
+
   const getFilterHandler = (filter: EntityTypeFilterConfig): (() => void) => {
     return match(filter)
       .with(
@@ -147,6 +179,10 @@ export function useFilterActions(params: UseFilterActionsParams) {
       .with(
         { kind: 'channelCategory' },
         (f) => () => toggleChannelCategoryFilter(f.channelCategory)
+      )
+      .with(
+        { kind: 'channelMultiCategory' },
+        (f) => () => toggleChannelMultiCategoryFilter(f.channelCategories)
       )
       .with(
         { kind: 'entityType' },
@@ -168,6 +204,12 @@ export function useFilterActions(params: UseFilterActionsParams) {
           entityTypeFilter().length === 1 &&
           isChannelCatActive(f.channelCategory)
       )
+      .with(
+        { kind: 'channelMultiCategory' },
+        (f) =>
+          entityTypeFilter().length === 1 &&
+          isChannelMultiCatActive(f.channelCategories)
+      )
       .with({ kind: 'entityType' }, (f) => isEntityTypeActive(f.type))
       .exhaustive();
   };
@@ -178,12 +220,14 @@ export function useFilterActions(params: UseFilterActionsParams) {
     isEntityTypeActive,
     isDocPresetActive,
     isChannelCatActive,
+    isChannelMultiCatActive,
     isFilterConfigActive,
     clearTopbarTypeFilters,
     toggleFocusFilter,
     setExclusiveEntityTypeFilter,
     toggleDocumentPreset,
     toggleChannelCategoryFilter,
+    toggleChannelMultiCategoryFilter,
     getFilterHandler,
   };
 }
