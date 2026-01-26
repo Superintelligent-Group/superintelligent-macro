@@ -66,10 +66,10 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
   {
     kind: 'channelCategory',
     channelCategory: 'groups',
-    label: 'Channels',
+    label: 'Messages',
     iconType: 'directMessage',
     enabled: true,
-    shortcut: 'c',
+    shortcut: 'm',
   },
   {
     kind: 'entityType',
