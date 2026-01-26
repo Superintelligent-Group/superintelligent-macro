@@ -22,10 +22,6 @@ import type {
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
 
-// ============================================================================
-// Mock User IDs and Timestamps
-// ============================================================================
-
 export const MOCK_USER_IDS = {
   owner: 'user_owner_123',
   sharedUser: 'user_shared_456',
@@ -42,10 +38,6 @@ export const MOCK_TIMESTAMPS = {
   lastMonth: Date.now() - 1000 * 60 * 60 * 24 * 30, // 30 days ago
   lastYear: Date.now() - 1000 * 60 * 60 * 24 * 365, // 365 days ago
 } as const;
-
-// ============================================================================
-// Mock Properties
-// ============================================================================
 
 export const MOCK_PROPERTIES: Property[] = [
   {
@@ -135,10 +127,6 @@ export const MOCK_PROPERTIES: Property[] = [
   },
 ];
 
-// ============================================================================
-// Mock Notifications
-// ============================================================================
-
 export const createMockNotification = (
   overrides?: Partial<Notification>
 ): Notification => ({
@@ -177,10 +165,6 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
     entity_type: 'channel',
   }),
 ];
-
-// ============================================================================
-// Document Entities
-// ============================================================================
 
 export const MOCK_DOCUMENT_BASIC: DocumentEntity = {
   type: 'document',
@@ -238,10 +222,6 @@ export const MOCK_DOCUMENT_SPECIAL_CHARS: DocumentEntity = {
   frecencyScore: 0.75,
 };
 
-// ============================================================================
-// Task Entities
-// ============================================================================
-
 export const MOCK_TASK_TODO: TaskEntity = {
   type: 'document',
   id: 'task_todo_1',
@@ -280,10 +260,6 @@ export const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
   frecencyScore: 0.99,
 };
 
-// ============================================================================
-// Channel Entities
-// ============================================================================
-
 export const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   type: 'channel',
   id: 'channel_public_1',
@@ -294,7 +270,7 @@ export const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   updatedAt: MOCK_TIMESTAMPS.today,
   interactedAt: MOCK_TIMESTAMPS.today,
   latestMessage: {
-    content: 'Hey everyone! Don\'t forget about the team meeting at 2pm',
+    content: "Hey everyone! Don't forget about the team meeting at 2pm",
     senderId: MOCK_USER_IDS.teamMember1,
     createdAt: MOCK_TIMESTAMPS.today,
   },
@@ -370,10 +346,6 @@ export const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
   frecencyScore: 0.68,
 };
 
-// ============================================================================
-// Email Entities
-// ============================================================================
-
 export const MOCK_EMAIL_UNREAD: EmailEntity = {
   type: 'email',
   id: 'email_unread_1',
@@ -385,7 +357,7 @@ export const MOCK_EMAIL_UNREAD: EmailEntity = {
   done: false,
   senderEmail: 'alice@example.com',
   senderName: 'Alice Johnson',
-  snippet: 'Let\'s schedule a meeting to discuss our Q1 goals and objectives...',
+  snippet: "Let's schedule a meeting to discuss our Q1 goals and objectives...",
   participants: [
     { email: 'alice@example.com', name: 'Alice Johnson' },
     { email: 'bob@example.com', name: 'Bob Smith' },
@@ -407,9 +379,7 @@ export const MOCK_EMAIL_READ: EmailEntity = {
   senderEmail: 'charlie@example.com',
   senderName: 'Charlie Davis',
   snippet: 'Thanks for the update! Everything looks good to me.',
-  participants: [
-    { email: 'charlie@example.com', name: 'Charlie Davis' },
-  ],
+  participants: [{ email: 'charlie@example.com', name: 'Charlie Davis' }],
   createdAt: MOCK_TIMESTAMPS.yesterday,
   updatedAt: MOCK_TIMESTAMPS.yesterday,
   frecencyScore: 0.76,
@@ -464,7 +434,8 @@ export const MOCK_EMAIL_MULTIPLE_PARTICIPANTS: EmailEntity = {
   done: false,
   senderEmail: 'frank@example.com',
   senderName: 'Frank Anderson',
-  snippet: 'Just a reminder that our all hands meeting is scheduled for next Monday...',
+  snippet:
+    'Just a reminder that our all hands meeting is scheduled for next Monday...',
   participants: [
     { email: 'frank@example.com', name: 'Frank Anderson' },
     { email: 'grace@example.com', name: 'Grace Lee' },
@@ -476,10 +447,6 @@ export const MOCK_EMAIL_MULTIPLE_PARTICIPANTS: EmailEntity = {
   updatedAt: MOCK_TIMESTAMPS.yesterday,
   frecencyScore: 0.78,
 };
-
-// ============================================================================
-// Project Entities
-// ============================================================================
 
 export const MOCK_PROJECT_1: ProjectEntity = {
   type: 'project',
@@ -511,10 +478,6 @@ export const MOCK_PROJECT_SHARED: ProjectEntity = {
   frecencyScore: 0.79,
 };
 
-// ============================================================================
-// Chat Entities
-// ============================================================================
-
 export const MOCK_CHAT_BASIC: ChatEntity = {
   type: 'chat',
   id: 'chat_1',
@@ -535,10 +498,6 @@ export const MOCK_CHAT_WITH_PROJECT: ChatEntity = {
   updatedAt: MOCK_TIMESTAMPS.yesterday,
   frecencyScore: 0.82,
 };
-
-// ============================================================================
-// Search Entities with Content Hits
-// ============================================================================
 
 export const MOCK_SEARCH_DOCUMENT: WithSearch<DocumentEntity> = {
   ...MOCK_DOCUMENT_BASIC,
@@ -645,10 +604,6 @@ export const MOCK_SEARCH_PDF: WithSearch<DocumentEntity> = {
   },
 };
 
-// ============================================================================
-// Entities with Notifications
-// ============================================================================
-
 export const createEntityWithNotifications = <T extends object>(
   entity: T,
   notifications: Notification[]
@@ -672,10 +627,6 @@ export const MOCK_CHANNEL_WITH_NOTIFICATIONS = createEntityWithNotifications(
   [MOCK_NOTIFICATIONS[2]]
 );
 
-// ============================================================================
-// Shared Ownership Entities
-// ============================================================================
-
 export const MOCK_SHARED_DOCUMENT: DocumentEntity = {
   ...MOCK_DOCUMENT_BASIC,
   id: 'doc_shared_1',
@@ -690,16 +641,8 @@ export const MOCK_SHARED_TASK: TaskEntity = {
   ownerId: MOCK_USER_IDS.teamMember1,
 };
 
-// ============================================================================
-// Entities with Properties
-// ============================================================================
-
 export const MOCK_TASK_WITH_PROPERTIES = MOCK_TASK_TODO;
 export const MOCK_TASK_PROPERTIES = MOCK_PROPERTIES;
-
-// ============================================================================
-// Edge Cases
-// ============================================================================
 
 export const MOCK_ENTITY_MISSING_FIELDS: DocumentEntity = {
   type: 'document',
@@ -731,10 +674,6 @@ export const MOCK_ENTITY_UNICODE: DocumentEntity = {
   updatedAt: MOCK_TIMESTAMPS.today,
   frecencyScore: 0.88,
 };
-
-// ============================================================================
-// Collections for Testing
-// ============================================================================
 
 export const ALL_DOCUMENT_ENTITIES = [
   MOCK_DOCUMENT_BASIC,
@@ -777,10 +716,7 @@ export const ALL_PROJECT_ENTITIES = [
   MOCK_PROJECT_SHARED,
 ];
 
-export const ALL_CHAT_ENTITIES = [
-  MOCK_CHAT_BASIC,
-  MOCK_CHAT_WITH_PROJECT,
-];
+export const ALL_CHAT_ENTITIES = [MOCK_CHAT_BASIC, MOCK_CHAT_WITH_PROJECT];
 
 export const ALL_SEARCH_ENTITIES = [
   MOCK_SEARCH_DOCUMENT,
