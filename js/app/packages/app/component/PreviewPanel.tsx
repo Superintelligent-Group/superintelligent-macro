@@ -139,7 +139,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     <div
       class="flex flex-col size-full"
       classList={{
-        'shadow-[inset_2px_0_0_0_var(--color-accent)]': showEscapeIndicator(),
+        'shadow-[inset_0_-2px_0_0_var(--color-accent)]': showEscapeIndicator(),
       }}
       onFocusIn={(event) => {
         if (interactedWith()) return;

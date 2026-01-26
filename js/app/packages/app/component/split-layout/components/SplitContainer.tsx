@@ -135,7 +135,7 @@ export function SplitContainer(
             <div
               class="flex flex-col min-h-0 size-full bg-panel"
               classList={{
-                'shadow-[inset_2px_0_0_0_var(--color-accent)]': showEscapeIndicator(),
+                'shadow-[inset_0_-2px_0_0_var(--color-accent)]': showEscapeIndicator(),
               }}
             >
               <SplitHeader ref={setHeaderRef} />
