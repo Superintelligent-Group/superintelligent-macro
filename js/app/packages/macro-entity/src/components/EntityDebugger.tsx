@@ -31,8 +31,6 @@ import {
   type Component,
   Suspense,
   createMemo,
-  createEffect,
-  on,
 } from 'solid-js';
 import { createDssInfiniteQuery } from '../queries/dss';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
