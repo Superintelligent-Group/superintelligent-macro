@@ -41,6 +41,9 @@ const [historyDirty, markHistoryDirty] = createSignal(undefined, {
   equals: () => false,
 });
 
+// Exported for testing reactivity of useUpdatedDssItemName
+export { markHistoryDirty };
+
 function historyQueryOptions() {
   return {
     queryKey: historyKeys.list.queryKey,
