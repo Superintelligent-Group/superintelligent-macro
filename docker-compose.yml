@@ -1,6 +1,8 @@
 # Services
 include:
   - docker-compose-databases.yml
+  - infra/stacks/fusionauth-instance/docker-compose.yml
+  - infra/stacks/opensearch/docker-compose-opensearch.yml
 
 x-common-env: &common-env
   env_file:
@@ -20,8 +22,10 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - fusionauth
       - redis
     networks:
+      - auth
       - databases
       - services
     healthcheck:
@@ -92,8 +96,6 @@ services:
       target: contacts_service
     ports:
       - "8083:8080"
-    environment:
-      - DATABASE_URL=${CONTACTSDB_URL}
     networks:
       - databases
       - services
@@ -109,6 +111,8 @@ services:
   # Document format conversion - requires LibreOffice
   # ============================================================================
   convert_service:
+    profiles:
+      - processors 
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -242,9 +246,6 @@ services:
       target: notification_service
     ports:
       - "8089:8080"
-    environment:
-      # Explicitly override as this is a unique databas
-      - DATABASE_URL=${NOTIFICATIONDB_URL}
     depends_on:
       - redis
       - document_cognition_service
@@ -316,6 +317,8 @@ services:
   # Search indexing worker
   # ============================================================================
   search_processing_service:
+    profiles:
+      - processors
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -404,8 +407,50 @@ services:
       retries: 3
       start_period: 10s
 
+  # ============================================================================
+  # websocket_service (Port 6969)
+  # Simple WebSocket service - responds with "ping" to all messages
+  # ============================================================================
+  websocket_service:
+    build:
+      context: ./js/websocket-service
+      dockerfile: Dockerfile
+    ports:
+      - "6969:6969"
+    networks:
+      - services
+
+  # ============================================================================
+  # lexical_service (Port 8096)
+  # Lexical document conversion service - converts Lexical JSON to various formats
+  # ============================================================================
+  lexical_service:
+    <<: *common-env
+    build:
+      context: ./js/lexical-service
+      dockerfile: Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+    ports:
+      - "8096:8096"
+    environment:
+      - PORT=8096
+      - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
+      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   services:
     driver: bridge
   databases:
+    external: true
+  auth:
     external: true

@@ -18,6 +18,7 @@ import {
   type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
+  type SnapshotNode,
   type GroupMentionNode,
   type HorizontalRuleNode,
   type ImageNode,
@@ -68,6 +69,7 @@ import { ContactMention as ContactMentionDecorator } from '../decorator/ContactM
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
@@ -214,7 +216,6 @@ function getTextClassName(
 type NodeComponent<T extends LexicalNode = LexicalNode> = {
   node: T;
   theme: EditorThemeClasses;
-  isGenerating: Accessor<boolean>;
 };
 
 type ElementNodeComponent<T extends ElementNode = ElementNode> = ParentProps &
@@ -323,6 +324,20 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
   render: (props) => (
     <span>
       {GroupMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const Snapshot: RenderableEntity<SnapshotNode> = {
+  guard: (node: LexicalNode): node is SnapshotNode =>
+    node.__type === 'snapshot',
+  render: (props) => (
+    <span>
+      {SnapshotDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -568,12 +583,7 @@ const DocumentCard: RenderableEntity<DocumentCardNode> = {
 const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
   render: (props) => (
-    <div
-      class={`${props.theme?.static?.['table-container'] || ''}`}
-      classList={{
-        hidden: props.isGenerating(),
-      }}
-    >
+    <div class={`${props.theme?.static?.['table-container'] || ''}`}>
       <table
         class={`${props.theme.table} min-w-full table-auto`}
         style="width: max-content;"
@@ -643,6 +653,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ContactMention,
   DateMention,
   GroupMention,
+  Snapshot,
   Image,
   Video,
   HorizontalRule,
@@ -672,7 +683,6 @@ function Render(props: NodeComponent | ElementNodeComponent) {
     return entity.render({
       ...props,
       theme: props.theme,
-      isGenerating: props.isGenerating,
     });
   }
 
@@ -685,10 +695,8 @@ function Render(props: NodeComponent | ElementNodeComponent) {
       children: MapRender({
         children: elemNode.getChildren(),
         theme: props.theme,
-        isGenerating: props.isGenerating,
       }),
       theme: props.theme,
-      isGenerating: props.isGenerating,
     });
   }
 
@@ -699,14 +707,9 @@ function Render(props: NodeComponent | ElementNodeComponent) {
 function MapRender(props: {
   children: LexicalNode[];
   theme: EditorThemeClasses;
-  isGenerating: Accessor<boolean>;
 }) {
   return props.children.map((child) => (
-    <Render
-      node={child}
-      theme={props.theme}
-      isGenerating={props.isGenerating}
-    />
+    <Render node={child} theme={props.theme} />
   ));
 }
 
@@ -714,7 +717,6 @@ function Document(props: {
   rootNode: RootNode;
   theme: EditorThemeClasses;
   rootRef?: (ref: HTMLDivElement) => void;
-  isGenerating: Accessor<boolean>;
   singleLine?: boolean;
 }): JSX.Element {
   return (
@@ -722,11 +724,7 @@ function Document(props: {
       class={`markdown-content ${props.theme.root ?? ''} break-words max-w-full`}
       ref={props.rootRef}
     >
-      <MapRender
-        children={props.rootNode.getChildren()}
-        theme={props.theme}
-        isGenerating={props.isGenerating}
-      />
+      <MapRender children={props.rootNode.getChildren()} theme={props.theme} />
     </div>
   );
 }
@@ -743,12 +741,10 @@ export function StaticMarkdown(props: {
   setEditorRef?: (editor: LexicalEditor) => void;
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
-  isGenerating?: Accessor<boolean>;
   singleLine?: boolean;
 }) {
   let { editor: contextEditor, theme: parentTheme } = useContext(context);
   let [editorState, setEditorState] = createSignal<EditorState | null>(null);
-  const [isGenerating, setIsGenerating] = createSignal<boolean>(false);
 
   if (contextEditor === null) {
     console.warn(
@@ -792,20 +788,16 @@ export function StaticMarkdown(props: {
 
   // TODO: Move citations to bulk query when built in backend
   createEffect(() => {
-    const isGenerating = props.isGenerating?.() ?? false;
-    if (!isGenerating) {
-      const editor = currentEditor();
+    const editor = currentEditor();
 
-      // Handle citations without affecting mentions
-      replaceCitations(content()).then((content: string) => {
-        setEditorStateFromMarkdown(editor, content, props.target);
-        if (props.singleLine) {
-          forceSingleLine(editor);
-        }
-        setEditorState(editor.getEditorState());
-      });
-    }
-    setIsGenerating(isGenerating);
+    // Handle citations without affecting mentions
+    replaceCitations(content()).then((content: string) => {
+      setEditorStateFromMarkdown(editor, content, props.target);
+      if (props.singleLine) {
+        forceSingleLine(editor);
+      }
+      setEditorState(editor.getEditorState());
+    });
   });
 
   const domTree = createMemo(() => {
@@ -813,7 +805,6 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
-        isGenerating,
       });
     });
   });
