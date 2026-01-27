@@ -8,12 +8,13 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
   type HistoryItem,
   type HistoryQueryResponse,
+  transformHistoryItem,
   transformHistoryResponse,
   updateItemViewedAt,
 } from './transforms';
@@ -29,6 +30,16 @@ export {
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
+
+/**
+ * A lightweight dirty signal to track history refetch. The useUpdatedDssItemName
+ * is used broadly across the app and was causing app crashing during cleanup
+ * in race conditions. This signal sets up a lighter weight reactivity
+ * subscription.
+ */
+const [historyDirty, markHistoryDirty] = createSignal(undefined, {
+  equals: () => false,
+});
 
 function historyQueryOptions() {
   return {
@@ -69,10 +80,12 @@ export async function prefetchHistory() {
   ));
 }
 
-export function refetchHistory() {
-  return queryClient.invalidateQueries({
+export async function refetchHistory() {
+  const result = await queryClient.invalidateQueries({
     queryKey: historyKeys.list.queryKey,
   });
+  markHistoryDirty();
+  return result;
 }
 
 export function optimisticUpdateViewedAt(itemId: string) {
@@ -175,6 +188,7 @@ export function useTrackViewedMutation(
           queryClient.invalidateQueries({
             queryKey: historyKeys.list.queryKey,
           });
+          markHistoryDirty();
         },
       },
       callbacks
@@ -263,6 +277,7 @@ export function useUpsertToHistoryMutation(
           queryClient.invalidateQueries({
             queryKey: historyKeys.list.queryKey,
           });
+          markHistoryDirty();
         },
       },
       callbacks
@@ -318,18 +333,16 @@ export async function removeHistoryItem(
 
 /**
  * Hook to get the updated name of a DSS item from history.
+ * The memo will re-evaluate when:
+ * - The itemId changes (if it's an accessor)
+ * - History is refetched via refetchHistory()
  */
 export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
-  const historyQuery = useHistoryQuery();
-
   return createMemo(() => {
-    const history = historyQuery.data;
-    if (!history) return undefined;
-
+    historyDirty();
     const itemIdValue = typeof itemId === 'function' ? itemId() : itemId;
     if (!itemIdValue) return undefined;
-
-    const item = history.find((item) => item.id === itemIdValue);
+    const item = getHistoryItem(itemIdValue);
     return item?.name;
   });
 }
@@ -344,6 +357,20 @@ export function getHistoryItems(): HistoryItem[] {
   );
   if (!data) return [];
   return transformHistoryResponse(data, null);
+}
+
+/**
+ * Get single history items from cache.
+ * Same as above, minus a filter and map.
+ */
+export function getHistoryItem(id: string): HistoryItem | undefined {
+  const data = queryClient.getQueryData<HistoryQueryResponse>(
+    historyKeys.list.queryKey
+  );
+  if (!data) return;
+  const item = data.data.find(({ id: itemId }) => itemId === id);
+  if (!item) return;
+  return transformHistoryItem(item);
 }
 
 /**
