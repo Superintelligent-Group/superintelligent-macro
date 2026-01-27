@@ -124,6 +124,12 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
   );
 };
 
+export const isChannelEntity = (
+  entity: EntityData
+): entity is ChannelEntity => {
+  return entity.type === 'channel';
+};
+
 export const isPureDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {

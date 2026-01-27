@@ -2,6 +2,7 @@ export { Entity } from './components/Entity';
 export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';
+export * from './Entity2';
 export * from './components/Sort';
 export { createUnifiedInfiniteList } from './components/UnifiedInfiniteList';
 export {

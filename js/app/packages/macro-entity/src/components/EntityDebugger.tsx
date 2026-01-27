@@ -11,6 +11,7 @@
  */
 
 import { EntityWithEverything } from './EntityWithEverything';
+import { EntityMinimal } from './EntityMinimal';
 import {
   ALL_CHANNEL_ENTITIES,
   ALL_DOCUMENT_ENTITIES,
@@ -54,6 +55,7 @@ interface EntityDebuggerState {
   showNotifications: boolean;
   showSearch: boolean;
   useApiData: boolean;
+  useMinimalView: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   checkedEntityIds: Set<string>;
@@ -89,6 +91,7 @@ export const EntityDebugger: Component = () => {
     showNotifications: false,
     showSearch: false,
     useApiData: false,
+    useMinimalView: false,
     selectedEntityId: null,
     hoveredEntityId: null,
     checkedEntityIds: new Set(),
@@ -242,6 +245,26 @@ export const EntityDebugger: Component = () => {
             />
             Use Real API Data
           </label>
+          <label class="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={state().useMinimalView}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setState((prev) => ({
+                  ...prev,
+                  useMinimalView: checked,
+                }));
+                addLog(
+                  'info',
+                  checked
+                    ? 'Switched to EntityMinimal'
+                    : 'Switched to EntityWithEverything'
+                );
+              }}
+            />
+            Use Minimal View
+          </label>
           <label class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -361,31 +384,46 @@ export const EntityDebugger: Component = () => {
                     };
 
                     return (
-                      <EntityWithEverything
-                        entity={entityWithFeatures()}
-                        selected={{
-                          active: isSelected(),
-                          muted: false,
-                        }}
-                        checked={isChecked()}
-                        onChecked={() => toggleChecked(entity.id)}
-                        onClick={(args) => {
-                          selectEntity(entity.id);
-                          addLog('info', 'Entity clicked', {
-                            type: args.type,
-                            entityId: args.entity.id,
-                          });
-                        }}
-                        properties={
-                          showProperties() &&
-                          entity.id === MOCK_TASK_WITH_PROPERTIES.id
-                            ? MOCK_PROPERTIES
-                            : undefined
+                      <Show
+                        when={!state().useMinimalView}
+                        fallback={
+                          <EntityMinimal
+                            entity={entity}
+                            onClick={() => {
+                              selectEntity(entity.id);
+                              addLog('info', 'Entity clicked (minimal)', {
+                                entityId: entity.id,
+                              });
+                            }}
+                          />
                         }
-                        showUnrollNotifications={showNotifications()}
-                        searchActive={showSearch()}
-                        splitId="entity-debugger"
-                      />
+                      >
+                        <EntityWithEverything
+                          entity={entityWithFeatures()}
+                          selected={{
+                            active: isSelected(),
+                            muted: false,
+                          }}
+                          checked={isChecked()}
+                          onChecked={() => toggleChecked(entity.id)}
+                          onClick={(args) => {
+                            selectEntity(entity.id);
+                            addLog('info', 'Entity clicked', {
+                              type: args.type,
+                              entityId: args.entity.id,
+                            });
+                          }}
+                          properties={
+                            showProperties() &&
+                            entity.id === MOCK_TASK_WITH_PROPERTIES.id
+                              ? MOCK_PROPERTIES
+                              : undefined
+                          }
+                          showUnrollNotifications={showNotifications()}
+                          searchActive={showSearch()}
+                          splitId="entity-debugger"
+                        />
+                      </Show>
                     );
                   }}
                 </For>
