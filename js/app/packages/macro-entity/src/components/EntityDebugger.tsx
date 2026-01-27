@@ -24,11 +24,18 @@ import {
 } from '../mocks/mockEntityData';
 import type { EntityData } from '../types/entity';
 import type { WithNotification } from '../types/notification';
-import { createSignal, For, Show, type Component } from 'solid-js';
-
-// ============================================================================
-// Types
-// ============================================================================
+import {
+  createSignal,
+  For,
+  Show,
+  type Component,
+  Suspense,
+  createMemo,
+  createEffect,
+  on,
+} from 'solid-js';
+import { createDssInfiniteQuery } from '../queries/dss';
+import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 type LayoutVariant = 'default' | 'compact' | 'expanded' | 'card';
 type WidthVariant = 'mobile' | 'tablet' | 'desktop' | 'wide';
@@ -48,38 +55,20 @@ interface EntityDebuggerState {
   showProperties: boolean;
   showNotifications: boolean;
   showSearch: boolean;
+  useApiData: boolean;
   selectedEntityId: string | null;
   hoveredEntityId: string | null;
   checkedEntityIds: Set<string>;
   logs: DebugLog[];
 }
 
-// ============================================================================
-// Width Configuration
-// ============================================================================
-
-const WIDTH_CONFIG: Record<WidthVariant, string> = {
-  mobile: '375px',
-  tablet: '768px',
-  desktop: '1024px',
-  wide: '1440px',
-};
-
-// ============================================================================
-// Entity Categories
-// ============================================================================
-
 const ENTITY_CATEGORIES = [
-  { name: 'Documents', entities: ALL_DOCUMENT_ENTITIES.slice(0, 3) },
-  { name: 'Tasks', entities: ALL_TASK_ENTITIES.slice(0, 2) },
-  { name: 'Emails', entities: ALL_EMAIL_ENTITIES.slice(0, 3) },
-  { name: 'Channels', entities: ALL_CHANNEL_ENTITIES.slice(0, 3) },
-  { name: 'Search Results', entities: ALL_SEARCH_ENTITIES.slice(0, 2) },
+  { name: 'Documents', entities: ALL_DOCUMENT_ENTITIES },
+  { name: 'Tasks', entities: ALL_TASK_ENTITIES },
+  { name: 'Emails', entities: ALL_EMAIL_ENTITIES },
+  { name: 'Channels', entities: ALL_CHANNEL_ENTITIES },
+  { name: 'Search Results', entities: ALL_SEARCH_ENTITIES },
 ] as const;
-
-// ============================================================================
-// Debug Logging
-// ============================================================================
 
 const createDebugLog = (
   type: DebugLog['type'],
@@ -92,10 +81,6 @@ const createDebugLog = (
   data,
 });
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 export const EntityDebugger: Component = () => {
   const [state, setState] = createSignal<EntityDebuggerState>({
     layout: 'default',
@@ -105,6 +90,7 @@ export const EntityDebugger: Component = () => {
     showProperties: true,
     showNotifications: false,
     showSearch: false,
+    useApiData: false,
     selectedEntityId: null,
     hoveredEntityId: null,
     checkedEntityIds: new Set(),
@@ -113,6 +99,44 @@ export const EntityDebugger: Component = () => {
         entities: ALL_MOCK_ENTITIES.length,
       }),
     ],
+  });
+
+  const dssQuery = createDssInfiniteQuery(undefined, () => ({ limit: 100 }));
+
+  // Memos for state slices (not query-dependent)
+  const useApiData = createMemo(() => state().useApiData);
+  const showProperties = createMemo(() => state().showProperties);
+  const showNotifications = createMemo(() => state().showNotifications);
+  const showSearch = createMemo(() => state().showSearch);
+  const checkedEntityIds = createMemo(() => state().checkedEntityIds);
+  const selectedEntityId = createMemo(() => state().selectedEntityId);
+
+  // Memoize API entity categories based on actual query data
+  // This only recalculates when dssQuery.data changes, not on every render
+  const apiEntityCategories = createMemo(() => {
+    // Only access query data when in API mode
+    if (!useApiData()) return [];
+
+    const entities = dssQuery.data ?? [];
+    if (entities.length === 0) return [];
+
+    const documents = entities.filter(
+      (e) => e.type === 'document' && e.subType?.type !== 'task'
+    );
+    const tasks = entities.filter(
+      (e) => e.type === 'document' && e.subType?.type === 'task'
+    );
+    const emails = entities.filter((e) => e.type === 'email');
+    const channels = entities.filter((e) => e.type === 'channel');
+    const chats = entities.filter((e) => e.type === 'chat');
+
+    return [
+      { name: 'Documents (API)', entities: documents },
+      { name: 'Tasks (API)', entities: tasks },
+      { name: 'Emails (API)', entities: emails },
+      { name: 'Channels (API)', entities: channels },
+      { name: 'Chats (API)', entities: chats },
+    ].filter((cat) => cat.entities.length > 0);
   });
 
   const addLog = (type: DebugLog['type'], message: string, data?: unknown) => {
@@ -140,20 +164,27 @@ export const EntityDebugger: Component = () => {
     addLog('info', 'Entity selected', { entityId });
   };
 
-  const selectedEntity = () => {
-    const id = state().selectedEntityId;
-    if (!id) return null;
-    return ALL_MOCK_ENTITIES.find((e) => e.id === id);
-  };
+  // Get entity categories to display
+  // This is memoized so it only switches when useApiData changes
+  const entityCategories = createMemo(() => {
+    return useApiData() ? apiEntityCategories() : ENTITY_CATEGORIES;
+  });
 
-  // ============================================================================
-  // Render Functions
-  // ============================================================================
+  // Get all entities (flattened from categories)
+  const allEntities = createMemo(() => {
+    return entityCategories().flatMap((cat) => cat.entities);
+  });
+
+  const selectedEntity = () => {
+    const id = selectedEntityId();
+    if (!id) return null;
+    const entities = allEntities();
+    return entities.find((e) => e.id === id);
+  };
 
   const renderControlsPanel = () => (
     <div class="border-b border-edge p-4 bg-panel">
       <div class="flex flex-wrap gap-4 items-center">
-        {/* Layout Selector */}
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium">Layout:</label>
           <select
@@ -195,6 +226,24 @@ export const EntityDebugger: Component = () => {
 
         {/* Feature Toggles */}
         <div class="flex items-center gap-4 ml-auto">
+          <label class="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={state().useApiData}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setState((prev) => ({
+                  ...prev,
+                  useApiData: checked,
+                }));
+                addLog(
+                  'info',
+                  checked ? 'Switched to API data' : 'Switched to mock data'
+                );
+              }}
+            />
+            Use Real API Data
+          </label>
           <label class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -253,53 +302,67 @@ export const EntityDebugger: Component = () => {
   );
 
   const renderEntityGrid = () => (
-    <div
-      class="flex-1 overflow-y-auto p-4 space-y-6"
-      style={{ width: WIDTH_CONFIG[state().width] }}
-    >
-      <For each={ENTITY_CATEGORIES}>
-        {(category) => (
-          <div class="space-y-2">
-            <h3 class="text-sm font-mono uppercase text-ink-muted">
-              {category.name}
-            </h3>
-            <div class="space-y-1 border border-edge rounded-lg overflow-hidden">
-              <For each={category.entities}>
-                {(entity) => {
-                  const isChecked = () =>
-                    state().checkedEntityIds.has(entity.id);
-                  const isSelected = () =>
-                    state().selectedEntityId === entity.id;
+    <div class="flex-1 overflow-y-auto scrollbar-hidden">
+      <Show
+        when={!state().useApiData || !dssQuery.isLoading}
+        fallback={
+          <div class="flex items-center justify-center h-64">
+            <div class="text-sm text-ink-muted">
+              Loading entities from API...
+            </div>
+          </div>
+        }
+      >
+        <Show
+          when={!dssQuery.isError}
+          fallback={
+            <div class="flex items-center justify-center h-64">
+              <div class="text-sm text-error">
+                Error loading entities: {dssQuery.error?.message}
+              </div>
+            </div>
+          }
+        >
+          <For
+            each={entityCategories()}
+            fallback={<div class="p-4 text-ink-muted">No entities found</div>}
+          >
+            {(category, index) => (
+              <>
+                <div
+                  class="bg-edge/10 py-2"
+                  classList={{ 'mt-4': index() > 0 }}
+                >
+                  <h3 class="text-sm font-mono uppercase text-ink-muted pl-4">
+                    {category.name}
+                  </h3>
+                </div>
+                <For
+                  each={category.entities}
+                  fallback={
+                    <div class="p-4 text-ink-muted">
+                      No entities in category
+                    </div>
+                  }
+                >
+                  {(entity) => {
+                    const isChecked = () => checkedEntityIds().has(entity.id);
+                    const isSelected = () => selectedEntityId() === entity.id;
 
-                  // Add notifications if enabled
-                  const entityWithFeatures = () => {
-                    let result: WithNotification<EntityData> = {
-                      ...entity,
-                      notifications:
-                        state().showNotifications &&
-                        entity.id === MOCK_DOCUMENT_WITH_NOTIFICATIONS.id
-                          ? MOCK_DOCUMENT_WITH_NOTIFICATIONS.notifications
-                          : undefined,
+                    // Add notifications if enabled
+                    const entityWithFeatures = () => {
+                      let result: WithNotification<EntityData> = {
+                        ...entity,
+                        notifications:
+                          showNotifications() &&
+                          entity.id === MOCK_DOCUMENT_WITH_NOTIFICATIONS.id
+                            ? MOCK_DOCUMENT_WITH_NOTIFICATIONS.notifications
+                            : undefined,
+                      };
+                      return result;
                     };
-                    return result;
-                  };
 
-                  return (
-                    <div
-                      onClick={() => selectEntity(entity.id)}
-                      onMouseEnter={() =>
-                        setState((prev) => ({
-                          ...prev,
-                          hoveredEntityId: entity.id,
-                        }))
-                      }
-                      onMouseLeave={() =>
-                        setState((prev) => ({
-                          ...prev,
-                          hoveredEntityId: null,
-                        }))
-                      }
-                    >
+                    return (
                       <EntityWithEverything
                         entity={entityWithFeatures()}
                         selected={{
@@ -309,28 +372,30 @@ export const EntityDebugger: Component = () => {
                         checked={isChecked()}
                         onChecked={() => toggleChecked(entity.id)}
                         onClick={(args) => {
+                          selectEntity(entity.id);
                           addLog('info', 'Entity clicked', {
                             type: args.type,
                             entityId: args.entity.id,
                           });
                         }}
                         properties={
-                          state().showProperties &&
+                          showProperties() &&
                           entity.id === MOCK_TASK_WITH_PROPERTIES.id
                             ? MOCK_PROPERTIES
                             : undefined
                         }
-                        showUnrollNotifications={state().showNotifications}
-                        searchActive={state().showSearch}
+                        showUnrollNotifications={showNotifications()}
+                        searchActive={showSearch()}
+                        splitId="entity-debugger"
                       />
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-        )}
-      </For>
+                    );
+                  }}
+                </For>
+              </>
+            )}
+          </For>
+        </Show>
+      </Show>
     </div>
   );
 
@@ -384,19 +449,13 @@ export const EntityDebugger: Component = () => {
                   <div>
                     <span class="text-ink-muted">Selected:</span>{' '}
                     <span class="text-accent">
-                      {state().selectedEntityId === entity().id ? 'Yes' : 'No'}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="text-ink-muted">Hovered:</span>{' '}
-                    <span class="text-accent">
-                      {state().hoveredEntityId === entity().id ? 'Yes' : 'No'}
+                      {selectedEntityId() === entity().id ? 'Yes' : 'No'}
                     </span>
                   </div>
                   <div>
                     <span class="text-ink-muted">Checked:</span>{' '}
                     <span class="text-accent">
-                      {state().checkedEntityIds.has(entity().id) ? 'Yes' : 'No'}
+                      {checkedEntityIds().has(entity().id) ? 'Yes' : 'No'}
                     </span>
                   </div>
                 </div>
@@ -506,30 +565,23 @@ export const EntityDebugger: Component = () => {
   // ============================================================================
 
   return (
-    <div class="h-screen flex flex-col bg-panel text-ink">
-      {/* Header */}
-      <div class="border-b border-edge p-4 bg-panel">
-        <h1 class="text-lg font-semibold">Entity Debugger</h1>
-        <p class="text-sm text-ink-muted mt-1">
-          Interactive testing environment for Entity component refactor
-        </p>
+    <StaticMarkdownContext>
+      <div class="h-screen flex flex-col bg-panel text-ink">
+        {/* Header */}
+        <div class="border-b border-edge p-4 bg-panel">
+          <h1 class="text-lg font-semibold">Entity Debugger</h1>
+          <p class="text-sm text-ink-muted mt-1">
+            Interactive testing environment for Entity component refactor
+          </p>
+        </div>
+        {renderControlsPanel()}
+        <div class="flex-1 flex overflow-hidden">
+          <Suspense>{renderEntityGrid()}</Suspense>
+          {renderInspectorPanel()}
+        </div>
+        {renderConsoleLog()}
       </div>
-
-      {/* Controls Panel */}
-      {renderControlsPanel()}
-
-      {/* Main Content Area */}
-      <div class="flex-1 flex overflow-hidden">
-        {/* Entity Grid */}
-        {renderEntityGrid()}
-
-        {/* Inspector Panel */}
-        {renderInspectorPanel()}
-      </div>
-
-      {/* Console Log */}
-      {renderConsoleLog()}
-    </div>
+    </StaticMarkdownContext>
   );
 };
 

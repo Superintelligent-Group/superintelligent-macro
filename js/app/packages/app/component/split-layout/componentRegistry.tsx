@@ -141,9 +141,9 @@ if (LOCAL_ONLY) {
   registerComponent(
     'entity-debugger',
     lazy(() =>
-      import(
-        '../../../macro-entity/src/components/EntityDebugger'
-      ).then((m) => ({ default: m.EntityDebugger }))
+      import('../../../macro-entity/src/components/EntityDebugger').then(
+        (m) => ({ default: m.EntityDebugger })
+      )
     )
   );
 }
