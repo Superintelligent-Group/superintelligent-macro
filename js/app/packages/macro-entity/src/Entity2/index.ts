@@ -1,21 +1,18 @@
-import { Container } from './core/Container';
+// Core components
+import { Root } from './core/Root';
 import { Layout } from './core/Layout';
+import { Slot } from './core/Slot';
 
-import { SlotIcon } from './slots/slot-icon';
-import { SlotTitle } from './slots/slot-title';
-
+// Extractors (components)
 import { ExtractorIcon } from './extractors/extractor-icon';
 import { ExtractorTitle } from './extractors/extractor-title';
+import { ExtractorTimestamp } from './extractors/extractor-timestamp';
 
 export const Entity2 = {
-  Container,
+  Root,
   Layout,
-  Slot: {
-    Icon: SlotIcon,
-    Title: SlotTitle,
-  },
-  Extractor: {
-    Icon: ExtractorIcon,
-    Title: ExtractorTitle,
-  },
+  Slot: Slot,
+  Icon: ExtractorIcon,
+  Title: ExtractorTitle,
+  Timestamp: ExtractorTimestamp,
 };

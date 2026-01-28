@@ -35,6 +35,8 @@ import {
 } from 'solid-js';
 import { createDssInfiniteQuery } from '../queries/dss';
 import { StaticMarkdownContext } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { useNotificationsForEntity } from '@notifications';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 
 type LayoutVariant = 'default' | 'compact' | 'expanded' | 'card';
 type WidthVariant = 'mobile' | 'tablet' | 'desktop' | 'wide';
@@ -90,8 +92,8 @@ export const EntityDebugger: Component = () => {
     showProperties: true,
     showNotifications: false,
     showSearch: false,
-    useApiData: false,
-    useMinimalView: false,
+    useApiData: true,
+    useMinimalView: true,
     selectedEntityId: null,
     hoveredEntityId: null,
     checkedEntityIds: new Set(),
@@ -103,6 +105,9 @@ export const EntityDebugger: Component = () => {
   });
 
   const dssQuery = createDssInfiniteQuery(undefined, () => ({ limit: 100 }));
+
+  // Get global notification source for hydrating entities with notifications
+  const notificationSource = useGlobalNotificationSource();
 
   // Memos for state slices (not query-dependent)
   const useApiData = createMemo(() => state().useApiData);
@@ -374,11 +379,16 @@ export const EntityDebugger: Component = () => {
                     const entityWithFeatures = () => {
                       let result: WithNotification<EntityData> = {
                         ...entity,
-                        notifications:
-                          showNotifications() &&
-                          entity.id === MOCK_DOCUMENT_WITH_NOTIFICATIONS.id
-                            ? MOCK_DOCUMENT_WITH_NOTIFICATIONS.notifications
-                            : undefined,
+                        notifications: showNotifications()
+                          ? useApiData()
+                            ? useNotificationsForEntity(
+                                notificationSource,
+                                entity
+                              )
+                            : entity.id === MOCK_DOCUMENT_WITH_NOTIFICATIONS.id
+                              ? MOCK_DOCUMENT_WITH_NOTIFICATIONS.notifications
+                              : undefined
+                          : undefined,
                       };
                       return result;
                     };
@@ -388,13 +398,16 @@ export const EntityDebugger: Component = () => {
                         when={!state().useMinimalView}
                         fallback={
                           <EntityMinimal
-                            entity={entity}
+                            entity={entityWithFeatures()}
+                            checked={isChecked()}
+                            onChecked={() => toggleChecked(entity.id)}
                             onClick={() => {
                               selectEntity(entity.id);
                               addLog('info', 'Entity clicked (minimal)', {
                                 entityId: entity.id,
                               });
                             }}
+                            ref={() => {}}
                           />
                         }
                       >
