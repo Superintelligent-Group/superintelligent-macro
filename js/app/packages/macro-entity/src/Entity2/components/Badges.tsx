@@ -1,5 +1,4 @@
 import type { ParentProps } from 'solid-js';
-import { Show } from 'solid-js';
 import { UserIcon } from 'core/component/UserIcon';
 import { cn } from '@ui/utils/classname';
 
@@ -26,15 +25,13 @@ export function SharedBadge(props: { ownerId: string }) {
 }
 
 export function DraftBadge() {
-  return <Badge class="text-accent-30 border-edge-muted px-2">DRAFT</Badge>;
+  return <Badge class="text-accent-30 border-edge-muted px-2">draft</Badge>;
 }
 
-export function ImportantBadge(props: { active?: boolean }) {
+export function ImportantBadge() {
   return (
-    <Show when={props.active}>
-      <Badge class="text-accent bg-accent/10 px-2 border-accent/10">
-        important
-      </Badge>
-    </Show>
+    <Badge class="text-accent bg-accent/10 px-2 border-accent/10">
+      important
+    </Badge>
   );
 }

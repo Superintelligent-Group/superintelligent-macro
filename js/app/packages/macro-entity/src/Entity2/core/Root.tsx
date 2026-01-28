@@ -9,7 +9,8 @@ export function Root(
 
   return (
     <div
-      class={cn('entity-container group/entity', local.class)}
+      class={cn('entity-root group/entity', local.class)}
+      data-entity
       data-entity-id={local.entity.id}
       {...rest}
     >

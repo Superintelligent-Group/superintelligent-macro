@@ -4,7 +4,7 @@ import type { GridParams } from '../Entity2/utils/grid';
 import { UnreadIndicator } from '../Entity2/components/UnreadIndicator';
 import type { Ref } from 'solid-js';
 import type { WithNotification } from '../types/notification';
-import { hasUnreads } from '../Entity2/utils/notifications';
+import { unreadFilterFn } from '../utils/filter';
 import { MultiSelectCheckbox } from '../Entity2/components/MutliSelectCheckbox';
 import { cn } from '@ui/utils/classname';
 
@@ -54,36 +54,36 @@ interface EntityMinimalProps {
 export function EntityMinimal(props: EntityMinimalProps) {
   const grid: GridParams = {
     columns: {
-      indicator: '1.5rem',
+      indicator: '1rem',
       title: '1fr',
       content: '1fr',
       timestamp: '12ch',
     },
     layout: ['indicator', 'title', 'content', 'timestamp'],
   };
-  const unread = () => hasUnreads(props.entity);
+  const unread = () => unreadFilterFn(props.entity);
 
   return (
     <Entity.Root
       entity={props.entity}
       onClick={props.onClick}
       ref={props.ref}
-      class={cn('w-full', {
-        'bg-accent/10': props.checked,
-        'outline outline-accent/40 outline-offset-[-1px] bracket':
+      class={cn('w-full h-10', {
+        'bg-accent/5': props.checked,
+        'outline outline-accent/20 outline-offset-[-1px] bracket':
           props.highlighted,
-        'bg-hover/50': props.highlighted && !props.checked,
+        'bg-hover/20': props.highlighted && !props.checked,
       })}
       onMouseOver={props.onMouseOver}
       onMouseLeave={props.onMouseLeave}
     >
       <Entity.Layout
-        class="gap-2 w-full items-center text-sm py-2 px-2"
+        class="gap-2 w-full h-full items-center text-sm px-2"
         grid={grid}
       >
         <Entity.Slot placement="indicator" class="relative size-full group">
           <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
-            <UnreadIndicator active={true} />
+            <UnreadIndicator active={unread()} />
           </div>
           <div class="absolute inset-0 grid place-items-center">
             <MultiSelectCheckbox

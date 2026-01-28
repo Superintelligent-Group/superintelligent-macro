@@ -1,14 +1,14 @@
 import { cn } from '@ui/utils/classname';
-import { type ComponentProps, splitProps } from 'solid-js';
+import { type JSX, splitProps } from 'solid-js';
 import { buildGrid, type GridParams } from '../utils/grid';
 
-export function Layout(props: ComponentProps<'div'> & { grid?: GridParams }) {
-  const [local, rest] = splitProps(props, [
-    'class',
-    'children',
-    'grid',
-    'style',
-  ]);
+export function Layout(
+  props: Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
+    grid?: GridParams;
+  }
+) {
+  const [local, rest] = splitProps(props, ['class', 'children', 'grid']);
+
   const isGrid = () => Boolean(props.grid);
 
   return (
