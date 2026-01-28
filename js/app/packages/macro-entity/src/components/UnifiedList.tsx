@@ -21,7 +21,7 @@ import type {
   EntityFilter,
   EntityRenderer,
 } from '../types/entity';
-import { Entity } from './Entity';
+import { EntityMinimal } from './EntityMinimal';
 
 type ChildlessVListProps<T extends EntityData> = Omit<
   VListProps<T>,
@@ -49,7 +49,7 @@ export function UnifiedList<T extends EntityData>(props: UnifiedListProps<T>) {
       >
         {(entity, index) =>
           unifiedListProps.children?.({ entity, index: index() }) ?? (
-            <Entity entity={entity} />
+            <EntityMinimal entity={entity} ref={undefined!} />
           )
         }
       </VList>

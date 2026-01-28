@@ -6,14 +6,49 @@ import type { Ref } from 'solid-js';
 import type { WithNotification } from '../types/notification';
 import { hasUnreads } from '../Entity2/utils/notifications';
 import { MultiSelectCheckbox } from '../Entity2/components/MutliSelectCheckbox';
+import { cn } from '@ui/utils/classname';
+
+// interface EntityProps<T extends WithNotification<EntityData>>
+//   extends ParentProps {
+//   entity: T;
+//   focused?: boolean;
+//   timestamp?: number;
+//   onClick?: EntityClickHandler<T>;
+//   onDblClick?: EntityClickHandler<T>;
+//   onPointerDown?: EntityClickHandler<T>;
+//   onClickRowAction?: (entity: T, type: 'done') => void;
+//   onClickNotification?: NotificationClickHandler<T>;
+//   onMouseOver?: () => void;
+//   onMouseLeave?: () => void;
+//   onFocusIn?: () => void;
+//   onContextMenu?: () => void;
+//   properties?: Property[];
+//   contentPlacement?: 'middle' | 'bottom-row';
+//   unreadIndicatorActive?: boolean;
+//   fadeIfRead?: boolean;
+//   importantIndicatorActive?: boolean;
+//   showLeftColumnIndicator?: boolean;
+//   showUnrollNotifications?: boolean;
+//   showDoneButton?: boolean;
+//   highlighted?: boolean;
+//   selected: { active: boolean; muted?: boolean };
+//   ref?: Ref<HTMLDivElement>;
+//   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
+//   checked?: boolean;
+//   searchActive?: boolean;
+//   splitId?: string;
+// }
 
 interface EntityMinimalProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
   timestamp?: number;
-  ref: Ref<HTMLDivElement>;
+  ref?: Ref<HTMLDivElement>;
   checked?: boolean;
+  highlighted?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
+  onMouseOver?: () => void;
+  onMouseLeave?: () => void;
 }
 
 export function EntityMinimal(props: EntityMinimalProps) {
@@ -24,7 +59,7 @@ export function EntityMinimal(props: EntityMinimalProps) {
       content: '1fr',
       timestamp: '12ch',
     },
-    // layout: ['indicator', 'title', 'content', 'timestamp'],
+    layout: ['indicator', 'title', 'content', 'timestamp'],
   };
   const unread = () => hasUnreads(props.entity);
 
@@ -33,18 +68,22 @@ export function EntityMinimal(props: EntityMinimalProps) {
       entity={props.entity}
       onClick={props.onClick}
       ref={props.ref}
-      class="hover:bg-hover hover:ring hover:ring-accent/20 hover:bracket"
+      class={cn('w-full', {
+        'bg-accent/10': props.checked,
+        'outline outline-accent/40 outline-offset-[-1px] bracket':
+          props.highlighted,
+        'bg-hover/50': props.highlighted && !props.checked,
+      })}
+      onMouseOver={props.onMouseOver}
+      onMouseLeave={props.onMouseLeave}
     >
       <Entity.Layout
-        class="gap-2 w-full items-center text-sm py-2 px-1"
+        class="gap-2 w-full items-center text-sm py-2 px-2"
         grid={grid}
       >
-        <Entity.Slot
-          placement="indicator"
-          class="relative size-full group/indicator"
-        >
-          <div class="absolute inset-0 grid place-items-center group-hover/indicator:opacity-0">
-            <UnreadIndicator active={unread()} />
+        <Entity.Slot placement="indicator" class="relative size-full group">
+          <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
+            <UnreadIndicator active={true} />
           </div>
           <div class="absolute inset-0 grid place-items-center">
             <MultiSelectCheckbox

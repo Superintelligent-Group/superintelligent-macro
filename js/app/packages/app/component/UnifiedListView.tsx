@@ -163,6 +163,7 @@ import {
   type ViewData,
 } from './ViewConfig';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { EntityMinimal } from '../../macro-entity/src/components/EntityMinimal';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -1305,6 +1306,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     });
   };
 
+  const simpleClickHandler = (
+    event: PointerEvent | MouseEvent,
+    entity: EntityData
+  ) => {
+    openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.altKey,
+      splitHandle: splitContext.handle,
+    });
+  };
+
   const entityDblClickHandler: EntityClickHandler<EntityData> = async ({
     entity,
     location,
@@ -1898,7 +1909,31 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <CheckIcon class="size-8 text-panel" />
                     }
                   >
-                    <EntityWithEverything
+                    <EntityMinimal
+                      entity={innerProps.entity}
+                      onClick={(e) => simpleClickHandler(e, innerProps.entity)}
+                      onMouseOver={() => {
+                        if (preview()) return;
+                        setViewDataStore(
+                          selectedView(),
+                          'hasUserInteractedEntity',
+                          true
+                        );
+                        setSelectedEntityFromMouse(innerProps.entity);
+                      }}
+                      onMouseLeave={() => {}}
+                      highlighted={focusedSelector(innerProps.entity.id)}
+                      checked={multiSelectSelector(innerProps.entity.id)}
+                      onChecked={(next, shiftKey) =>
+                        handleMultiSelectChecked({
+                          entity: innerProps.entity,
+                          entityIndex: innerProps.index,
+                          next,
+                          shiftKey: shiftKey ?? false,
+                        })
+                      }
+                    />
+                    {/*<EntityWithEverything
                       onContextMenu={() => {
                         if (isPanelActive() && !preview()) {
                           setSelectedEntity(innerProps.entity);
@@ -1984,7 +2019,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         })
                       }
                       searchActive={!!searchText()}
-                    />
+                    />*/}
                   </EntityRow>
                 );
               }}
