@@ -22,7 +22,7 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
   };
 
   return (
-    <div class="bg-panel size-5 rounded-full p-[2px]">
+    <div class="bg-panel size-full rounded-full">
       <Show
         when={participantId()}
         fallback={<EntityIcon targetType="directMessage" size="fill" />}

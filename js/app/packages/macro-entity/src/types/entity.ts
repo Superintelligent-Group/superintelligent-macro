@@ -130,6 +130,34 @@ export const isChannelEntity = (
   return entity.type === 'channel';
 };
 
+export const isChatEntity = (entity: EntityData): entity is ChatEntity => {
+  return entity.type === 'chat';
+};
+
+export const isEmailEntity = (entity: EntityData): entity is EmailEntity => {
+  return entity.type === 'email';
+};
+
+export const isProjectEntity = (
+  entity: EntityData
+): entity is ProjectEntity => {
+  return entity.type === 'project';
+};
+
+export const isDocumentEntity = (
+  entity: EntityData
+): entity is DocumentEntity => {
+  return entity.type === 'document';
+};
+
+export const isMarkdownEntity = (
+  entity: EntityData
+): entity is MarkdownEntity => {
+  return (
+    entity.type === 'document' && entity.fileType === 'md' && !entity.subType
+  );
+};
+
 export const isPureDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {

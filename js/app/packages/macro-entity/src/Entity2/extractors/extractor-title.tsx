@@ -2,14 +2,9 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { match } from 'ts-pattern';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
-import { createMemo, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { EntityData } from '../../types/entity';
 import { isSearchEntity } from '../../queries/search';
-
-interface EntityExtractorTitleProps {
-  entity: EntityData;
-  highlightText?: string;
-}
 
 function extractRawTitle(entity: EntityData): string {
   return match(entity)
@@ -22,16 +17,12 @@ function extractRawTitle(entity: EntityData): string {
 }
 
 function extractSearchHighlight(entity: EntityData): string | undefined {
-  // Search entities can have highlighted markdown version
   if (!isSearchEntity(entity)) return undefined;
-
-  // Check if entity has a nameHighlight field
   return entity.search.nameHighlight ?? undefined;
 }
 
-export function ExtractorTitle(props: EntityExtractorTitleProps) {
-  const titleData = createMemo(() => {
-    // Try search highlight first
+export function ExtractorTitle(props: { entity: EntityData }) {
+  const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
     if (searchHighlight) {
       return {
@@ -40,13 +31,11 @@ export function ExtractorTitle(props: EntityExtractorTitleProps) {
       };
     }
 
-    // Fall back to raw title
-    const rawTitle = extractRawTitle(props.entity);
     return {
-      text: rawTitle,
+      text: extractRawTitle(props.entity),
       isMarkdown: false,
     };
-  });
+  };
 
   return (
     <Show

@@ -15,6 +15,7 @@ function Badge(props: ParentProps<{ class?: string }>) {
   );
 }
 
+// TODO (seamus) : tool tip for now, better shared context later
 export function SharedBadge(props: { ownerId: string }) {
   return (
     <Badge class="text-ink-extra-muted border-edge-muted pr-2">

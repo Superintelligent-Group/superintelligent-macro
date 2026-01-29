@@ -1,17 +1,13 @@
-/**
- * Pure utility functions for handling email participant names and display
- */
+import { useEmail } from '@core/context/user';
+import { emailToMacroId, useDisplayName } from 'core/user';
+import type { EmailEntity } from '../../types/entity';
 
-/**
- * Checks if a value is likely an email address
- */
+/** Checks if a value is likely an email address */
 export function isLikelyEmail(value?: string): boolean {
   return typeof value === 'string' && value.includes('@');
 }
 
-/**
- * Extracts the local part of an email address (before @)
- */
+/** Extracts the local part of an email address (before @) */
 export function getEmailLocalPart(email: string): string {
   return email.split('@')[0];
 }
@@ -24,18 +20,13 @@ export function resolveParticipantName(
   participant: { email: string; name: string },
   macroDisplayName?: string
 ): string {
-  // Prefer macro display name if it's not an email
   if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
     return macroDisplayName;
   }
-
-  // Fall back to participant's full name if it's not an email
   const participantFullName = participant.name ?? '';
   if (participantFullName && !isLikelyEmail(participantFullName)) {
     return participantFullName;
   }
-
-  // Last resort: use email local part
   return getEmailLocalPart(participant.email);
 }
 
@@ -52,7 +43,6 @@ export function combineParticipantNames(
     return [];
   }
 
-  // Special case: single participant is the user
   if (
     participants.length === 1 &&
     userEmail &&
@@ -66,7 +56,6 @@ export function combineParticipantNames(
   for (const participant of participants) {
     if (!participant.email) continue;
 
-    // Skip the current user in multi-participant threads
     if (userEmail && participant.email === userEmail) continue;
 
     const macroDisplayName = getMacroDisplayName(participant.email);
@@ -97,4 +86,27 @@ export function formatDisplayNames(names: string[]): string | undefined {
 
   // For 4+ participants: "First .. SecondLast, Last"
   return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
+}
+
+/**
+ * Get a nicely formatted list of participants from an email entity.
+ * @param props
+ * @returns
+ */
+export function ExtractorEmailParticipants(props: { entity: EmailEntity }) {
+  const userEmail = useEmail();
+  const fetchDisplayName = (email: string) =>
+    useDisplayName(emailToMacroId(email))[0]();
+
+  const displayNames = () => {
+    return formatDisplayNames(
+      combineParticipantNames(
+        props.entity.participants,
+        userEmail(),
+        fetchDisplayName
+      )
+    );
+  };
+
+  return <>{displayNames()}</>;
 }
