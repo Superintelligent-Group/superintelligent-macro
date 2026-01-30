@@ -93,9 +93,6 @@ export type ProjectEntity = EntityBase & {
   projectId?: string;
 };
 
-// Create new entity types above this comment
-// Then add it to the EntityData union below
-
 export type EntityData =
   | ChannelEntity
   | ChatEntity
@@ -194,3 +191,13 @@ export type EntityRenderer<T extends EntityData> = (props: {
   entity: T;
   index: number;
 }) => JSX.Element;
+
+export type ProjectContainedEntity<T extends EntityData = EntityData> = T & {
+  projectId: string;
+};
+
+export const isProjectContainedEntity = <T extends EntityData>(
+  entity: T
+): entity is ProjectContainedEntity<T> => {
+  return getEntityProjectId(entity) !== false;
+};

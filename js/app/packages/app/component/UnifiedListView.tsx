@@ -66,6 +66,8 @@ import {
   unreadFilterFn,
   type WithNotification,
   type WithSearch,
+  isProjectEntity,
+  ProjectEntity,
 } from '@macro-entity';
 import { usePropertyEditorHotkeys } from '../component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import {
@@ -1935,6 +1937,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                             shiftKey: shiftKey ?? false,
                           })
                         }
+                        onProjectClick={(entity, event) => {
+                          entityClickHandler({
+                            type: 'entity-project-path',
+                            entity,
+                            projectEntity: entity,
+                            event,
+                          });
+                        }}
+                        showUnrollNotifications={showUnrollNotifications()}
                       />
                     </Show>
                     <Show when={false}>

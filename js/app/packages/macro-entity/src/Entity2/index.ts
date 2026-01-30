@@ -7,8 +7,13 @@ import { ExtractorIcon } from './extractors/extractor-icon';
 import { ExtractorTitle } from './extractors/extractor-title';
 import { ExtractorTimestamp } from './extractors/extractor-timestamp';
 import { ExtractorEmailParticipants } from './extractors/extractor-email-participants';
-import { ExtractorLastMessage } from './extractors/extractor-last-message';
 import { ExtractorOwner } from './extractors/extractor-owner';
+
+// Search extractors
+import { ExtractorContentHits } from './extractors-search';
+
+// Notification extractors
+import { ExtractorNotificationRows } from './extractors-notification';
 
 export const Entity2 = {
   Root,
@@ -18,6 +23,11 @@ export const Entity2 = {
   Title: ExtractorTitle,
   Timestamp: ExtractorTimestamp,
   EmailParticipants: ExtractorEmailParticipants,
-  LastMessage: ExtractorLastMessage,
   Owner: ExtractorOwner,
+  Search: {
+    ContentHits: ExtractorContentHits,
+  },
+  Notification: {
+    Rows: ExtractorNotificationRows,
+  },
 };

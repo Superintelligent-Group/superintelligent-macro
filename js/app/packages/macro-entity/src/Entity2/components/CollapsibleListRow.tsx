@@ -21,26 +21,7 @@ export function CollapsibleListRow(
   props: ParentProps<CollapsibleListRowProps>
 ) {
   return (
-    <div
-      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
-      classList={{
-        'hover:bg-hover/50 hover:opacity-85':
-          props.enableHover ?? !!props.onClick,
-        ...props.classList,
-      }}
-      onClick={(e) => {
-        if (props.onClick) {
-          if (props.blockNavigation) {
-            e.stopPropagation();
-          }
-          props.onClick(e);
-        }
-      }}
-      data-blocks-navigation={props.blockNavigation}
-    >
-      <Show when={props.showThreadBorder}>
-        <ThreadBorder />
-      </Show>
+    <div class="relative flex gap-1 items-center min-w-0 h-8 transition-all">
       {props.children}
     </div>
   );

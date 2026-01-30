@@ -33,27 +33,18 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
         {(child, index) => props.children(child, index(), count())}
       </For>
       <Show when={hasMore()}>
-        <div class="h-5 relative">
-          <Show when={props.threadBorder}>
-            <div
-              class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-              style={{ height: '6px' }}
-            />
+        <button
+          type="button"
+          class="block w-fit py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium bg-[pink]/40"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAll((prev) => !prev);
+          }}
+        >
+          <Show when={!showAll()} fallback="Collapse">
+            + {props.items.length - visibleCount()} More
           </Show>
-          <button
-            type="button"
-            class="block w-fit px-2 py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAll((prev) => !prev);
-            }}
-            data-blocks-navigation
-          >
-            <Show when={!showAll()} fallback="Collapse">
-              + {props.items.length - visibleCount()} More
-            </Show>
-          </button>
-        </div>
+        </button>
       </Show>
     </>
   );

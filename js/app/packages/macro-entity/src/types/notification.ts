@@ -16,3 +16,17 @@ export type WithNotification<T> = T & {
 export type WithStackedNotifications<T> = T & {
   stackedNotifications?: Notification[];
 };
+
+export const isWithNotification = <T extends {} = {}>(
+  item: T
+): item is WithNotification<T> => {
+  return 'notifications' in item && typeof item.notifications === 'function';
+};
+
+export const isWithStackedNotifications = <T extends {} = {}>(
+  item: T
+): item is WithStackedNotifications<T> => {
+  return (
+    'stackedNotifications' in item && Array.isArray(item.stackedNotifications)
+  );
+};

@@ -18,12 +18,10 @@ export function ExtractorOwner(props: { entity: EntityData }) {
 
     if (!owner) return undefined;
 
-    // Return "me" if the owner is the current user
     if (currentUser && owner === currentUser) {
       return 'me';
     }
 
-    // Otherwise return the owner's display name
     return ownerDisplayName();
   };
 

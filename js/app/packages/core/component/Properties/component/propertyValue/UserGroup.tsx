@@ -1,6 +1,5 @@
-import { createMemo, For, Show } from 'solid-js';
+import { UserGroup as CoreUserGroup } from '@core/component/UserGroup';
 import type { EntityReference } from '../../types';
-import { UserIcon } from '@core/component/UserIcon';
 
 type UserEntityPillProps = {
   entities: EntityReference[];
@@ -8,39 +7,19 @@ type UserEntityPillProps = {
 };
 
 /**
- * Pill for multiselect user entity properties that shows user avatars in LiveIndicators style
+ * Wrapper around the core UserGroup component for use in property values.
+ * Maps EntityReference[] to userIds string[] expected by the core component.
  */
 export const UserGroup = (props: UserEntityPillProps) => {
-  const max = () => props.maxUsers ?? 3;
-  const remaining = createMemo(() => {
-    if (props.entities.length <= max()) return undefined;
-    return props.entities.length - max();
-  });
-
-  const displayEntities = () => props.entities.slice(0, max());
+  const userIds = () => props.entities.map((entity) => entity.entity_id);
 
   return (
-    <div class="flex items-center shrink-0 w-fit pr-3">
-      <For each={displayEntities()}>
-        {(entity) => (
-          <div class="bg-panel rounded-full p-[2px] -mr-3">
-            <UserIcon
-              id={entity.entity_id}
-              isDeleted={false}
-              size="xs"
-              suppressClick
-              showTooltip={false}
-            />
-          </div>
-        )}
-      </For>
-      <Show when={remaining()}>
-        <div class="z-4">
-          <div class="size-5 bg-menu border-2 text-[10px] -mr-2 text-ink border-panel rounded-full flex flex-col justify-center items-center">
-            <span>+{remaining()}</span>
-          </div>
-        </div>
-      </Show>
-    </div>
+    <CoreUserGroup
+      userIds={userIds()}
+      maxUsers={props.maxUsers}
+      size="xs"
+      suppressClick
+      showTooltip={false}
+    />
   );
 };
