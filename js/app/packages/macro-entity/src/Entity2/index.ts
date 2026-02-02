@@ -21,17 +21,15 @@ import {
   NotificationTimestamp,
   NotificationDescription,
   NotificationCount,
-  useNotificationActions,
-  useNotificationStackActions,
 } from './extractors-notification';
 
-// Composed notification components
-import { NotificationMinimal } from './composed-notification';
-
+/**
+ * Entity composable component namespace.
+ */
 export const Entity2 = {
   Root,
   Layout,
-  Slot: Slot,
+  Slot,
   Icon: EntityIcon,
   Title: EntityTitle,
   Timestamp: EntityTimestamp,
@@ -48,8 +46,5 @@ export const Entity2 = {
     Timestamp: NotificationTimestamp,
     Description: NotificationDescription,
     Count: NotificationCount,
-    Minimal: NotificationMinimal,
-    Actions: useNotificationActions,
-    StackActions: useNotificationStackActions,
   },
 };

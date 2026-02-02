@@ -27,7 +27,6 @@ import { cn } from '@ui/utils/classname';
 import { useNotificationStackActions } from './notification-actions';
 import { Button } from '@ui/components/Button';
 import CheckIcon from '@icon/regular/check.svg';
-import EyeIcon from '@icon/regular/eye.svg';
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -44,7 +43,7 @@ function NotificationStackRow(props: {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
 
-  const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
+  const { markStackAsDone } = useNotificationStackActions({
     stack: props.stack,
   });
 
@@ -60,11 +59,6 @@ function NotificationStackRow(props: {
     props.onClick?.(e);
   };
 
-  const handleMarkAsRead = async (e: PointerEvent | MouseEvent) => {
-    e.stopPropagation();
-    await markStackAsRead();
-  };
-
   const handleMarkAsDone = async (e: PointerEvent | MouseEvent) => {
     e.stopPropagation();
     await markStackAsDone();
@@ -73,7 +67,7 @@ function NotificationStackRow(props: {
   return (
     <div
       class={cn(
-        'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20 transition-colors',
+        'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20',
         {
           'border-accent': unread(),
         }
@@ -93,11 +87,16 @@ function NotificationStackRow(props: {
       </div>
       <div class="w-full">
         <div class="flex items-center gap-1 text-xs">
-          <Show when={unread()}>
-            <span class="pr-1">
-              <UnreadIndicator active />
-            </span>
-          </Show>
+          <span
+            class={cn(
+              'w-0 transition-[width] overflow-hidden duration-500 ease',
+              {
+                'w-4': unread(),
+              }
+            )}
+          >
+            <UnreadIndicator active />
+          </span>
           <NotificationSenderIcon stack={props.stack} size="xs" />
           <NotificationDescription stack={props.stack} />
           <span class="text-ink-extra-muted/50">

@@ -3,7 +3,6 @@ import type { EntityData } from '../../types/entity';
 import type { SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../queries/search';
 import { CollapsibleList } from '../components/CollapsibleList';
-import { ContentHitRow } from '../components-search/ContentHitRow';
 
 interface ExtractorContentHitsProps {
   entity: EntityData;
