@@ -60,35 +60,17 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let queue_aws_client = if cfg!(feature = "local_queue") {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url("http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/")
-                .load()
-                .await,
-        )
-    } else {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        )
-    };
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .search_event_queue(&config.search_event_queue);
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
@@ -107,10 +89,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    let comms_service_client = CommsServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.comms_service_url.clone(),
-    );
+    let comms_service_client = CommsServiceClient::new(config.comms_service_url.clone());
 
     tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
@@ -130,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized sync service client");
     let search_service_client = SearchServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.search_service_url.clone(),
+        config.document_storage_service_url.clone(),
     );
 
     tracing::info!("initialized search service client");
@@ -213,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
                         .with_macro_db(db.clone())
                         .build(),
                 )
-                .with_channel_client(comms_service_client.clone())
+                .with_channel_client_and_db(comms_service_client.clone(), db.clone())
                 .with_dcs_client(document_cognition_service_client)
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),

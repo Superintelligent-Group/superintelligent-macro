@@ -15,6 +15,9 @@ fix_environment *ARGS:
 get_environment *ARGS:
   sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
 
+edit_environment *ARGS:
+  sops --input-type dotenv --output-type dotenv .env-local{{ ARGS}}.enc
+
 # Creates the docker networks then runs the databases
 # This is used when initializing your databases
 run_dbs *ARGS:
@@ -41,6 +44,9 @@ build_run_local *ARGS:
 # Stop all local services
 stop-local:
   docker compose down
+
+stop-databases:
+  docker-compose -f docker-compose-databases.yml down
 
 # Start LocalStack for local AWS emulation
 start_localstack:
