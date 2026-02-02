@@ -44,7 +44,7 @@ function NotificationStackRow(props: { stack: NotificationStack }) {
   const icon = () => getNotificationIcon(props.stack.type);
 
   return (
-    <div class="flex items-center py-2">
+    <div class="flex items-center py-4 border-b border-edge-muted">
       <StackedNotificationRow
         notifications={props.stack.notifications}
         icon={icon()}
@@ -68,9 +68,14 @@ export function ExtractorNotificationRows(
 
   return (
     <Show when={stacks().length > 0}>
-      <CollapsibleList items={stacks()} visibleCount={props.visibleCount ?? 3}>
-        {(stack) => <NotificationStackRow stack={stack} />}
-      </CollapsibleList>
+      <div class="">
+        <CollapsibleList
+          items={stacks()}
+          visibleCount={props.visibleCount ?? 3}
+        >
+          {(stack) => <NotificationStackRow stack={stack} />}
+        </CollapsibleList>
+      </div>
     </Show>
   );
 }

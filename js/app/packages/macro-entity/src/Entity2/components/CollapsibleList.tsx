@@ -32,7 +32,8 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
       <For each={visibleItems()}>
         {(child, index) => props.children(child, index(), count())}
       </For>
-      <Show when={hasMore()}>
+      {/* Temporarily hidden */}
+      {/* <Show when={hasMore()}>
         <button
           type="button"
           class="block w-fit py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium bg-[pink]/40"
@@ -45,7 +46,7 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
             + {props.items.length - visibleCount()} More
           </Show>
         </button>
-      </Show>
+      </Show> */}
     </>
   );
 }

@@ -85,7 +85,9 @@ export function EntityMinimal(props: EntityMinimalProps) {
       onMouseLeave={props.onMouseLeave}
     >
       <Entity.Layout
-        class="gap-2 w-full min-h-[inherit] items-center text-sm px-2"
+        class={cn('gap-2 w-full min-h-[inherit] items-center text-sm px-2', {
+          'bg-edge/20': showUnrolled(),
+        })}
         grid={grid}
       >
         <Entity.Slot placement="indicator" class="relative size-full group">

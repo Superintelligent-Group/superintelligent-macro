@@ -3,9 +3,8 @@ import { Dynamic } from 'solid-js/web';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import type { TypedNotification } from '@notifications';
-import { formatTimestamp } from '../utils/timestamp';
 import { DisplayName } from '../components/DisplayName';
-import { NotificationRowContainer } from './NotificationRowContainer';
+import { UserIcon } from '@core/component/UserIcon';
 import { match } from 'ts-pattern';
 
 interface StackedNotificationRowProps {
@@ -166,7 +165,7 @@ export function StackedNotificationRow(props: StackedNotificationRowProps) {
       return (
         <>
           <DisplayName id={data.firstSenderId} format="firstName" />
-          <span class="ml-1">{data.actionVerb}</span>
+          <span class="">{data.actionVerb}</span>
         </>
       );
     }
@@ -176,9 +175,9 @@ export function StackedNotificationRow(props: StackedNotificationRowProps) {
       return (
         <>
           <span>{data.count}</span>
-          <span class="ml-1">{data.typeNoun}</span>
-          <span class="ml-1">from</span>
-          <span class="ml-1">
+          <span class="">{data.typeNoun}</span>
+          <span class="">from</span>
+          <span class="">
             <DisplayName id={data.firstSenderId} format="firstName" />
           </span>
         </>
@@ -189,60 +188,64 @@ export function StackedNotificationRow(props: StackedNotificationRowProps) {
     return (
       <>
         <span>{data.count}</span>
-        <span class="ml-1">{data.typeNoun}</span>
-        <span class="ml-1">from</span>
-        <span class="ml-1">
+        <span class="">{data.typeNoun}</span>
+        <span class="">from</span>
+        <span class="">
           <DisplayName id={data.firstSenderId} format="firstName" />
         </span>
         <Show when={data.additionalSenders > 0}>
-          <span class="ml-1">+{data.additionalSenders}</span>
+          <span class="">+{data.additionalSenders}</span>
         </Show>
       </>
     );
   };
 
   return (
-    <NotificationRowContainer
-      icon={
-        <>
-          <Dynamic component={props.icon} class="size-4 text-ink-extra-muted" />
-          <span class="text-xs text-ink-extra-muted flex items-center px-1 w-54">
-            {descriptionSlot()}
-          </span>
-        </>
-      }
-      content={
-        <>
-          <Show when={mostRecent()?.senderId}>
-            {(senderId) => (
-              <span class="font-semibold">
-                <DisplayName id={senderId()} format="firstName" />
-              </span>
-            )}
-          </Show>
-          <Show when={content()}>
-            {(content) => (
-              <Show
-                when={content()}
-                fallback={
-                  <span class="italic text-ink-disabled">Attached items</span>
-                }
-              >
-                {(trimmedContent) => (
-                  <span class="text-ink-extra-muted">
-                    <StaticMarkdown
-                      markdown={trimmedContent()}
-                      theme={unifiedListMarkdownTheme}
-                      singleLine={true}
-                    />
-                  </span>
-                )}
-              </Show>
-            )}
-          </Show>
-        </>
-      }
-      timestamp={formatTimestamp(mostRecent().createdAt)}
-    />
+    <div class="flex items-start gap-3 w-full">
+      {/* Left side: user icon */}
+      <Show when={mostRecent()?.senderId}>
+        {(senderId) => (
+          <div class="shrink-0">
+            <UserIcon id={senderId()} size="xs" isDeleted={false} />
+          </div>
+        )}
+      </Show>
+
+      {/* Right side: stacked description and message preview */}
+      <div class="flex-1 min-w-0 flex flex-col gap-1">
+        {/* Description line with icon */}
+        <div class="flex items-center gap-2 text-xs text-ink-muted">
+          <Dynamic
+            component={props.icon}
+            class="size-4 text-ink-extra-muted shrink-0"
+          />
+          <span class="flex items-center gap-1">{descriptionSlot()}</span>
+        </div>
+
+        {/* Message preview */}
+        <Show when={content()}>
+          {(content) => (
+            <Show
+              when={content()}
+              fallback={
+                <span class="text-xs italic text-ink-disabled">
+                  Attached items
+                </span>
+              }
+            >
+              {(trimmedContent) => (
+                <div class="text-sm text-ink">
+                  <StaticMarkdown
+                    markdown={trimmedContent()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </Show>
+          )}
+        </Show>
+      </div>
+    </div>
   );
 }
