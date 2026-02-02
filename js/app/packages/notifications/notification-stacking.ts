@@ -8,6 +8,7 @@ import {
 import type { UnifiedNotification } from './types';
 
 export interface NotificationStack {
+  id: string; // Composite key of all notification IDs for stable reconcile
   type: TypedNotification['notificationEventType'];
   notifications: TypedNotification[];
 }
@@ -86,11 +87,8 @@ export function stackNotifications(
     }),
   ];
 
-  // Sort: mentions first, then by recency
+  // Sort by recency only
   return groups.sort((a, b) => {
-    if ((a.type === 'channel_mention') !== (b.type === 'channel_mention')) {
-      return a.type === 'channel_mention' ? -1 : 1;
-    }
     return b.notifications[0].createdAt - a.notifications[0].createdAt;
   });
 }
@@ -120,7 +118,12 @@ function makeStack(
   notifications: TypedNotification[]
 ): NotificationStack[] {
   if (notifications.length === 0) return [];
-  return [{ type, notifications: sortByRecency(notifications) }];
+  const sorted = sortByRecency(notifications);
+  const id = sorted
+    .map((n) => n.id)
+    .sort()
+    .join(',');
+  return [{ id, type, notifications: sorted }];
 }
 
 function makeReplyStacks(
@@ -132,8 +135,16 @@ function makeReplyStacks(
   );
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
-    .map(([, group]) => ({
-      type: 'channel_message_reply',
-      notifications: sortByRecency(group),
-    }));
+    .map(([, group]) => {
+      const sorted = sortByRecency(group);
+      const id = sorted
+        .map((n) => n.id)
+        .sort()
+        .join(',');
+      return {
+        id,
+        type: 'channel_message_reply',
+        notifications: sorted,
+      };
+    });
 }

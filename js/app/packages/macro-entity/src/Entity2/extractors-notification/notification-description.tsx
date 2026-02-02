@@ -92,10 +92,14 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     return undefined;
   };
 
+  const senderIds = () => {
+    if (!props.stack) return [];
+    return getUniqueSenderIds(props.stack.notifications);
+  };
+
   const additionalSenderCount = () => {
     if (!props.stack) return 0;
-    const senderIds = getUniqueSenderIds(props.stack.notifications);
-    return Math.max(0, senderIds.length - 1);
+    return Math.max(0, senderIds().length - 1);
   };
 
   const hasMultipleSenders = () => additionalSenderCount() > 0;
@@ -107,6 +111,15 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   const primarySenderFirstName = () => {
     const firstName = primarySenderNameParts.firstName();
     return firstName || primarySenderNameParts.fullName();
+  };
+
+  const secondarySenderNameParts = useDisplayNameParts(
+    tryMacroId(senderIds()[1] ?? '')
+  );
+
+  const secondarySenderFirstName = () => {
+    const firstName = secondarySenderNameParts.firstName();
+    return firstName || secondarySenderNameParts.fullName();
   };
 
   const description = () => {
@@ -123,10 +136,16 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       return getActionVerb(type);
     }
 
-    // Stack with multiple senders: "13 messages from Peter +5"
+    // Stack with multiple senders
     if (hasMultipleSenders()) {
       if (senderId) {
-        return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} +${additionalSenderCount()}`;
+        const senderCount = senderIds().length;
+        // Two senders: "13 messages from Peter and Jane"
+        if (senderCount === 2) {
+          return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} and ${secondarySenderFirstName()}`;
+        }
+        // Three or more senders: "13 messages from Peter and 5 others"
+        return `${count()} ${getTypeNoun(type, count())} from ${primarySenderFirstName()} and ${additionalSenderCount()} ${additionalSenderCount() === 1 ? 'other' : 'others'}`;
       }
       return `${count()} ${getTypeNoun(type, count())}`;
     }

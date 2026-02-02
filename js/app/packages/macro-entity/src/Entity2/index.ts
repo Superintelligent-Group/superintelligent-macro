@@ -21,6 +21,8 @@ import {
   NotificationTimestamp,
   NotificationDescription,
   NotificationCount,
+  useNotificationActions,
+  useNotificationStackActions,
 } from './extractors-notification';
 
 // Composed notification components
@@ -47,5 +49,7 @@ export const Entity2 = {
     Description: NotificationDescription,
     Count: NotificationCount,
     Minimal: NotificationMinimal,
+    Actions: useNotificationActions,
+    StackActions: useNotificationStackActions,
   },
 };

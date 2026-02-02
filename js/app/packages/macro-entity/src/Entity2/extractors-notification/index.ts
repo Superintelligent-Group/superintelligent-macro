@@ -6,3 +6,7 @@ export { NotificationContent } from './notification-content';
 export { NotificationTimestamp } from './notification-timestamp';
 export { NotificationDescription } from './notification-description';
 export { NotificationCount } from './notification-count';
+export {
+  useNotificationActions,
+  useNotificationStackActions,
+} from './notification-actions';

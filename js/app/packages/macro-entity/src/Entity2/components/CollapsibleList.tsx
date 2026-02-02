@@ -13,6 +13,11 @@ interface CollapsibleListProps<T> {
  * - Shows a limited number of items initially
  * - Provides "Show N more" / "Collapse" buttons
  * - Supports thread border for visual hierarchy
+ *
+ * NOTE: This component uses <For> which compares items by referential equality.
+ * If items array is recreated with new object references on every render,
+ * all children will remount. To prevent this, ensure stable object references
+ * in the parent component using reconcile() or proper memoization.
  */
 export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const [showAll, setShowAll] = createSignal(false);

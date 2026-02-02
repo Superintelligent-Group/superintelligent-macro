@@ -58,7 +58,7 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
       >
         <UserGroup
           userIds={senderIds()}
-          maxUsers={3}
+          maxUsers={senderIds().length === 2 ? 2 : 1}
           size={size()}
           suppressClick
           showTooltip={false}

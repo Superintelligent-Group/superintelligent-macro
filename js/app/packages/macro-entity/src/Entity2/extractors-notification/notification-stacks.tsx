@@ -1,5 +1,12 @@
-import { Show } from 'solid-js';
-import { stackNotifications, type NotificationStack } from '@notifications';
+import { Show, createMemo as createEffect } from 'solid-js';
+import { reconcile, createStore } from 'solid-js/store';
+import {
+  stackNotifications,
+  type NotificationStack,
+  getMostRecentNotification,
+  openNotification,
+  tryToTypedNotification,
+} from '@notifications';
 import type { WithNotification } from '../../types/notification';
 import type { EntityData } from '../../types/entity';
 import { CollapsibleList } from '../components/CollapsibleList';
@@ -14,6 +21,13 @@ import { NotificationDescription } from './notification-description';
 import { NotificationSenderIcon } from './notification-sender-icon';
 import { NotificationTimestamp } from './notification-timestamp';
 import { UnreadIndicator } from '../components/UnreadIndicator';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { cn } from '@ui/utils/classname';
+import { useNotificationStackActions } from './notification-actions';
+import { Button } from '@ui/components/Button';
+import CheckIcon from '@icon/regular/check.svg';
+import EyeIcon from '@icon/regular/eye.svg';
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -23,14 +37,66 @@ interface NotificationStacksProps {
   visibleCount?: number;
 }
 
-function NotificationStackRow(props: { stack: NotificationStack }) {
+function NotificationStackRow(props: {
+  stack: NotificationStack;
+  onClick?: (e: PointerEvent | MouseEvent) => void;
+}) {
+  const notificationSource = useGlobalNotificationSource();
+  const unread = () => isNotificationUnread(props.stack);
+
+  const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
+    stack: props.stack,
+  });
+
+  const handleClick = async (e: PointerEvent | MouseEvent) => {
+    const mostRecent = getMostRecentNotification(props.stack);
+    const typed = tryToTypedNotification(mostRecent);
+    const splitManager = globalSplitManager();
+    if (!typed || !splitManager) return;
+
+    e.stopPropagation();
+    await openNotification(typed, splitManager);
+    await notificationSource.markAsRead(mostRecent);
+    props.onClick?.(e);
+  };
+
+  const handleMarkAsRead = async (e: PointerEvent | MouseEvent) => {
+    e.stopPropagation();
+    await markStackAsRead();
+  };
+
+  const handleMarkAsDone = async (e: PointerEvent | MouseEvent) => {
+    e.stopPropagation();
+    await markStackAsDone();
+  };
+
   return (
-    <div class="flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4">
-      <NotificationIcon stack={props.stack} class="size-4" />
+    <div
+      class={cn(
+        'flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4 hover:bg-edge/20 transition-colors',
+        {
+          'border-accent': unread(),
+        }
+      )}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick(e as unknown as MouseEvent);
+        }
+      }}
+    >
+      <div class="pt-1">
+        <NotificationIcon stack={props.stack} class="size-4" />
+      </div>
       <div class="w-full">
         <div class="flex items-center gap-1 text-xs">
-          <Show when={isNotificationUnread(props.stack)}>
-            <UnreadIndicator active />
+          <Show when={unread()}>
+            <span class="pr-1">
+              <UnreadIndicator active />
+            </span>
           </Show>
           <NotificationSenderIcon stack={props.stack} size="xs" />
           <NotificationDescription stack={props.stack} />
@@ -38,6 +104,15 @@ function NotificationStackRow(props: { stack: NotificationStack }) {
             {' - '}
             <NotificationTimestamp stack={props.stack} />
           </span>
+          <div class="ml-auto flex items-center gap-1 pr-2">
+            <Button
+              onClick={handleMarkAsDone}
+              tooltip={'Mark notification stack done'}
+              class="border border-edge-muted text-xs text-ink-muted grid p-0 place-items-center size-6"
+            >
+              <CheckIcon class="size-3" />
+            </Button>
+          </div>
         </div>
         <div class="mt-1">
           <NotificationContent stack={props.stack} />
@@ -52,15 +127,22 @@ export function NotificationStacks(props: NotificationStacksProps) {
   const validNotifications = () =>
     filterNotDoneNotifications(filterValidNotifications(notifications()));
 
-  const stacks = () => stackNotifications(validNotifications());
+  const [stacks, setStacks] = createStore<NotificationStack[]>([]);
+
+  createEffect(() => {
+    const newStacks = stackNotifications(validNotifications());
+    setStacks(reconcile(newStacks, { key: 'id', merge: false }));
+  });
 
   return (
-    <Show when={stacks().length > 0}>
+    <Show when={stacks.length > 0}>
       <CollapsibleList
-        items={stacks()}
+        items={stacks}
         visibleCount={props.visibleCount ?? DEFAULT_VISIBLE_COUNT}
       >
-        {(stack) => <NotificationStackRow stack={stack} />}
+        {(stack) => (
+          <NotificationStackRow stack={stack} onClick={props.onClick} />
+        )}
       </CollapsibleList>
     </Show>
   );
