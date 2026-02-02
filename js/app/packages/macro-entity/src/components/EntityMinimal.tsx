@@ -26,6 +26,8 @@ import {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from '../Entity2/utils/notification-display';
+import { isSearchEntity } from '../queries/search';
+import type { SearchLocation } from '../types/search';
 
 interface EntityMinimalProps {
   entity: WithNotification<EntityData>;
@@ -42,6 +44,7 @@ interface EntityMinimalProps {
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+  onContentHitClick?: (location?: SearchLocation) => void;
 }
 
 export function EntityMinimal(props: EntityMinimalProps) {
@@ -58,32 +61,36 @@ export function EntityMinimal(props: EntityMinimalProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
 
-  const showUnrolled = () => {
+  const hasNotifications = () => {
     if (!props.showUnrollNotifications) return false;
-    if (isWithNotification(props.entity)) {
-      return (
-        filterNotDoneNotifications(
-          filterValidNotifications(props.entity.notifications?.())
-        ).length > 0
-      );
-    }
-    return false;
+    if (!isWithNotification(props.entity)) return false;
+    return (
+      filterNotDoneNotifications(
+        filterValidNotifications(props.entity.notifications?.())
+      ).length > 0
+    );
   };
+
+  const showUnrolled = () => hasNotifications();
 
   return (
     <Entity.Root
       entity={props.entity}
       onClick={props.onClick}
       ref={props.ref}
-      class={cn('w-full min-h-10', {
+      class={cn('w-full min-h-10 relative', {
         'bg-accent/5': props.checked,
-        'outline outline-accent/20 outline-offset-[-1px] bracket':
-          props.highlighted,
+        'outline outline-accent/20 outline-offset-[-1px]': props.highlighted,
         'bg-hover/20': props.highlighted && !props.checked,
       })}
       onMouseOver={props.onMouseOver}
       onMouseLeave={props.onMouseLeave}
     >
+      <div
+        class={cn('absolute h-full w-[2px] left-0 top-0 bg-accent opacity-0', {
+          'opacity-100': props.highlighted,
+        })}
+      ></div>
       <Entity.Layout
         class={cn('gap-2 w-full min-h-[inherit] items-center text-sm px-2')}
         grid={grid}
@@ -111,18 +118,32 @@ export function EntityMinimal(props: EntityMinimalProps) {
             <Match when={isEmailEntity(props.entity) && props.entity}>
               {(entity) => (
                 <>
-                  <span class="w-[20%] shrink-0 min-w-12 max-w-48 truncate flex gap-2">
-                    <Show when={entity().isDraft}>
-                      <DraftBadge />
-                    </Show>
-                    <Entity.EmailParticipants entity={entity()} />
-                  </span>
-                  <span class="truncate">
-                    <Entity.Title entity={entity()} />
-                  </span>
-                  <span class="text-ink/50 font-medium truncate flex-1">
-                    {entity().snippet}
-                  </span>
+                  <Show
+                    when={!isSearchEntity(entity())}
+                    fallback={
+                      <>
+                        <span class="truncate">
+                          <Entity.Title entity={entity()} />
+                        </span>
+                        <span class="text-ink/50 font-medium truncate flex-1">
+                          {entity().snippet}
+                        </span>
+                      </>
+                    }
+                  >
+                    <span class="w-[20%] shrink-0 min-w-12 max-w-48 truncate flex gap-2">
+                      <Show when={entity().isDraft}>
+                        <DraftBadge />
+                      </Show>
+                      <Entity.EmailParticipants entity={entity()} />
+                    </span>
+                    <span class="truncate">
+                      <Entity.Title entity={entity()} />
+                    </span>
+                    <span class="text-ink/50 font-medium truncate flex-1">
+                      {entity().snippet}
+                    </span>
+                  </Show>
                 </>
               )}
             </Match>
@@ -183,16 +204,35 @@ export function EntityMinimal(props: EntityMinimalProps) {
 
       <Show when={showUnrolled()}>
         <Entity.Layout
-          class="gap-2 w-full h-full items-center text-sm px-2"
+          class="gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2"
           grid={grid}
         >
           <Entity.Slot placement={['content', 'timestamp']} class="ml-6">
-            <Entity.Notification.Stacks
+            <Show
+              when={
+                isWithNotification(props.entity) &&
+                !isSearchEntity(props.entity)
+              }
+            >
+              <Entity.Notification.Stacks
+                entity={props.entity}
+                visibleCount={3}
+              />
+            </Show>
+          </Entity.Slot>
+        </Entity.Layout>
+      </Show>
+
+      <Show when={isSearchEntity(props.entity)}>
+        <Entity.Layout
+          class="gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2"
+          grid={grid}
+        >
+          <Entity.Slot placement={['content', 'timestamp']} class="ml-6">
+            <Entity.Search.ContentHits
               entity={props.entity}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-              visibleCount={3}
+              onClick={props.onContentHitClick}
+              visibleCount={1}
             />
           </Entity.Slot>
         </Entity.Layout>

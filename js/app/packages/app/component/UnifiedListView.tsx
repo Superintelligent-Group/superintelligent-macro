@@ -1945,6 +1945,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                             event,
                           });
                         }}
+                        onContentHitClick={(location) => {
+                          openEntityInSplitFromUnifiedList(innerProps.entity, {
+                            openInNewSplit: false,
+                            location,
+                            splitHandle: splitContext.handle,
+                          });
+                        }}
                         showUnrollNotifications={showUnrollNotifications()}
                       />
                     </Show>

@@ -3,6 +3,7 @@ import type { EntityData } from '../../types/entity';
 import type { SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../queries/search';
 import { CollapsibleList } from '../components/CollapsibleList';
+import { SearchContentHitRow } from './search-content-hit-row';
 
 interface ExtractorContentHitsProps {
   entity: EntityData;
@@ -28,9 +29,8 @@ export function ContentHits(props: ExtractorContentHitsProps) {
         threadBorder
       >
         {(hit, index, count) => (
-          <ContentHitRow
-            data={hit}
-            allData={contentHits()}
+          <SearchContentHitRow
+            hit={hit}
             onClick={props.onClick}
             index={index}
             count={count}
