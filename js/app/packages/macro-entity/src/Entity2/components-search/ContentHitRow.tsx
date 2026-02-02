@@ -1,9 +1,5 @@
 import { Show, Switch, Match } from 'solid-js';
 import type { ContentHitData, SearchLocation } from '../../types/search';
-import {
-  CollapsibleListRow,
-  type RowClickEvent,
-} from '../components/CollapsibleListRow';
 import { ChannelMessageContentHit } from './ChannelMessageContentHit';
 import { EmailMessageContentHit } from './EmailMessageContentHit';
 import { GenericContentHit } from './GenericContentHit';
@@ -28,9 +24,9 @@ export function ContentHitRow(props: ContentHitRowProps) {
     }
   };
 
-  const handleClick = (_e: RowClickEvent) => {
-    props.onClick?.(props.data.location);
-  };
+  // const handleClick = (_e: RowClickEvent) => {
+  //   props.onClick?.(props.data.location);
+  // };
 
   return (
     <div

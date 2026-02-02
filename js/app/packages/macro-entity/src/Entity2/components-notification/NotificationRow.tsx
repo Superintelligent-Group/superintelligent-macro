@@ -3,7 +3,6 @@ import { Dynamic } from 'solid-js/web';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import type { Notification } from '../../types/notification';
-import type { RowClickEvent } from '../components/CollapsibleListRow';
 import { extractMessageContent } from '../utils/notification-display';
 import { formatTimestamp } from '../utils/timestamp';
 import { DisplayName } from '../components/DisplayName';
@@ -11,7 +10,7 @@ import { NotificationRowContainer } from './NotificationRowContainer';
 
 interface NotificationRowProps {
   notification: Notification;
-  onClick?: (e: RowClickEvent) => void;
+  onClick?: (e: PointerEvent | MouseEvent) => void;
   icon?: (props: { class?: string }) => JSX.Element;
 }
 

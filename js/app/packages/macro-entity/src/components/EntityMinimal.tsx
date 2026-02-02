@@ -187,7 +187,7 @@ export function EntityMinimal(props: EntityMinimalProps) {
           grid={grid}
         >
           <Entity.Slot placement={['content', 'timestamp']} class="ml-6">
-            <Entity.Notification.Rows
+            <Entity.Notification.Stacks
               entity={props.entity}
               onClick={(e) => {
                 e.stopPropagation();

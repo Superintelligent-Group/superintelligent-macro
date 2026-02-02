@@ -1,4 +1,4 @@
-export { ExtractorNotificationRows } from './extractor-notification-rows';
+export { NotificationStacks } from './notification-stacks';
 export { NotificationIcon } from './notification-icon';
 export { NotificationSender } from './notification-sender';
 export { NotificationSenderIcon } from './notification-sender-icon';

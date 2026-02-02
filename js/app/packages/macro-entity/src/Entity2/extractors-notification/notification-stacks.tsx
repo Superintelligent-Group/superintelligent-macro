@@ -8,7 +8,6 @@ import {
   filterNotDoneNotifications,
   isNotificationUnread,
 } from '../utils/notification-display';
-import type { RowClickEvent } from '../components/CollapsibleListRow';
 import { NotificationContent } from './notification-content';
 import { NotificationIcon } from './notification-icon';
 import { NotificationDescription } from './notification-description';
@@ -16,9 +15,11 @@ import { NotificationSenderIcon } from './notification-sender-icon';
 import { NotificationTimestamp } from './notification-timestamp';
 import { UnreadIndicator } from '../components/UnreadIndicator';
 
-interface ExtractorNotificationRowsProps {
+const DEFAULT_VISIBLE_COUNT = 3;
+
+interface NotificationStacksProps {
   entity: WithNotification<EntityData>;
-  onClick?: (e: RowClickEvent) => void;
+  onClick?: (e: PointerEvent | MouseEvent) => void;
   visibleCount?: number;
 }
 
@@ -46,9 +47,7 @@ function NotificationStackRow(props: { stack: NotificationStack }) {
   );
 }
 
-export function ExtractorNotificationRows(
-  props: ExtractorNotificationRowsProps
-) {
+export function NotificationStacks(props: NotificationStacksProps) {
   const notifications = () => props.entity.notifications?.() ?? [];
   const validNotifications = () =>
     filterNotDoneNotifications(filterValidNotifications(notifications()));
@@ -57,7 +56,10 @@ export function ExtractorNotificationRows(
 
   return (
     <Show when={stacks().length > 0}>
-      <CollapsibleList items={stacks()} visibleCount={props.visibleCount ?? 3}>
+      <CollapsibleList
+        items={stacks()}
+        visibleCount={props.visibleCount ?? DEFAULT_VISIBLE_COUNT}
+      >
         {(stack) => <NotificationStackRow stack={stack} />}
       </CollapsibleList>
     </Show>
