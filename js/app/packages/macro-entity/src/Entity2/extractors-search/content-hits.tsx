@@ -15,7 +15,7 @@ interface ExtractorContentHitsProps {
  * Extractor component for search content hits
  * Renders collapsible list of content hit rows
  */
-export function ExtractorContentHits(props: ExtractorContentHitsProps) {
+export function ContentHits(props: ExtractorContentHitsProps) {
   const contentHits = () => {
     if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];

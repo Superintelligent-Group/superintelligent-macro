@@ -1,6 +1,6 @@
 import {
-  EntityIcon,
-  type EntityIconProps,
+  EntityIcon as CoreEntityIcon,
+  type EntityIconProps as CoreEntityIconProps,
   getIconConfig,
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -10,7 +10,7 @@ import type { ChannelEntity, EntityData } from '../../types/entity';
 import { isChannelEntity, isTaskEntity } from '../../types/entity';
 import { match } from 'ts-pattern';
 
-interface EntityExtractorIconProps {
+interface EntityIconProps {
   entity: EntityData;
 }
 
@@ -25,7 +25,7 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
     <div class="bg-panel size-full rounded-full">
       <Show
         when={participantId()}
-        fallback={<EntityIcon targetType="directMessage" size="fill" />}
+        fallback={<CoreEntityIcon targetType="directMessage" size="fill" />}
       >
         {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
       </Show>
@@ -33,7 +33,7 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
   );
 }
 
-export function ExtractorIcon(props: EntityExtractorIconProps) {
+export function EntityIcon(props: EntityIconProps) {
   const iconType = () => {
     return match(props.entity)
       .when(isChannelEntity, ({ channelType }) =>
@@ -54,7 +54,7 @@ export function ExtractorIcon(props: EntityExtractorIconProps) {
 
   const validIconType = () => {
     const type = iconType();
-    if (getIconConfig(type)) return type as EntityIconProps['targetType'];
+    if (getIconConfig(type)) return type as CoreEntityIconProps['targetType'];
     else return 'default' as const;
   };
 
@@ -63,7 +63,7 @@ export function ExtractorIcon(props: EntityExtractorIconProps) {
   return (
     <Show
       when={isDirectMessage()}
-      fallback={<EntityIcon targetType={validIconType()} size="fill" />}
+      fallback={<CoreEntityIcon targetType={validIconType()} size="fill" />}
     >
       <DirectMessageIcon entity={props.entity as ChannelEntity} />
     </Show>

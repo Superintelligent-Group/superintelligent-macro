@@ -85,9 +85,7 @@ export function EntityMinimal(props: EntityMinimalProps) {
       onMouseLeave={props.onMouseLeave}
     >
       <Entity.Layout
-        class={cn('gap-2 w-full min-h-[inherit] items-center text-sm px-2', {
-          'bg-edge/20': showUnrolled(),
-        })}
+        class={cn('gap-2 w-full min-h-[inherit] items-center text-sm px-2')}
         grid={grid}
       >
         <Entity.Slot placement="indicator" class="relative size-full group">
@@ -188,7 +186,7 @@ export function EntityMinimal(props: EntityMinimalProps) {
           class="gap-2 w-full h-full items-center text-sm px-2"
           grid={grid}
         >
-          <Entity.Slot placement={['content', 'timestamp']}>
+          <Entity.Slot placement={['content', 'timestamp']} class="ml-6">
             <Entity.Notification.Rows
               entity={props.entity}
               onClick={(e) => {

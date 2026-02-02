@@ -66,7 +66,7 @@ export default defineConfig({
         },
       },
       {
-        extends: './packages/core/vitest.config.ts',
+        extends: './packages/notifications/vitest.config.ts',
         test: {
           include: ['packages/macro-entity/**/*.{test,spec}.{ts,tsx}'],
           name: 'macro-entity',

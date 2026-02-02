@@ -21,7 +21,7 @@ function extractSearchHighlight(entity: EntityData): string | undefined {
   return entity.search.nameHighlight ?? undefined;
 }
 
-export function ExtractorTitle(props: { entity: EntityData }) {
+export function EntityTitle(props: { entity: EntityData }) {
   const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
     if (searchHighlight) {

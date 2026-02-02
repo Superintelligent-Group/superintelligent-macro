@@ -2,7 +2,7 @@ import { tryMacroId, useDisplayName } from 'core/user';
 import { useUserId } from '@core/context/user';
 import type { EntityData } from '../../types/entity';
 
-export function ExtractorOwner(props: { entity: EntityData }) {
+export function EntityOwner(props: { entity: EntityData }) {
   const userId = useUserId();
   const ownerId = () => props.entity.ownerId;
 

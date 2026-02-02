@@ -93,7 +93,7 @@ export function formatDisplayNames(names: string[]): string | undefined {
  * @param props
  * @returns
  */
-export function ExtractorEmailParticipants(props: { entity: EmailEntity }) {
+export function EntityEmailParticipants(props: { entity: EmailEntity }) {
   const userEmail = useEmail();
   const fetchDisplayName = (email: string) =>
     useDisplayName(emailToMacroId(email))[0]();

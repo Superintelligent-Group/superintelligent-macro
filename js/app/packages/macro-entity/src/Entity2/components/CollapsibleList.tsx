@@ -1,4 +1,5 @@
 import { For, Show, createSignal, type JSX } from 'solid-js';
+import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
 
 interface CollapsibleListProps<T> {
   items: T[];
@@ -32,21 +33,29 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
       <For each={visibleItems()}>
         {(child, index) => props.children(child, index(), count())}
       </For>
-      {/* Temporarily hidden */}
-      {/* <Show when={hasMore()}>
-        <button
-          type="button"
-          class="block w-fit py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium bg-[pink]/40"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAll((prev) => !prev);
-          }}
-        >
-          <Show when={!showAll()} fallback="Collapse">
-            + {props.items.length - visibleCount()} More
-          </Show>
-        </button>
-      </Show> */}
+      <Show when={hasMore()}>
+        <div class="w-full flex items-center gap-2 my-2">
+          <button
+            type="button"
+            class="flex items-center gap-1 text-xs bracket-never"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAll((prev) => !prev);
+            }}
+          >
+            <ChevronDownIcon
+              class="w-3 h-3 transition-transform duration-100"
+              classList={{
+                'rotate-180': showAll(),
+              }}
+            />
+            <Show when={!showAll()} fallback="Collapse">
+              Show {props.items.length - visibleCount()} More
+            </Show>
+          </button>
+          <div class="border-t border-edge-muted/50 grow"></div>
+        </div>
+      </Show>
     </>
   );
 }

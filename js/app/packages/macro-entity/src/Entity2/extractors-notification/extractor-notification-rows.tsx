@@ -6,16 +6,15 @@ import { CollapsibleList } from '../components/CollapsibleList';
 import {
   filterValidNotifications,
   filterNotDoneNotifications,
+  isNotificationUnread,
 } from '../utils/notification-display';
 import type { RowClickEvent } from '../components/CollapsibleListRow';
-import { StackedNotificationRow } from '../components-notification';
-import { match } from 'ts-pattern';
-import BellIcon from '@icon/regular/bell.svg';
-import ArrowBendUpLeftIcon from '@icon/regular/arrow-bend-up-left.svg';
-import AtIcon from '@icon/regular/at.svg';
-import ShareIcon from '@icon/regular/share.svg';
-import EnvelopeIcon from '@icon/regular/envelope.svg';
-import type { JSX } from 'solid-js';
+import { NotificationContent } from './notification-content';
+import { NotificationIcon } from './notification-icon';
+import { NotificationDescription } from './notification-description';
+import { NotificationSenderIcon } from './notification-sender-icon';
+import { NotificationTimestamp } from './notification-timestamp';
+import { UnreadIndicator } from '../components/UnreadIndicator';
 
 interface ExtractorNotificationRowsProps {
   entity: WithNotification<EntityData>;
@@ -23,40 +22,30 @@ interface ExtractorNotificationRowsProps {
   visibleCount?: number;
 }
 
-/**
- * Gets the appropriate icon for a notification type
- */
-function getNotificationIcon(
-  type: NotificationStack['type']
-): (props: { class?: string }) => JSX.Element {
-  return match(type)
-    .with('channel_mention', () => AtIcon)
-    .with('channel_message_reply', () => ArrowBendUpLeftIcon)
-    .with('channel_message_send', () => BellIcon)
-    .with('document_mention', () => AtIcon)
-    .with('item_shared_user', () => ShareIcon)
-    .with('item_shared_organization', () => ShareIcon)
-    .with('new_email', () => EnvelopeIcon)
-    .otherwise(() => BellIcon);
-}
-
 function NotificationStackRow(props: { stack: NotificationStack }) {
-  const icon = () => getNotificationIcon(props.stack.type);
-
   return (
-    <div class="flex items-center py-4 border-b border-edge-muted">
-      <StackedNotificationRow
-        notifications={props.stack.notifications}
-        icon={icon()}
-      />
+    <div class="flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-edge/10 gap-4">
+      <NotificationIcon stack={props.stack} class="size-4" />
+      <div class="w-full">
+        <div class="flex items-center gap-1 text-xs">
+          <Show when={isNotificationUnread(props.stack)}>
+            <UnreadIndicator active />
+          </Show>
+          <NotificationSenderIcon stack={props.stack} size="xs" />
+          <NotificationDescription stack={props.stack} />
+          <span class="text-ink-extra-muted/50">
+            {' - '}
+            <NotificationTimestamp stack={props.stack} />
+          </span>
+        </div>
+        <div class="mt-1">
+          <NotificationContent stack={props.stack} />
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * Extractor component for notification rows
- * Filters, stacks, and renders notifications in a collapsible list
- */
 export function ExtractorNotificationRows(
   props: ExtractorNotificationRowsProps
 ) {
@@ -68,14 +57,9 @@ export function ExtractorNotificationRows(
 
   return (
     <Show when={stacks().length > 0}>
-      <div class="">
-        <CollapsibleList
-          items={stacks()}
-          visibleCount={props.visibleCount ?? 3}
-        >
-          {(stack) => <NotificationStackRow stack={stack} />}
-        </CollapsibleList>
-      </div>
+      <CollapsibleList items={stacks()} visibleCount={props.visibleCount ?? 3}>
+        {(stack) => <NotificationStackRow stack={stack} />}
+      </CollapsibleList>
     </Show>
   );
 }

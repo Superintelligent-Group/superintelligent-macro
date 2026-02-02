@@ -33,10 +33,10 @@ export function ContentHitRow(props: ContentHitRowProps) {
   };
 
   return (
-    <CollapsibleListRow
-      blockNavigation
-      onClick={handleClick}
-      showThreadBorder={props.data.type === 'channel'}
+    <div
+    // blockNavigation
+    // onClick={handleClick}
+    // showThreadBorder={props.data.type === 'channel'}
     >
       <Switch>
         <Match when={props.data.type === 'channel' && props.data}>
@@ -66,6 +66,6 @@ export function ContentHitRow(props: ContentHitRowProps) {
           </div>
         </Match>
       </Switch>
-    </CollapsibleListRow>
+    </div>
   );
 }

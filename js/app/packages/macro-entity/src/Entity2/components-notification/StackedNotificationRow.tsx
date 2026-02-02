@@ -186,17 +186,13 @@ export function StackedNotificationRow(props: StackedNotificationRowProps) {
 
     // Multiple senders: "14 messages from Peter +2"
     return (
-      <>
-        <span>{data.count}</span>
-        <span class="">{data.typeNoun}</span>
-        <span class="">from</span>
-        <span class="">
-          <DisplayName id={data.firstSenderId} format="firstName" />
-        </span>
+      <span>
+        {data.count} {data.typeNoun} from{' '}
+        <DisplayName id={data.firstSenderId} format="firstName" />
         <Show when={data.additionalSenders > 0}>
           <span class="">+{data.additionalSenders}</span>
         </Show>
-      </>
+      </span>
     );
   };
 

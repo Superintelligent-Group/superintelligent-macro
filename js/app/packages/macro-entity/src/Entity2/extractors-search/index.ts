@@ -1,1 +1,1 @@
-export { ExtractorContentHits } from './extractor-content-hits';
+export { ContentHits } from './content-hits';

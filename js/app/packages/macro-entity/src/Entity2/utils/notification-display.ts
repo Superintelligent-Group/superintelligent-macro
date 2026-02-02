@@ -1,17 +1,17 @@
-import type { Notification } from '../../types/notification';
-import type { TypedNotification } from '@notifications';
 import {
   isChannelMention,
-  isChannelMessageSend,
   isChannelMessageReply,
+  isChannelMessageSend,
   isDocumentMention,
-  isItemSharedUser,
   isItemSharedOrganization,
+  isItemSharedUser,
   isNewEmail,
   type UnifiedNotificationWithMetadata,
-} from '@notifications';
+  type TypedNotification,
+} from '@notifications/notification-metadata';
+import type { NotificationStack } from '@notifications/notification-stacking';
+import type { Notification } from '../../types/notification';
 import { match } from 'ts-pattern';
-
 /**
  * Filters out invalid notification types that shouldn't be displayed
  * Currently filters out 'channel_message_document' notifications
@@ -122,4 +122,25 @@ export function extractMessageContent(notification: Notification): string {
   }
 
   return '';
+}
+
+/**
+ * Checks if a notification or notification stack is unread
+ * A notification is unread if it hasn't been viewed (!viewedAt) and isn't done (!done)
+ * A notification stack is unread if ANY notification in the stack is unread
+ */
+export function isNotificationUnread(
+  item: Notification | NotificationStack
+): boolean {
+  // Check if it's a notification stack
+  if ('notifications' in item && Array.isArray(item.notifications)) {
+    const stack = item as NotificationStack;
+    return stack.notifications.some(
+      (notification) => !notification.viewedAt && !notification.done
+    );
+  }
+
+  // It's a single notification
+  const notification = item as Notification;
+  return !notification.viewedAt && !notification.done;
 }

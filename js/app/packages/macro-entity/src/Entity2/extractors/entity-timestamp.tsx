@@ -1,7 +1,7 @@
 import type { EntityData } from '../../types/entity';
 import { formatTimestamp } from '../utils/timestamp';
 
-export function ExtractorTimestamp(props: {
+export function EntityTimestamp(props: {
   entity: EntityData;
   overrideTimeStamp?: number;
 }) {
