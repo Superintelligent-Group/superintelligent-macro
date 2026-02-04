@@ -2012,6 +2012,7 @@ dependencies = [
  "serde_dynamo",
  "serde_json",
  "sqlx",
+ "stream",
  "strum",
  "strum_macros",
  "tokio",
@@ -8862,9 +8863,12 @@ dependencies = [
 name = "stream"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-stream",
  "async-trait",
+ "dashmap",
  "futures",
+ "model-entity",
  "redis",
  "serde",
  "serde_json",
