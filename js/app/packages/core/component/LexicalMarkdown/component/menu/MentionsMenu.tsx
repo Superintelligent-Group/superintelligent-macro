@@ -36,6 +36,7 @@ import type { List } from 'lodash';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   For,
   type JSXElement,
@@ -535,21 +536,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     };
   };
 
-  // Lazy-initialize the email search query only when user starts typing
-  const [emailQueryInit, setEmailQueryInit] = createSignal(false);
-  createEffect(() => {
-    if (searchTerm() && !emailQueryInit()) {
-      setEmailQueryInit(true);
-    }
-  });
+  const shouldFetchEmails = createMemo(() => searchTerm().length > 0);
 
-  // Only create the query after init flag is set
-  const emailUnifiedSearchInfiniteQuery = emailQueryInit()
-    ? createUnifiedSearchInfiniteQuery(args)
-    : null;
+  // Always create the query, but disable it until user types
+  const emailUnifiedSearchInfiniteQuery = createUnifiedSearchInfiniteQuery(
+    args,
+    {
+      disabled: () => !shouldFetchEmails(),
+    }
+  );
 
   const foundEmails = createLazyMemo((): Entity<'email'>[] => {
-    if (!emailUnifiedSearchInfiniteQuery) return [];
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
       function isEmail(
         e: WithSearch<EntityData>
@@ -663,8 +660,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (isKeypressActive()) return;
     setSelectedIndex(index);
   };
-
-  let menuRef!: HTMLDivElement;
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
@@ -1138,6 +1133,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 'max-height': '100%',
                 width: '100%',
               }}
+              class="scrollbar-hidden"
             >
               {(item, i) => (
                 <MentionsMenuItem
@@ -1260,7 +1256,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             label="Emails"
             binType="emails"
             isNextPage={() =>
-              emailUnifiedSearchInfiniteQuery?.hasNextPage ?? false
+              emailUnifiedSearchInfiniteQuery.hasNextPage ?? false
             }
             totalCount={filteredEmails().length}
             showingCount={emailList.length}
@@ -1271,7 +1267,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}
-                  index={i()}
+                  index={users.length + docs.length + dates.length + i()}
                   selected={
                     users.length + docs.length + dates.length + i() ===
                     selectedIndex()
@@ -1303,7 +1299,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         when={totalLength() > 0}
         fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
       >
-        <div>
+        <div class="max-h-96 overflow-y-auto scrollbar-hidden">
           <Dynamic component={RenderOptions} />
         </div>
       </Show>
@@ -1339,13 +1335,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         <div
           class="w-96 cursor-default select-none z-modal-content"
           ref={(el) => {
-            menuRef = el;
             clickOutside(el, () => clickOutsideHandler);
             floatWithElement(el, floatWithElementProps);
             floatWithSelection(el, floatWithSelectionProps);
           }}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
+          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2 scrollbar-hidden">
             {inner()}
           </div>
           <BozzyBracketInnerSibling animOnOpen={true} />
