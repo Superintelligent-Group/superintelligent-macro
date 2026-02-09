@@ -12,6 +12,7 @@ export interface TourStep {
   target?: string; // data-tour-target value (for anchored)
   title: string;
   description: string;
+  hint?: string;
   action: TourAction;
   position?: Placement; // For anchored tooltips (from @floating-ui/dom)
 }

@@ -608,6 +608,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     >
       <div
         ref={setListRef}
+        data-tour-target="entity-list"
         class="@container/uList size-full unified-list-root flex flex-col"
         classList={{
           'border-r border-edge-muted': soup.previewEntity() !== undefined,

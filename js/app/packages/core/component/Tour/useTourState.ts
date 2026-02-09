@@ -83,6 +83,10 @@ export function useTourState(
     }
   };
 
+  const goToNextStep = () => {
+    advanceToNextStep();
+  };
+
   return {
     currentStep,
     currentStepIndex,
@@ -90,5 +94,6 @@ export function useTourState(
     actionWaiting,
     advanceToNextStep,
     goToPreviousStep,
+    goToNextStep,
   };
 }

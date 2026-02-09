@@ -787,6 +787,7 @@ export function ShareButton(props: ShareButtonProps) {
           }
         >
           <button
+            data-tour-target={props.itemType === 'document' ? 'share-toolbar' : undefined}
             class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
             onClick={() => {
               if (!isAuthenticated()) {

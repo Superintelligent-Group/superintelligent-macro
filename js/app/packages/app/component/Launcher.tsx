@@ -544,6 +544,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
+        data-tour-target="launcher"
         class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
         classList={{
           [gridColsClass()]: true,
@@ -602,7 +603,7 @@ export const Launcher = (props: LauncherProps) => {
           </Show>
         </Dialog.Overlay>
 
-        <Dialog.Content data-tour-target="launcher">
+        <Dialog.Content>
           <div
             class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
             onClick={(e) => {

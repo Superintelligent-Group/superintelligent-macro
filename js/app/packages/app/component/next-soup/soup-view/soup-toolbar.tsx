@@ -253,6 +253,8 @@ const SoupFilters = () => {
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
+        dataTourTarget="inbox-filter"
+        dataTourActive={soup.filters.isActive('signal')}
         onClick={toggleSignalFilter}
       />
       {/* Other toggle */}
@@ -550,6 +552,8 @@ export interface FilterButtonProps {
   isActive: (() => boolean) | boolean;
   onClick: () => void;
   paddingClass?: string;
+  dataTourTarget?: string;
+  dataTourActive?: boolean;
 }
 
 export const FilterButton: Component<FilterButtonProps> = (props) => (
@@ -559,6 +563,8 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
     >
       <button
         type="button"
+        data-tour-target={props.dataTourTarget}
+        data-tour-active={props.dataTourActive ? '' : undefined}
         class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
         classList={{
           'bg-accent text-panel':

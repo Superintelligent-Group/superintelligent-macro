@@ -6,6 +6,9 @@ import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
+import { Button } from '@ui/components/Button';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -21,7 +24,6 @@ import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import { useOrganizationName } from '@core/user';
 import Logout from '@icon/regular/sign-out.svg';
 import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
@@ -66,12 +68,13 @@ function useUserName() {
 export function Account() {
   const email = useEmail();
   const userId = useUserId();
-  const organizationName = useOrganizationName();
   const licenseStatus = useLicenseStatus();
   const logout = useLogout();
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
   const { connect: connectEmail, disconnect: disconnectEmail } = useEmailLinks();
 
@@ -85,7 +88,6 @@ export function Account() {
 
   const emailActive = useEmailLinksStatus();
   const [showTooltip, setShowTooltip] = createSignal<boolean>(false);
-
   const { resetAllTours } = useTourStorage();
 
   const firstName = () => {
@@ -109,6 +111,12 @@ export function Account() {
   };
 
   const logoutHandler = () => {
+    let redirectUrl = window.location.origin;
+    logout(redirectUrl);
+  };
+
+  const deleteAccountHandler = async () => {
+    await authServiceClient.deleteUser();
     let redirectUrl = window.location.origin;
     logout(redirectUrl);
   };
@@ -180,9 +188,6 @@ export function Account() {
           text="Email"
           subtext={email() ?? ''}
         />
-        <Show when={organizationName()}>
-          {(name) => <TabContentRow text="Organization" subtext={name()} />}
-        </Show>
 
         <div class="flex gap-4 items-center">
           <TabContentRow
@@ -272,8 +277,6 @@ export function Account() {
           </div>
         </Show>
         <NotificationToggle />
-
-        {/* Reset Tours Section */}
         <div class="flex items-center justify-between mb-[18px]">
           <div class="text-sm">Tours</div>
           <DeprecatedTextButton
@@ -282,16 +285,61 @@ export function Account() {
             onClick={resetAllTours}
           />
         </div>
-
-        <div class="flex flex-row justify-between items-center border-t border-edge pt-2">
+        <div class="flex flex-row justify-between items-center border-t border-edge pt-4">
           <div
-            class="mb-4.5 flex flex-row justify-start items-center gap-1"
+            class="mb-4 flex flex-row justify-start items-center gap-1"
             onClick={logoutHandler}
           >
             <Logout class="w-4 h-4" />
             <div class="text-sm select-none">Logout</div>
           </div>
           </div>
+        <Show when={isNativeMobilePlatform()}>
+          <div class="border-t border-edge pt-4">
+            <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
+              Delete Account
+            </Button>
+            <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
+              <Overlay />
+              <Content>
+                <Header>Delete Account</Header>
+                <Message>
+                  Are you sure you want to delete your account? This action is
+                  permanent and cannot be undone.
+                </Message>
+                <ButtonBar>
+                  <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={() => {
+                    setShowDeleteModal(false);
+                    setShowDeleteConfirmModal(true);
+                  }}>
+                    Delete
+                  </Button>
+                </ButtonBar>
+              </Content>
+            </Modal>
+            <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
+              <Overlay />
+              <Content>
+                <Header>Are you absolutely sure?</Header>
+                <Message>
+                  This will permanently delete your account and all associated
+                  data. This cannot be undone.
+                </Message>
+                <ButtonBar>
+                  <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={deleteAccountHandler}>
+                    Delete My Account
+                  </Button>
+                </ButtonBar>
+              </Content>
+            </Modal>
+          </div>
+        </Show>
         </div>
       </div>
     </div>
