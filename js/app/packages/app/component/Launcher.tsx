@@ -602,7 +602,7 @@ export const Launcher = (props: LauncherProps) => {
           </Show>
         </Dialog.Overlay>
 
-        <Dialog.Content>
+        <Dialog.Content data-tour-target="launcher">
           <div
             class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center"
             onClick={(e) => {

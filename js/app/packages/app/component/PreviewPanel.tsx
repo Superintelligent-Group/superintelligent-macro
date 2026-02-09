@@ -131,6 +131,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           }}
         />
         <div
+          data-tour-target="share-toolbar"
           class="flex h-full items-center"
           ref={(ref) => {
             scopedLayoutRefs.toolbarRight = ref;

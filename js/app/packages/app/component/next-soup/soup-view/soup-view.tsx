@@ -35,6 +35,8 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { useIsAuthenticated } from '@core/auth';
+import { useSettingsState } from '@core/constant/SettingsState';
 import {
   type EntityData,
   isTaskEntity,
@@ -85,6 +87,14 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import {
+  Tour,
+  useTourStorage,
+  activateTour,
+  deactivateTour,
+  isAnyTourActive,
+} from '@core/component/Tour';
+import { soupTourConfig } from '@app/component/next-soup/soup-tour-config';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -136,6 +146,55 @@ const cacheMap = new Map<
 export const SoupView = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const isAuthenticated = useIsAuthenticated();
+  const { isTourCompleted, markTourCompleted } = useTourStorage();
+  const { settingsOpen } = useSettingsState();
+
+  // Tour state
+  const [tourActive, setTourActive] = createSignal(false);
+  const [soupContainerRef, setSoupContainerRef] =
+    createSignal<HTMLDivElement>();
+
+  const shouldShowTour = createMemo(() => {
+    return (
+      isAuthenticated() &&
+      !isTourCompleted('soup-onboarding') &&
+      !settingsOpen() &&
+      !tourActive() &&
+      !isAnyTourActive()
+    );
+  });
+
+  // Auto-trigger tour for new users
+  createEffect(() => {
+    if (shouldShowTour()) {
+      const timeoutId = setTimeout(() => {
+        if (activateTour('soup-onboarding')) {
+          setTourActive(true);
+        }
+      }, 500);
+      onCleanup(() => clearTimeout(timeoutId));
+    }
+  });
+
+  const handleTourComplete = () => {
+    markTourCompleted('soup-onboarding');
+    deactivateTour('soup-onboarding');
+    setTourActive(false);
+  };
+
+  const handleTourSkip = () => {
+    markTourCompleted('soup-onboarding');
+    deactivateTour('soup-onboarding');
+    setTourActive(false);
+  };
+
+  // Cleanup: deactivate tour if this instance unmounts while tour is active
+  onCleanup(() => {
+    if (tourActive()) {
+      deactivateTour('soup-onboarding');
+    }
+  });
 
   useSoupNotificationInvalidators();
 
@@ -148,7 +207,10 @@ export const SoupView = () => {
       }}
     >
       <SoupViewContextProvider soup={soup}>
-        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
+        <div
+          ref={setSoupContainerRef}
+          class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full"
+        >
           <SoupToolbar />
           <SoupViewFileDropzone>
             <SoupViewList />
@@ -156,6 +218,14 @@ export const SoupView = () => {
         </div>
         <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
           <SoupChatInput />
+        </Show>
+        <Show when={tourActive()}>
+          <Tour
+            config={soupTourConfig}
+            onComplete={handleTourComplete}
+            onSkip={handleTourSkip}
+            scopeContainer={soupContainerRef()}
+          />
         </Show>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>

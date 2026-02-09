@@ -69,6 +69,7 @@ export const SoupToolbar = () => {
 
           <div
             ref={setScrollContainerRef}
+            data-tour-target="filter-menu"
             class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
           >
             <SoupFilters />
