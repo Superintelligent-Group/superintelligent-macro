@@ -60,12 +60,12 @@ export const AnimatedNoiseIcon = (props: { triggerAnimation?: boolean }) => {
         }
       `}</style>
       <g class="bars">
-        <rect class="bar-1" x="2" y="6" width="2" height="4"/>
-        <rect class="bar-2" x="6" y="3.25" width="2" height="9.5"/>
-        <rect class="bar-3" x="10" y="0" width="2" height="16"/>
-        <rect class="bar-4" x="14" y="5" width="2" height="6"/>
-        <rect class="bar-5" x="18" y="1.5" width="2" height="13"/>
-        <rect class="bar-6" x="22" y="7" width="2" height="2"/>
+        <rect class="bar-1" x="2" y="6" width="2" height="4" />
+        <rect class="bar-2" x="6" y="3.25" width="2" height="9.5" />
+        <rect class="bar-3" x="10" y="0" width="2" height="16" />
+        <rect class="bar-4" x="14" y="5" width="2" height="6" />
+        <rect class="bar-5" x="18" y="1.5" width="2" height="13" />
+        <rect class="bar-6" x="22" y="7" width="2" height="2" />
       </g>
     </svg>
   );
