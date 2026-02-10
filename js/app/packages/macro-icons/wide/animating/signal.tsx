@@ -57,12 +57,12 @@ export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
         }
         @keyframes disappear-reappear {
           0% { opacity: 1; }
-          1%, 99% { opacity: 0; }
+          10%, 90% { opacity: 0; }
           100% { opacity: 1; }
         }
         @keyframes appear-disappear {
           0% { opacity: 0; }
-          1%, 99% { opacity: 1; }
+          10%, 90% { opacity: 1; }
           100% { opacity: 0; }
         }
         .animated-signal-icon {
@@ -88,7 +88,7 @@ export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
             animation: disappear-reappear 0.4s ease forwards 0.2s;
           }
           .long-wave {
-            animation: cycle-left 0.4s ease forwards 0.3s, appear-disappear 0.4s ease forwards 0.2s;
+            animation: cycle-left 0.4s ease forwards 0.3s;
           }
           #${maskId} {
             .left-box {
