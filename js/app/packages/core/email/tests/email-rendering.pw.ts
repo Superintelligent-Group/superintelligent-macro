@@ -76,9 +76,9 @@ function generateThemeCSS(themeName: string): string {
   return `:root {\n    ${vars}\n  }`;
 }
 
-// =============================================================================
+// ============================================================================
 // HTML Generation
-// =============================================================================
+// ============================================================================
 
 function createTestHTML(fixture: EmailFixture, themeName: string): string {
   const themeCSS = generateThemeCSS(themeName);
