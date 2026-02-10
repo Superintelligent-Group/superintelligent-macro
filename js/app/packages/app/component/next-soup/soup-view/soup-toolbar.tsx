@@ -5,7 +5,7 @@ import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
 import { AnimatedNoiseIcon } from '@macro-icons/wide/animating/noise';
-import { AnimatedWaveformIcon } from '@macro-icons/wide/animating/waveform';
+import { AnimatedSignalIcon } from '@macro-icons/wide/animating/signal';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -253,7 +253,7 @@ const SoupFilters = () => {
       {/* Inbox toggle */}
       <FilterButton
         icon={SignalIcon}
-        animatedIcon={AnimatedWaveformIcon}
+        animatedIcon={AnimatedSignalIcon}
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}

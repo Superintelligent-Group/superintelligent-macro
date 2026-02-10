@@ -1,6 +1,6 @@
 import { createUniqueId } from 'solid-js';
 
-export const AnimatedWaveformIcon = (props: { triggerAnimation?: boolean }) => {
+export const AnimatedSignalIcon = (props: { triggerAnimation?: boolean }) => {
   const maskId = createUniqueId();
   return (
     <svg
@@ -10,24 +10,41 @@ export const AnimatedWaveformIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
-      class={`animated-waveform-icon ${props.triggerAnimation ? 'animating' : ''}`}
+      class={`animated-signal-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
-      <title>Animated waveform icon</title>
+      <title>Animated signal icon</title>
       <style>{`
         @keyframes move-left {
           0% {
             transform: translate(0, 0);
           }
-          100% {
+          50% {
             transform: translate(-5px, 0);
+          }
+          100% {
+            transform: translate(0, 0);
           }
         }
         @keyframes move-right {
           0% {
             transform: translate(0, 0);
           }
-          100% {
+          50% {
             transform: translate(5px, 0);
+          }
+          100% {
+            transform: translate(0, 0);
+          }
+        }
+        @keyframes rotate-out-and-back {
+          0% {
+            transform: rotate(0);
+          }
+          20%, 80% {
+            transform: rotate(78deg);
+          }
+          100% {
+            transform: rotate(0);
           }
         }
         @keyframes cycle-left {
@@ -35,14 +52,20 @@ export const AnimatedWaveformIcon = (props: { triggerAnimation?: boolean }) => {
             transform: translate(0, 0);
           }
           100% {
-            transform: translate(-9.75px, 0);
+            transform: translate(-9.5px, 0);
           }
         }
-        @keyframes disappear {
+        @keyframes disappear-reappear {
           0% { opacity: 1; }
+          1%, 99% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes appear-disappear {
+          0% { opacity: 0; }
+          1%, 99% { opacity: 1; }
           100% { opacity: 0; }
         }
-        .animated-waveform-icon {
+        .animated-signal-icon {
           .left-arm, .right-arm {
             transition: transform 0.2s ease;
           }
@@ -57,25 +80,22 @@ export const AnimatedWaveformIcon = (props: { triggerAnimation?: boolean }) => {
             translate: 2px 0;
           }
         }
-        .animated-waveform-icon.animating {
-          .left-arm {
-            transform: rotate(78deg);
+        .animated-signal-icon.animating {
+          .left-arm, .right-arm {
+            animation: rotate-out-and-back 0.8s ease forwards, disappear-reappear 0.4s ease forwards 0.2s;
           }
-          .right-arm {
-            transform: rotate(78deg);
-          }
-          .short-wave, .left-arm, .right-arm {
-            animation: disappear 0.1s ease forwards 0.2s;
+          .short-wave {
+            animation: disappear-reappear 0.4s ease forwards 0.2s;
           }
           .long-wave {
-            animation: cycle-left 0.4s linear infinite 0.3s;
+            animation: cycle-left 0.4s ease forwards 0.3s, appear-disappear 0.4s ease forwards 0.2s;
           }
           #${maskId} {
             .left-box {
-              animation: move-left 0.4s ease forwards;
+              animation: move-left 0.8s ease forwards;
             }
             .right-box {
-              animation: move-right 0.4s ease forwards;
+              animation: move-right 0.8s ease forwards;
             }
           }
         }
