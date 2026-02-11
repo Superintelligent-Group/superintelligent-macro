@@ -7,6 +7,7 @@ import {
   buildDssFiltersRequest,
   getFolderFileTypes,
 } from '@app/component/next-soup/filters/filters';
+import deepEqual from 'fast-deep-equal';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEmailLinksStatus } from '@core/email-link';
@@ -172,6 +173,9 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
+  // Structural equality prevents focus-group filter toggles (signal/noise)
+  // from cascading into query re-evaluation. These filters are client-side
+  // only and don't change the server query params.
   const queryFilters = createMemo(
     () => {
       const base = buildDssFiltersRequest(soup.filters.active(), {
@@ -196,7 +200,7 @@ export const SoupViewContextProvider: FlowComponent<
     },
     undefined,
     {
-      equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      equals: deepEqual,
     }
   );
 
