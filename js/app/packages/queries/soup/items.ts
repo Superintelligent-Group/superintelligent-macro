@@ -66,6 +66,7 @@ export const useSoupItemsQuery = (
               ...body,
               ...params,
             },
+            signal: ctx.signal,
           })
       );
     },

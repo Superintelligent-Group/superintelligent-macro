@@ -172,27 +172,33 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  const queryFilters = createMemo(() => {
-    const base = buildDssFiltersRequest(soup.filters.active(), {
-      extra: props.queryFilters,
-      isSearchActive: !isSearchDisabled(),
-      emailActive: emailActive(),
-    });
+  const queryFilters = createMemo(
+    () => {
+      const base = buildDssFiltersRequest(soup.filters.active(), {
+        extra: props.queryFilters,
+        isSearchActive: !isSearchDisabled(),
+        emailActive: emailActive(),
+      });
 
-    if (soup.filters.isActive('file')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = getFolderFileTypes('soup');
+      if (soup.filters.isActive('file')) {
+        if (base.document_filters?.file_types) {
+          base.document_filters.file_types = getFolderFileTypes('soup');
+        }
       }
-    }
 
-    if (soup.filters.isActive('task')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = ['md'];
+      if (soup.filters.isActive('task')) {
+        if (base.document_filters?.file_types) {
+          base.document_filters.file_types = ['md'];
+        }
       }
-    }
 
-    return base;
-  });
+      return base;
+    },
+    undefined,
+    {
+      equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    }
+  );
 
   const searchFilters = createMemo(() => {
     const {

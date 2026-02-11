@@ -245,6 +245,7 @@ export const storageServiceClient = {
   async getSoupItems(args: {
     params: { cursor?: string | null };
     body: PostSoupRequest;
+    signal?: AbortSignal;
   }) {
     // Could use URLSearchParams?
     const searchParams = args.params.cursor
@@ -254,6 +255,7 @@ export const storageServiceClient = {
     return await dssFetch<SoupPage>(`/items/soup${searchParams}`, {
       method: 'POST',
       body: JSON.stringify(args.body),
+      signal: args.signal,
     });
   },
 
