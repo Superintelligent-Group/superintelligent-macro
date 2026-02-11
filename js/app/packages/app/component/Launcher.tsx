@@ -2,6 +2,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { useTourAnchor } from '@core/component/Tour';
 import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
@@ -389,6 +390,7 @@ type LauncherInnerProps = {
 
 const LauncherInner = (props: LauncherInnerProps) => {
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
+  const attachLauncherAnchor = useTourAnchor('launcher');
 
   let ref!: HTMLDivElement;
 
@@ -544,12 +546,14 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
-        data-tour-target="launcher"
         class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
         classList={{
           [gridColsClass()]: true,
         }}
-        ref={ref}
+        ref={(el) => {
+          ref = el;
+          attachLauncherAnchor(el);
+        }}
       >
         <div class="absolute pointer-events-none size-full inset-0"></div>
 

@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import type { TourStep } from './types';
+import { anchorVersion, resolveTourAnchor } from './anchors';
 
 interface TourOverlayProps {
   step: TourStep;
@@ -11,6 +12,7 @@ export function TourOverlay(props: TourOverlayProps) {
 
   createEffect(() => {
     if (props.step.type === 'anchored' && props.step.target) {
+      anchorVersion();
       let observer: ResizeObserver | undefined;
       let mutationObserver: MutationObserver | undefined;
       let observedElement: Element | null = null;
@@ -34,19 +36,22 @@ export function TourOverlay(props: TourOverlayProps) {
         }
       };
 
-      const updateTargetRect = () => {
-        const selector = `[data-tour-target="${props.step.target}"]`;
-        let element: Element | null = null;
+      const resolveElement = () => {
+        let element = resolveTourAnchor(props.step.target!, props.scopeContainer);
 
-        // Try scoped query first, then fall back to document for portal targets
-        if (props.scopeContainer) {
-          element = props.scopeContainer.querySelector(selector);
-          if (!element) {
-            element = document.querySelector(selector);
+        if (!element) {
+          const selector = `[data-tour-target="${props.step.target}"]`;
+          if (props.scopeContainer) {
+            element = props.scopeContainer.querySelector(selector) ?? undefined;
           }
-        } else {
-          element = document.querySelector(selector);
+          element = element ?? document.querySelector(selector) ?? undefined;
         }
+
+        return element ?? null;
+      };
+
+      const updateTargetRect = () => {
+        const element = resolveElement();
 
         if (element) {
           observeElement(element);

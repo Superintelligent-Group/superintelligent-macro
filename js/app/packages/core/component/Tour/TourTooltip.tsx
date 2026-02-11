@@ -18,6 +18,7 @@ import {
 } from '@floating-ui/dom';
 import { Button } from '@ui/components/Button';
 import type { TourStep } from './types';
+import { anchorVersion, resolveTourAnchor } from './anchors';
 
 interface TourTooltipProps {
   step: TourStep;
@@ -62,6 +63,9 @@ export function TourTooltip(props: TourTooltipProps) {
     if (action.type === 'await-element') {
       return 'Open the next panel to continue';
     }
+    if (action.type === 'await-anchor') {
+      return 'Open the next panel to continue';
+    }
     if (action.type === 'await-signal') {
       return 'Complete the action to continue';
     }
@@ -78,21 +82,22 @@ export function TourTooltip(props: TourTooltipProps) {
     const arrowElement = arrowRef();
     if (!tooltip || !props.step.target || !arrowElement) return;
 
+    anchorVersion();
     let cleanup: (() => void) | undefined;
     let pollInterval: number | undefined;
 
     const setupPositioning = () => {
-      const selector = `[data-tour-target="${props.step.target}"]`;
-      let targetElement: Element | null = null;
+      let targetElement = resolveTourAnchor(
+        props.step.target!,
+        props.scopeContainer
+      );
 
-      // Try scoped query first, then fall back to document for portal targets
-      if (props.scopeContainer) {
-        targetElement = props.scopeContainer.querySelector(selector);
-        if (!targetElement) {
-          targetElement = document.querySelector(selector);
+      if (!targetElement) {
+        const selector = `[data-tour-target="${props.step.target}"]`;
+        if (props.scopeContainer) {
+          targetElement = props.scopeContainer.querySelector(selector) ?? undefined;
         }
-      } else {
-        targetElement = document.querySelector(selector);
+        targetElement = targetElement ?? document.querySelector(selector) ?? undefined;
       }
 
       if (!targetElement) {

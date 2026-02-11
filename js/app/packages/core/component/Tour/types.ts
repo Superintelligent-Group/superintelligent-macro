@@ -9,7 +9,7 @@ export interface TourConfig {
 export interface TourStep {
   id: string;
   type: 'anchored' | 'centered';
-  target?: string; // data-tour-target value (for anchored)
+  target?: string; // anchor id (for anchored)
   title: string;
   description: string;
   hint?: string;
@@ -17,11 +17,20 @@ export interface TourStep {
   position?: Placement; // For anchored tooltips (from @floating-ui/dom)
 }
 
+type TourActionBase = {
+  /**
+   * Optional hook to trigger the required state for this step.
+   * Used by "step-through" controls (e.g., right arrow) to advance safely.
+   */
+  perform?: () => void;
+};
+
 export type TourAction =
-  | { type: 'click-next' }
-  | { type: 'await-keypress'; key: ValidHotkey }
-  | { type: 'await-element'; selector: string }
-  | { type: 'await-signal'; check: () => boolean };
+  | (TourActionBase & { type: 'click-next' })
+  | (TourActionBase & { type: 'await-keypress'; key: ValidHotkey })
+  | (TourActionBase & { type: 'await-anchor'; targetId: string })
+  | (TourActionBase & { type: 'await-element'; selector: string })
+  | (TourActionBase & { type: 'await-signal'; check: () => boolean });
 
 export interface TourProps {
   config: TourConfig;

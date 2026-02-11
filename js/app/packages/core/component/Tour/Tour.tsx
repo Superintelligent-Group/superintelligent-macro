@@ -1,4 +1,4 @@
-import { Show, For, createEffect, onCleanup, createSignal } from 'solid-js';
+import { Show, For, createEffect, onCleanup, createSignal, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Button } from '@ui/components/Button';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -14,6 +14,7 @@ import { TourTooltip } from './TourTooltip';
 import { TourCenteredCard } from './TourCenteredCard';
 import { useTourState } from './useTourState';
 import type { TourProps } from './types';
+import { anchorVersion, resolveTourAnchor } from './anchors';
 
 export function Tour(props: TourProps) {
   const state = useTourState(props.config, props.onComplete, props.scopeContainer);
@@ -75,6 +76,14 @@ export function Tour(props: TourProps) {
       handlerPriority: HOTKEY_PRIORITY_HIGH,
       runWithInputFocused: true,
       keyDownHandler: () => {
+        if (state.actionWaiting()) {
+          const action = state.currentStep().action;
+          if (action.perform) {
+            action.perform();
+            return true;
+          }
+          return false;
+        }
         state.goToNextStep();
         return true;
       },
@@ -88,6 +97,20 @@ export function Tour(props: TourProps) {
   const handleNext = () => {
     state.advanceToNextStep();
   };
+
+  const hasAnchoredTarget = createMemo(() => {
+    const step = state.currentStep();
+    if (step.type !== 'anchored' || !step.target) return false;
+
+    anchorVersion();
+    if (resolveTourAnchor(step.target, props.scopeContainer)) return true;
+
+    const selector = `[data-tour-target="${step.target}"]`;
+    if (props.scopeContainer && props.scopeContainer.querySelector(selector)) {
+      return true;
+    }
+    return !!document.querySelector(selector);
+  });
 
   return (
     <Portal>
@@ -144,7 +167,7 @@ export function Tour(props: TourProps) {
 
       <Show when={!showExitConfirm()}>
         <Show
-          when={state.currentStep().type === 'anchored'}
+          when={state.currentStep().type === 'anchored' && hasAnchoredTarget()}
           fallback={
             <TourCenteredCard
               step={state.currentStep()}

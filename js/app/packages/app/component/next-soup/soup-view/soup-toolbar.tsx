@@ -35,6 +35,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import { useTourAnchor } from '@core/component/Tour';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -56,6 +57,7 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 
 export const SoupToolbar = () => {
   const { soup } = useSoupView();
+  const attachFilterMenuAnchor = useTourAnchor('filter-menu');
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
@@ -68,8 +70,10 @@ export const SoupToolbar = () => {
           <ScrollIndicators scrollRef={scrollContainerRef()} />
 
           <div
-            ref={setScrollContainerRef}
-            data-tour-target="filter-menu"
+            ref={(el) => {
+              setScrollContainerRef(el);
+              if (el) attachFilterMenuAnchor(el);
+            }}
             class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
           >
             <SoupFilters />
@@ -253,8 +257,6 @@ const SoupFilters = () => {
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
-        dataTourTarget="inbox-filter"
-        dataTourActive={soup.filters.isActive('signal')}
         onClick={toggleSignalFilter}
       />
       {/* Other toggle */}
@@ -443,6 +445,7 @@ const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
 const SearchBar = () => {
   const { searchText, setSearchText } = useSoupView();
   const panel = useSplitPanelOrThrow();
+  const attachSearchAnchor = useTourAnchor('soup-search');
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
 
@@ -462,7 +465,12 @@ const SearchBar = () => {
   onCleanup(searchHotkey.dispose);
 
   return (
-    <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
+    <div
+      class="flex items-center shrink-0 touch:mobile-width:-order-2"
+      ref={(el) => {
+        if (el) attachSearchAnchor(el);
+      }}
+    >
       <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
         <div
           class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
@@ -552,8 +560,6 @@ export interface FilterButtonProps {
   isActive: (() => boolean) | boolean;
   onClick: () => void;
   paddingClass?: string;
-  dataTourTarget?: string;
-  dataTourActive?: boolean;
 }
 
 export const FilterButton: Component<FilterButtonProps> = (props) => (
@@ -563,8 +569,6 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
     >
       <button
         type="button"
-        data-tour-target={props.dataTourTarget}
-        data-tour-active={props.dataTourActive ? '' : undefined}
         class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
         classList={{
           'bg-accent text-panel':

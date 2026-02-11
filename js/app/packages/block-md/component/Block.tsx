@@ -5,22 +5,43 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import { Tour, useAutoTour } from '@core/component/Tour';
+import { useIsAuthenticated } from '@core/auth';
+import { isMobile } from '@core/mobile/isMobile';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { InstructionsTopBar, TopBar } from './TopBar';
+import { documentTourConfig } from './document-tour-config';
 
 const { track, TrackingEvents } = withAnalytics();
 
 export default function BlockMarkdown() {
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [docContainerRef, setDocContainerRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
+  const isAuthenticated = useIsAuthenticated();
   const isInstructionsMd = () => {
     return blockId === instructionsMdId.data;
   };
+
+  const shouldShowTour = createMemo(
+    () => isAuthenticated() && !isMobile() && !isInstructionsMd()
+  );
+  const { tourActive, handleComplete, handleSkip } = useAutoTour(
+    'document-onboarding',
+    { enabled: shouldShowTour, delayMs: 500 }
+  );
 
   // Set initial data.
   onMount(() => {
@@ -39,6 +60,7 @@ export default function BlockMarkdown() {
       <div
         class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
         tabIndex={-1}
+        ref={setDocContainerRef}
       >
         <div class="relative">
           <Suspense>
@@ -76,6 +98,14 @@ export default function BlockMarkdown() {
           <CustomScrollbar scrollContainer={scrollRef} />
         </div>
       </div>
+      <Show when={tourActive()}>
+        <Tour
+          config={documentTourConfig}
+          onComplete={handleComplete}
+          onSkip={handleSkip}
+          scopeContainer={docContainerRef()}
+        />
+      </Show>
     </DocumentBlockContainer>
   );
 }

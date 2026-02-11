@@ -33,6 +33,9 @@ export function TourCenteredCard(props: TourCenteredCardProps) {
     if (action.type === 'await-element') {
       return 'Open the next panel to continue';
     }
+    if (action.type === 'await-anchor') {
+      return 'Open the next panel to continue';
+    }
     if (action.type === 'await-signal') {
       return 'Complete the action to continue';
     }

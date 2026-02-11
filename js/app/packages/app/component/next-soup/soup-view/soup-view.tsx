@@ -87,13 +87,7 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import {
-  Tour,
-  useTourStorage,
-  activateTour,
-  deactivateTour,
-  isAnyTourActive,
-} from '@core/component/Tour';
+import { Tour, useAutoTour, useTourAnchor } from '@core/component/Tour';
 import { soupTourConfig } from '@app/component/next-soup/soup-tour-config';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
@@ -147,54 +141,21 @@ export const SoupView = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const isAuthenticated = useIsAuthenticated();
-  const { isTourCompleted, markTourCompleted } = useTourStorage();
   const { settingsOpen } = useSettingsState();
 
-  // Tour state
-  const [tourActive, setTourActive] = createSignal(false);
   const [soupContainerRef, setSoupContainerRef] =
     createSignal<HTMLDivElement>();
 
-  const shouldShowTour = createMemo(() => {
-    return (
-      isAuthenticated() &&
-      !isTourCompleted('soup-onboarding') &&
-      !settingsOpen() &&
-      !tourActive() &&
-      !isAnyTourActive()
-    );
-  });
-
-  // Auto-trigger tour for new users
-  createEffect(() => {
-    if (shouldShowTour()) {
-      const timeoutId = setTimeout(() => {
-        if (activateTour('soup-onboarding')) {
-          setTourActive(true);
-        }
-      }, 500);
-      onCleanup(() => clearTimeout(timeoutId));
+  const shouldShowTour = createMemo(
+    () => isAuthenticated() && !isMobile() && !settingsOpen()
+  );
+  const { tourActive, handleComplete, handleSkip } = useAutoTour(
+    'soup-onboarding',
+    {
+      enabled: shouldShowTour,
+      delayMs: 500,
     }
-  });
-
-  const handleTourComplete = () => {
-    markTourCompleted('soup-onboarding');
-    deactivateTour('soup-onboarding');
-    setTourActive(false);
-  };
-
-  const handleTourSkip = () => {
-    markTourCompleted('soup-onboarding');
-    deactivateTour('soup-onboarding');
-    setTourActive(false);
-  };
-
-  // Cleanup: deactivate tour if this instance unmounts while tour is active
-  onCleanup(() => {
-    if (tourActive()) {
-      deactivateTour('soup-onboarding');
-    }
-  });
+  );
 
   useSoupNotificationInvalidators();
 
@@ -222,8 +183,8 @@ export const SoupView = () => {
         <Show when={tourActive()}>
           <Tour
             config={soupTourConfig}
-            onComplete={handleTourComplete}
-            onSkip={handleTourSkip}
+            onComplete={handleComplete}
+            onSkip={handleSkip}
             scopeContainer={soupContainerRef()}
           />
         </Show>
@@ -240,6 +201,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
   const { soup, source, rows: _rows, searchText } = useSoupView();
   const { getSplitCount } = useSplitLayout();
+  const attachEntityListAnchor = useTourAnchor('entity-list');
 
   const rows = createMemo(() => _rows());
 
@@ -607,8 +569,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       data-soup-view-id={panel.handle.id + (previewPanel ? '-preview' : '')}
     >
       <div
-        ref={setListRef}
-        data-tour-target="entity-list"
+        ref={(el) => {
+          setListRef(el);
+          attachEntityListAnchor(el);
+        }}
         class="@container/uList size-full unified-list-root flex flex-col"
         classList={{
           'border-r border-edge-muted': soup.previewEntity() !== undefined,

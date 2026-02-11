@@ -22,6 +22,7 @@ import { QuickAccess } from './QuickAccess';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
+import { useTourAnchor } from '@core/component/Tour';
 
 export function Dock() {
   const notificationSource = useGlobalNotificationSource();
@@ -31,6 +32,9 @@ export function Dock() {
   const toggleRightPanel = useToggleRightPanel();
   const { settingsOpen, toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
+  const attachCommandMenuAnchor = useTourAnchor('command-menu');
+  const attachNewSplitAnchor = useTourAnchor('new-split');
+  const attachSettingsAnchor = useTourAnchor('settings-button');
 
   return (
     <>
@@ -92,6 +96,9 @@ export function Dock() {
                 onClick={() => { setKonsoleOpen(true) }}
                 class="dock-button-hover"
                 data-hotkey-token={TOKENS.global.commandMenu}
+                ref={(el) => {
+                  if (el) attachCommandMenuAnchor(el);
+                }}
               >
                 <IconLogo
                   style={{
@@ -226,6 +233,9 @@ export function Dock() {
                   }
                 }}
                 class="p-1"
+                ref={(el) => {
+                  if (el) attachNewSplitAnchor(el);
+                }}
               >
                 <SplitIcon class="h-4"/>
               </Button>
@@ -237,6 +247,9 @@ export function Dock() {
                 class="p-1 size-6"
                 classList={{
                   "bg-accent/20 text-accent": settingsOpen(),
+                }}
+                ref={(el) => {
+                  if (el) attachSettingsAnchor(el);
                 }}
               >
                 <IconGear />

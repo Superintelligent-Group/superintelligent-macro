@@ -18,6 +18,9 @@ import { Shortcuts } from './Shortcuts';
 import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { Tour, useAutoTour, useTourStorage } from '@core/component/Tour';
+import { useIsAuthenticated } from '@core/auth';
+import { settingsTourConfig } from './settings-tour-config';
 
 const SCROLL_THRESHOLD = 10;
 
@@ -31,10 +34,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const [spotlight, setSpotlight] = createSignal(false);
+  const isAuthenticated = useIsAuthenticated();
+  const { isTourCompleted } = useTourStorage();
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
+  const [tourScopeRef, setTourScopeRef] = createSignal<HTMLDivElement>();
 
   let scrollRef!: HTMLDivElement;
   let scrollCleanup: (() => void) | undefined;
@@ -109,6 +115,26 @@ export function SettingsPanel(props: SettingsPanelProps) {
         // Focus the settings container to activate the hotkey scope
         settingsContainerRef?.focus();
       }, 10);
+    }
+  });
+
+  const shouldShowTour = createMemo(
+    () => settingsOpen() && isAuthenticated() && !isMobile()
+  );
+  const { tourActive, handleComplete, handleSkip, stopTour } = useAutoTour(
+    'settings-onboarding',
+    { enabled: shouldShowTour, delayMs: 250 }
+  );
+
+  createEffect(() => {
+    if (shouldShowTour() && !isTourCompleted('settings-onboarding')) {
+      setActiveTabId('Appearance');
+    }
+  });
+
+  createEffect(() => {
+    if (!settingsOpen() && tourActive()) {
+      stopTour();
     }
   });
 
@@ -214,7 +240,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
         invisible: props.hide,
       }}
       tabIndex={0}
-      ref={settingsContainerRef}
+      ref={(el) => {
+        settingsContainerRef = el;
+        setTourScopeRef(el);
+      }}
     >
       <SplitlikeContainer
         setSpotlight={setSpotlight}
@@ -357,6 +386,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </Tabs>
           </div>
         </SplitlikeContainer>
-      </div>
+        <Show when={tourActive() && settingsOpen()}>
+          <Tour
+            config={settingsTourConfig}
+            onComplete={handleComplete}
+            onSkip={handleSkip}
+            scopeContainer={tourScopeRef()}
+          />
+        </Show>
+    </div>
   );
 }

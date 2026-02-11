@@ -34,6 +34,7 @@ import TableActionMenu, {
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
+import { useTourAnchor } from '@core/component/Tour';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -240,6 +241,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }, undefined);
 
   let editorContainerRef!: HTMLDivElement;
+  const attachDocEditorAnchor = useTourAnchor('doc-editor');
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
   const [isGenerating, setIsGenerating] = isGeneratingSignal;
@@ -886,7 +888,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       </Show>
       <div
         class="relative"
-        ref={editorContainerRef}
+        ref={(el) => {
+          editorContainerRef = el;
+          attachDocEditorAnchor(el);
+        }}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
             if (!e) return;

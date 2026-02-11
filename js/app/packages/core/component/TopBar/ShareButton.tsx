@@ -12,6 +12,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { useTourAnchor } from '@core/component/Tour';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
@@ -662,6 +663,7 @@ interface ShareButtonProps {
 
 export function ShareButton(props: ShareButtonProps) {
   const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
+  const attachShareAnchor = useTourAnchor('share-toolbar');
   const isBlockContext = isInBlock();
   const [fallbackPermissionsResource] = createResource(
     () => {
@@ -787,8 +789,12 @@ export function ShareButton(props: ShareButtonProps) {
           }
         >
           <button
-            data-tour-target={props.itemType === 'document' ? 'share-toolbar' : undefined}
             class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
+            ref={(el) => {
+              if (props.itemType === 'document' && el) {
+                attachShareAnchor(el);
+              }
+            }}
             onClick={() => {
               if (!isAuthenticated()) {
                 openLoginModal();
