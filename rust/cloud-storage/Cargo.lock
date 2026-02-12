@@ -8958,7 +8958,6 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "dashmap",
  "futures",
  "model-entity",
  "redis",
@@ -8970,7 +8969,6 @@ dependencies = [
  "tokio-stream",
  "tokio-test",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -9411,6 +9409,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

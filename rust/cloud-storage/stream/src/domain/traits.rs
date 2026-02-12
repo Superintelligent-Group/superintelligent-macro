@@ -4,10 +4,8 @@ use super::{StreamId, StreamItem};
 use async_trait::async_trait;
 use futures::stream::Stream;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::mpsc::Sender;
 
 /// Default stream should not last longer than 5 minutes
 pub const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(300);
@@ -42,19 +40,10 @@ pub trait StreamRepo: Send + Sync + 'static {
     async fn notify(&self) -> Receiver<StreamId>;
 }
 
+/// Subscribe to all streams on an entity, returning a merged item stream.
 #[async_trait]
-pub trait StreamManager<T>: Send + Sync + 'static
-where
-    T: Send + Sync + 'static,
-    T: TryFrom<StreamItem>,
-{
-    /// subscribe a sender (intended to be a websocket) to
-    /// all streams on an entity
-    async fn subscribe(
-        self: Arc<Self>,
-        entity_id: String,
-        sender_id: String,
-        sender: Sender<T>,
-    ) -> Result<()>;
-    async fn unsubscribe(self: Arc<Self>, entity_id: &str, sender_id: &str) -> Result<()>;
+pub trait StreamManager: Send + Sync + 'static {
+    /// Subscribe to all current and future streams for an entity.
+    /// Returns a merged stream of items from all streams.
+    async fn subscribe(&self, entity_id: String) -> Result<ItemStream>;
 }
