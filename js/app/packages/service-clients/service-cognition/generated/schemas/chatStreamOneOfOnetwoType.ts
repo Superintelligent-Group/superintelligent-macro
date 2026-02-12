@@ -10,5 +10,5 @@ export type ChatStreamOneOfOnetwoType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfOnetwoType = {
-  model_selection_changed: 'model_selection_changed',
+  chat_renamed: 'chat_renamed',
 } as const;

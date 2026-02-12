@@ -5,10 +5,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ChatStreamOneOfTwofiveType =
-  (typeof ChatStreamOneOfTwofiveType)[keyof typeof ChatStreamOneOfTwofiveType];
+export type ChatStreamOneOfThreeoneType =
+  (typeof ChatStreamOneOfThreeoneType)[keyof typeof ChatStreamOneOfThreeoneType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ChatStreamOneOfTwofiveType = {
-  pong: 'pong',
+export const ChatStreamOneOfThreeoneType = {
+  stream_end: 'stream_end',
 } as const;

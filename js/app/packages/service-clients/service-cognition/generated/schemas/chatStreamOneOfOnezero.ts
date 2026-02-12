@@ -7,11 +7,11 @@
 import type { ChatStreamOneOfOnezeroType } from './chatStreamOneOfOnezeroType';
 
 /**
- * Indicates that a chat has been renamed
+ * Indicates that a message has been finished
  */
 export type ChatStreamOneOfOnezero = {
   chat_id: string;
-  name: string;
-  stream_id: string;
+  message_id: string;
   type: ChatStreamOneOfOnezeroType;
+  user_message_id: string;
 };

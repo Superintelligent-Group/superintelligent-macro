@@ -10,5 +10,5 @@ export type ChatStreamOneOfTwothreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfTwothreeType = {
-  pong: 'pong',
+  extraction_status_update: 'extraction_status_update',
 } as const;

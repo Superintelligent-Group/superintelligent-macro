@@ -4,17 +4,14 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { ChatStreamOneOfOnetwoNewModel } from './chatStreamOneOfOnetwoNewModel';
 import type { ChatStreamOneOfOnetwoType } from './chatStreamOneOfOnetwoType';
-import type { Model } from './model';
 
 /**
- * Notifies the client that the available models have changed
+ * Indicates that a chat has been renamed
  */
 export type ChatStreamOneOfOnetwo = {
-  available_models: Model[];
   chat_id: string;
-  new_model?: ChatStreamOneOfOnetwoNewModel;
+  name: string;
+  stream_id: string;
   type: ChatStreamOneOfOnetwoType;
 };
