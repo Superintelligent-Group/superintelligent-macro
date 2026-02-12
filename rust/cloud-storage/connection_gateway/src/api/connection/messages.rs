@@ -7,8 +7,8 @@ use crate::{
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{StreamExt, stream::SplitStream};
-use model_entity::TrackingData;
-use std::error::Error;
+use model_entity::{TrackAction, TrackingData};
+use std::{error::Error, f64};
 use tokio::sync::mpsc::Sender;
 use tungstenite::error::{Error as TungsteniteError, ProtocolError};
 
@@ -20,7 +20,9 @@ pub async fn handle_websocket_stream(
     while let Some(msg) = stream.next().await {
         match msg {
             Ok(msg) => {
-                handle_message(connection_context, msg, &sender).await?;
+                if let Err(e) = handle_message(connection_context, msg, &sender).await {
+                    tracing::error!(error=?e, "error handling message");
+                }
             }
             Err(err) => {
                 match err
@@ -84,13 +86,16 @@ pub async fn handle_message(
 
     match parsed_message {
         ToWebsocketMessage::TrackEntityMessage(message) => {
+            let is_open = matches!(message.action, TrackAction::Open);
+            let entity_id = message.extra.entity_id.to_string();
+
             tracker::track_entity(
                 connection_context,
                 TrackingData {
                     entity: message
                         .extra
                         .entity_type
-                        .with_entity_str(&message.extra.entity_id)
+                        .with_entity_str(&entity_id)
                         .with_connection_str(connection_context.connection_id)
                         .with_user_str(&connection_context.user_context.user_id),
                     action: message.action,
@@ -98,11 +103,15 @@ pub async fn handle_message(
             )
             .await
             .ok();
-        }
-        ToWebsocketMessage::SubscribeEntity(message) => {
-            stream::subscribe_entity(connection_context, message, sender)
-                .await
-                .ok();
+
+            if is_open {
+                let stream_manager = connection_context.api_context.stream_manager.clone();
+                let sender = sender.clone();
+                stream::subscribe_entity(stream_manager, entity_id, sender)
+                    .await
+                    .inspect_err(|e| tracing::error!(error=?e, "stream subscription failed"))
+                    .ok();
+            }
         }
     };
 

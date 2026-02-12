@@ -352,13 +352,6 @@
           }
         }
       },
-      "SubscribeEntityMessage": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Entity"
-          }
-        ]
-      },
       "ToWebsocketMessage": {
         "oneOf": [
           {
@@ -373,23 +366,6 @@
                   "type": {
                     "type": "string",
                     "enum": ["track_entity"]
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubscribeEntityMessage"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["subscribe_to_entity"]
                   }
                 }
               }
