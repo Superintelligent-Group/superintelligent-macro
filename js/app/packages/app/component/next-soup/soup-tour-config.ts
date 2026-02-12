@@ -1,4 +1,21 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { performHotkey, type TourConfig } from '@core/component/Tour';
+
+const returnFocusToActiveSplit = () => {
+  const manager = globalSplitManager();
+  if (!manager) return;
+  manager.returnFocus();
+  const activeSplitId = manager.activeSplitId();
+  if (!activeSplitId) return;
+  const splitContainer = document.querySelector<HTMLElement>(
+    `[data-split-id="${activeSplitId}"]`
+  );
+  splitContainer?.focus();
+};
+
+const getSplitCount = () => globalSplitManager()?.splits().length ?? 0;
+let splitCountAtStart = 0;
+let activeSplitIdAtStart: string | undefined;
 
 export const soupTourConfig: TourConfig = {
   id: 'soup-onboarding',
@@ -10,7 +27,8 @@ export const soupTourConfig: TourConfig = {
       title: 'Focus Your Inbox',
       description: 'Press `I` to toggle Inbox and focus on what needs attention.',
       hint: 'Press I to toggle Inbox',
-      action: { type: 'await-keypress', key: 'i', perform: () => performHotkey('i') },
+      onStepStart: returnFocusToActiveSplit,
+      action: { type: 'await-keypress', key: 'i' },
       position: 'bottom',
     },
     {
@@ -21,11 +39,8 @@ export const soupTourConfig: TourConfig = {
       description:
         'Docs, tasks, channels, and more show up here. Press `Space` to preview the selected item.',
       hint: 'Press Space to preview',
-      action: {
-        type: 'await-keypress',
-        key: 'space',
-        perform: () => performHotkey('space'),
-      },
+      onStepStart: returnFocusToActiveSplit,
+      action: { type: 'await-keypress', key: 'space' },
       position: 'bottom',
     },
     {
@@ -35,7 +50,22 @@ export const soupTourConfig: TourConfig = {
       title: 'Create A New Split',
       description: 'Press `|` to create a new split and work side-by-side.',
       hint: 'Press | to create a split',
-      action: { type: 'click-next' },
+      onStepStart: () => {
+        returnFocusToActiveSplit();
+        splitCountAtStart = getSplitCount();
+        activeSplitIdAtStart = globalSplitManager()?.activeSplitId();
+      },
+      action: {
+        type: 'await-signal',
+        check: () => {
+          const manager = globalSplitManager();
+          if (!manager) return false;
+          const splitCountChanged = getSplitCount() > splitCountAtStart;
+          const activeSplitChanged =
+            manager.activeSplitId() !== activeSplitIdAtStart;
+          return splitCountChanged || activeSplitChanged;
+        },
+      },
       position: 'top',
     },
     {
@@ -44,11 +74,8 @@ export const soupTourConfig: TourConfig = {
       title: 'Close It',
       description: 'Press `Space` to close the preview and return to your list.',
       hint: 'Press Space to close the preview',
-      action: {
-        type: 'await-keypress',
-        key: 'space',
-        perform: () => performHotkey('space'),
-      },
+      onStepStart: returnFocusToActiveSplit,
+      action: { type: 'await-keypress', key: 'space' },
     },
     {
       id: 'press-c',
@@ -56,6 +83,7 @@ export const soupTourConfig: TourConfig = {
       title: 'Create Anything',
       description: 'Press `C` to open the create menu.',
       hint: 'Press C to open the create menu',
+      onStepStart: returnFocusToActiveSplit,
       action: {
         type: 'await-anchor',
         targetId: 'launcher',

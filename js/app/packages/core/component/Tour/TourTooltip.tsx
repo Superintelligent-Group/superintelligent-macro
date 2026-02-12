@@ -3,7 +3,6 @@ import {
   createEffect,
   onCleanup,
   createMemo,
-  For,
   Show,
   type JSX,
 } from 'solid-js';
@@ -18,7 +17,9 @@ import {
 } from '@floating-ui/dom';
 import { Button } from '@ui/components/Button';
 import type { TourStep } from './types';
-import { anchorVersion, resolveTourAnchor } from './anchors';
+import { anchorVersion, resolveTourTargetElement } from './anchors';
+import { getActionPrompt } from './actionUtils';
+import { TourStepIndicator } from './TourStepIndicator';
 
 interface TourTooltipProps {
   step: TourStep;
@@ -41,40 +42,7 @@ export function TourTooltip(props: TourTooltipProps) {
     ...tooltipSizeStyle(),
   }));
 
-  const actionPrompt = createMemo(() => {
-    if (props.step.hint) return props.step.hint;
-    const action = props.step.action;
-    if (action.type === 'await-keypress') {
-      const key = action.key;
-      const pretty = key
-        .split('+')
-        .map((part) => {
-          if (part === 'space') return 'Space';
-          if (part === 'enter') return 'Enter';
-          if (part === 'cmd') return '⌘';
-          if (part === 'ctrl') return 'Ctrl';
-          if (part === 'opt') return 'Opt';
-          if (part === 'shift') return 'Shift';
-          return part.length === 1 ? part.toUpperCase() : part;
-        })
-        .join(' + ');
-      return `Press ${pretty}`;
-    }
-    if (action.type === 'await-element') {
-      return 'Open the next panel to continue';
-    }
-    if (action.type === 'await-anchor') {
-      return 'Open the next panel to continue';
-    }
-    if (action.type === 'await-signal') {
-      return 'Complete the action to continue';
-    }
-    return 'Press Enter to continue';
-  });
-
-  const steps = createMemo(() =>
-    Array.from({ length: props.totalSteps }, (_, i) => i)
-  );
+  const actionPrompt = createMemo(() => getActionPrompt(props.step));
   const [arrowStyle, setArrowStyle] = createSignal<JSX.CSSProperties>({});
 
   createEffect(() => {
@@ -87,18 +55,10 @@ export function TourTooltip(props: TourTooltipProps) {
     let pollInterval: number | undefined;
 
     const setupPositioning = () => {
-      let targetElement = resolveTourAnchor(
+      const targetElement = resolveTourTargetElement(
         props.step.target!,
         props.scopeContainer
       );
-
-      if (!targetElement) {
-        const selector = `[data-tour-target="${props.step.target}"]`;
-        if (props.scopeContainer) {
-          targetElement = props.scopeContainer.querySelector(selector) ?? undefined;
-        }
-        targetElement = targetElement ?? document.querySelector(selector) ?? undefined;
-      }
 
       if (!targetElement) {
         setTooltipStyle((prev) => ({
@@ -109,11 +69,11 @@ export function TourTooltip(props: TourTooltipProps) {
       }
 
       cleanup = autoUpdate(
-        targetElement as HTMLElement,
+        targetElement,
         tooltip,
         async () => {
           const { x, y, placement, middlewareData } = await computePosition(
-            targetElement as HTMLElement,
+            targetElement,
             tooltip,
             {
               strategy: 'fixed',
@@ -125,7 +85,13 @@ export function TourTooltip(props: TourTooltipProps) {
                 arrow({ element: arrowElement as HTMLElement }),
                 size({
                   padding: 8,
-                  apply({ availableWidth, availableHeight }) {
+                  apply({
+                    availableWidth,
+                    availableHeight,
+                  }: {
+                    availableWidth: number;
+                    availableHeight: number;
+                  }) {
                     const maxWidth = Math.max(
                       200,
                       Math.min(320, availableWidth)
@@ -163,7 +129,6 @@ export function TourTooltip(props: TourTooltipProps) {
             visibility: 'visible',
           });
 
-          // Arrow positioning
           if (middlewareData.arrow && arrowElement) {
             const { x: arrowX, y: arrowY } = middlewareData.arrow;
             const staticSide = {
@@ -186,10 +151,8 @@ export function TourTooltip(props: TourTooltipProps) {
       return true;
     };
 
-    // Initial attempt
     const found = setupPositioning();
 
-    // If target not found, poll indefinitely for it to appear
     if (!found) {
       pollInterval = window.setInterval(() => {
         if (setupPositioning()) {
@@ -206,11 +169,11 @@ export function TourTooltip(props: TourTooltipProps) {
 
   return (
     <Show when={props.step.target}>
-        <div
-          ref={setTooltipRef}
-          class="fixed z-[10000] max-w-[320px] bg-panel border border-edge rounded-lg p-4 shadow-lg transition-[left,top,opacity] duration-200 ease-out"
-          style={mergedTooltipStyle()}
-        >
+      <div
+        ref={setTooltipRef}
+        class="fixed z-[10000] max-w-[320px] bg-panel border border-edge rounded-lg p-4 shadow-lg transition-[left,top,opacity] duration-200 ease-out"
+        style={mergedTooltipStyle()}
+      >
         <div
           ref={setArrowRef}
           class="absolute w-2 h-2 bg-panel border-edge rotate-45"
@@ -223,19 +186,11 @@ export function TourTooltip(props: TourTooltipProps) {
             <div class="mt-2 text-xs text-ink-muted">{props.step.hint}</div>
           </Show>
         </div>
-        <div class="mt-3 flex items-center gap-1.5">
-          <For each={steps()}>
-            {(index) => (
-              <div
-                class={`h-1.5 rounded-full transition-colors ${
-                  index === props.stepIndex
-                    ? 'bg-accent w-8'
-                    : 'bg-edge-muted w-2.5'
-                }`}
-              />
-            )}
-          </For>
-        </div>
+        <TourStepIndicator
+          stepIndex={props.stepIndex}
+          totalSteps={props.totalSteps}
+          class="mt-3 flex items-center gap-1.5"
+        />
         <div class="mt-4">
           <Show
             when={!props.isWaitingForAction}

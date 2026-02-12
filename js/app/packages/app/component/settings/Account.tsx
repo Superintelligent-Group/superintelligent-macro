@@ -29,12 +29,12 @@ import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
-import { useTourStorage } from '@core/component/Tour';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
 import {
     useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
+import { useTourStorage } from '@core/component/Tour';
 import { BetaTooltip } from '../BetaTooltip';
 import {
   type SupportedNotificationSettings,
@@ -75,6 +75,7 @@ export function Account() {
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
+  const { resetAllTours } = useTourStorage();
 
   const { connect: connectEmail, disconnect: disconnectEmail } = useEmailLinks();
 
@@ -88,7 +89,6 @@ export function Account() {
 
   const emailActive = useEmailLinksStatus();
   const [showTooltip, setShowTooltip] = createSignal<boolean>(false);
-  const { resetAllTours } = useTourStorage();
 
   const firstName = () => {
     // Display any updated first name immediately without having to refetch
@@ -276,15 +276,15 @@ export function Account() {
             </div>
           </div>
         </Show>
+        <TabContentRow
+          text="Product Tours"
+          subtext="Restart onboarding tours and tips"
+        >
+          <Button variant="secondary" onClick={() => resetAllTours()}>
+            Reset Tours
+          </Button>
+        </TabContentRow>
         <NotificationToggle />
-        <div class="flex items-center justify-between mb-[18px]">
-          <div class="text-sm">Tours</div>
-          <DeprecatedTextButton
-            theme="base"
-            text="Reset All"
-            onClick={resetAllTours}
-          />
-        </div>
         <div class="flex flex-row justify-between items-center border-t border-edge pt-4">
           <div
             class="mb-4 flex flex-row justify-start items-center gap-1"

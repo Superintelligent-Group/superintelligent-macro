@@ -1,14 +1,12 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
-import { IS_MAC } from '@core/constant/isMac';
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import {
-  EVENT_MODIFIER_NAME_MAP,
-  EVENT_TO_HOTKEY_NAME_MAP,
-  MODIFIER_LIST_MAC,
-  MODIFIER_LIST_NON_MAC,
+  shiftPunctuationMap,
+  shiftPunctuationReverseMap,
 } from '@core/hotkey/constants';
-import { getKeyString, normalizeEventKeyPress } from '@core/hotkey/utils';
+import type { ValidHotkey } from '@core/hotkey/types';
 import type { TourConfig } from './types';
-import { resolveTourAnchor } from './anchors';
+import { resolveTourTargetElement } from './anchors';
 import { useTourStorage } from './useTourStorage';
 
 export function useTourState(
@@ -33,6 +31,51 @@ export function useTourState(
 
   const currentStep = () => config.steps[currentStepIndex()];
   const isLastStep = () => currentStepIndex() === config.steps.length - 1;
+
+  createEffect(() => {
+    const step = currentStep();
+    step.onStepStart?.();
+    step.onEnter?.();
+    onCleanup(() => {
+      step.onStepExit?.();
+    });
+  });
+
+  const matchesActionKey = (pressed: ValidHotkey, target: ValidHotkey) => {
+    if (pressed === target) return true;
+    if (!target.includes('+')) {
+      const baseFromShifted =
+        shiftPunctuationMap[
+          target as keyof typeof shiftPunctuationMap
+        ];
+      if (baseFromShifted) {
+        if (
+          pressed === baseFromShifted ||
+          pressed === (`shift+${baseFromShifted}` as ValidHotkey)
+        ) {
+          return true;
+        }
+      }
+      const shiftedFromBase =
+        shiftPunctuationReverseMap[
+          target as keyof typeof shiftPunctuationReverseMap
+        ];
+      if (shiftedFromBase) {
+        const shifted = `shift+${target}` as ValidHotkey;
+        if (pressed === shifted) return true;
+      }
+    }
+    return false;
+  };
+
+  useSubscribeToKeypress((context) => {
+    if (context.eventType !== 'keydown' || context.event.repeat) return;
+    const step = currentStep();
+    if (step.action.type !== 'await-keypress') return;
+    if (matchesActionKey(context.pressedKeysString, step.action.key)) {
+      advanceToNextStep();
+    }
+  });
 
   createEffect(() => {
     setTourProgress(config.id, currentStepIndex());
@@ -62,65 +105,9 @@ export function useTourState(
 
     setActionWaiting(true);
 
-    if (action.type === 'await-keypress') {
-      const matchesHotkey = (event: KeyboardEvent, hotkey: string) => {
-        const key = normalizeEventKeyPress(event);
-        if (key === 'dead') return false;
-
-        const pressed = new Set<string>();
-        if (key) pressed.add(key);
-
-        const modifierList = IS_MAC ? MODIFIER_LIST_MAC : MODIFIER_LIST_NON_MAC;
-        modifierList.forEach((mod) => {
-          if (event[mod]) {
-            const modName = EVENT_MODIFIER_NAME_MAP[mod];
-            const mapped = EVENT_TO_HOTKEY_NAME_MAP[modName];
-            if (mapped) pressed.add(mapped);
-          }
-        });
-
-        if (getKeyString(pressed) === hotkey) return true;
-
-        const parts = hotkey.split('+');
-        const targetKey = parts.at(-1);
-        if (!targetKey || key !== targetKey) return false;
-
-        const required = new Set(parts.slice(0, -1));
-        // On non-Mac, treat cmd as an alias for ctrl so cmd+<key> tours can advance.
-        if (!IS_MAC && required.has('cmd') && !required.has('ctrl')) {
-          required.delete('cmd');
-          required.add('ctrl');
-        }
-        const hasCmd = IS_MAC ? event.metaKey : event.ctrlKey;
-        const hasCtrl = event.ctrlKey;
-        const hasOpt = event.altKey;
-        const hasShift = event.shiftKey;
-
-        if (required.has('cmd') !== hasCmd) return false;
-        if (required.has('ctrl') !== hasCtrl) return false;
-        if (required.has('opt') !== hasOpt) return false;
-        if (required.has('shift') !== hasShift) return false;
-        if (!required.has('cmd') && hasCmd) return false;
-        if (!required.has('ctrl') && hasCtrl) return false;
-        if (!required.has('opt') && hasOpt) return false;
-        if (!required.has('shift') && hasShift) return false;
-
-        return true;
-      };
-
-      const handler = (event: KeyboardEvent) => {
-        if (event.repeat) return;
-        if (matchesHotkey(event, action.key)) {
-          advanceToNextStep();
-        }
-      };
-      document.addEventListener('keydown', handler, { capture: true });
-      onCleanup(() =>
-        document.removeEventListener('keydown', handler, { capture: true })
-      );
-    } else if (action.type === 'await-anchor') {
+    if (action.type === 'await-anchor') {
       const interval = setInterval(() => {
-        if (resolveTourAnchor(action.targetId, scopeContainer)) {
+        if (resolveTourTargetElement(action.targetId, scopeContainer)) {
           clearInterval(interval);
           advanceToNextStep();
         }
@@ -146,6 +133,7 @@ export function useTourState(
   });
 
   const advanceToNextStep = () => {
+    currentStep().onStepComplete?.();
     if (isLastStep()) {
       clearTourProgress(config.id);
       onComplete();

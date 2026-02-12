@@ -44,6 +44,22 @@ export function resolveTourAnchor(
   return set.values().next().value ?? null;
 }
 
+export function resolveTourTargetElement(
+  id: string,
+  scopeContainer?: HTMLElement
+): HTMLElement | null {
+  const anchor = resolveTourAnchor(id, scopeContainer);
+  if (anchor) return anchor;
+
+  const selector = `[data-tour-target="${id}"]`;
+  if (scopeContainer) {
+    const scoped = scopeContainer.querySelector(selector);
+    if (scoped) return scoped as HTMLElement;
+  }
+
+  return document.querySelector(selector) as HTMLElement | null;
+}
+
 export function useTourAnchor(id: string) {
   let current: HTMLElement | undefined;
 

@@ -1,5 +1,6 @@
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 const STORAGE_KEY = 'tours-completed';
 const PROGRESS_KEY = 'tour-progress';
@@ -10,15 +11,24 @@ const [completedTours, setCompletedTours] = makePersisted(
   { name: STORAGE_KEY }
 );
 
-const hasLocalStorage = () =>
-  typeof window !== 'undefined' && !!window.localStorage;
+const [tourProgress, setTourProgressStore] = makePersisted(
+  createStore<Record<string, number>>({}),
+  {
+    name: PROGRESS_KEY,
+    storage: localStorage,
+  }
+);
 
-const getProgressKey = (tourId: string) => `${PROGRESS_KEY}:${tourId}`;
+const removeProgressKey = (tourId: string) => {
+  if (!(tourId in tourProgress)) return;
+  const next = { ...tourProgress };
+  delete next[tourId];
+  setTourProgressStore(reconcile(next));
+};
 
 export function useTourStorage() {
   const clearTourProgress = (tourId: string) => {
-    if (!hasLocalStorage()) return;
-    window.localStorage.removeItem(getProgressKey(tourId));
+    removeProgressKey(tourId);
   };
 
   return {
@@ -35,25 +45,14 @@ export function useTourStorage() {
     },
     resetAllTours: () => {
       setCompletedTours([]);
-      if (!hasLocalStorage()) return;
-      const prefix = `${PROGRESS_KEY}:`;
-      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
-        const key = window.localStorage.key(i);
-        if (key && key.startsWith(prefix)) {
-          window.localStorage.removeItem(key);
-        }
-      }
+      setTourProgressStore(reconcile({}));
     },
     getTourProgress: (tourId: string) => {
-      if (!hasLocalStorage()) return undefined;
-      const raw = window.localStorage.getItem(getProgressKey(tourId));
-      if (raw == null) return undefined;
-      const parsed = Number(raw);
-      return Number.isFinite(parsed) ? parsed : undefined;
+      const value = tourProgress[tourId];
+      return Number.isFinite(value) ? value : undefined;
     },
     setTourProgress: (tourId: string, stepIndex: number) => {
-      if (!hasLocalStorage()) return;
-      window.localStorage.setItem(getProgressKey(tourId), `${stepIndex}`);
+      setTourProgressStore(tourId, stepIndex);
     },
     clearTourProgress,
   };

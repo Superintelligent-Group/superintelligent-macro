@@ -1,4 +1,8 @@
-import { HOTKEY_TO_EVENT_NAME_MAP } from '@core/hotkey/constants';
+import {
+  HOTKEY_TO_EVENT_NAME_MAP,
+  shiftPunctuationMap,
+  shiftPunctuationReverseMap,
+} from '@core/hotkey/constants';
 import type { ValidHotkey } from '@core/hotkey/types';
 
 const SPECIAL_KEY_MAP: Record<string, string> = {
@@ -8,13 +12,20 @@ const SPECIAL_KEY_MAP: Record<string, string> = {
   tab: 'Tab',
   backspace: 'Backspace',
   delete: 'Delete',
+  arrowup: 'ArrowUp',
+  arrowdown: 'ArrowDown',
+  arrowleft: 'ArrowLeft',
+  arrowright: 'ArrowRight',
   left: 'ArrowLeft',
   right: 'ArrowRight',
   up: 'ArrowUp',
   down: 'ArrowDown',
 };
 
-const EVENT_PROP_MAP: Record<string, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'> = {
+const EVENT_PROP_MAP: Record<
+  string,
+  'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
+> = {
   control: 'ctrlKey',
   alt: 'altKey',
   shift: 'shiftKey',
@@ -47,7 +58,22 @@ export function performHotkey(
     if (prop) eventInit[prop] = true;
   }
 
-  eventInit.key = SPECIAL_KEY_MAP[keyPart] ?? keyPart;
+  const normalizedKey = keyPart.toLowerCase();
+  const hasShift = eventInit.shiftKey === true;
+
+  if (normalizedKey in SPECIAL_KEY_MAP) {
+    eventInit.key = SPECIAL_KEY_MAP[normalizedKey];
+  } else if (normalizedKey in shiftPunctuationMap) {
+    eventInit.key = normalizedKey;
+    eventInit.shiftKey = true;
+  } else if (hasShift && normalizedKey in shiftPunctuationReverseMap) {
+    eventInit.key =
+      shiftPunctuationReverseMap[
+        normalizedKey as keyof typeof shiftPunctuationReverseMap
+      ];
+  } else {
+    eventInit.key = keyPart;
+  }
 
   const dispatchTarget =
     target ??

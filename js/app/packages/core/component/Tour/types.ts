@@ -13,6 +13,23 @@ export interface TourStep {
   title: string;
   description: string;
   hint?: string;
+  /**
+   * Optional hook that runs when this step becomes active.
+   * Useful for resetting focus before expecting hotkeys.
+   */
+  onStepStart?: () => void;
+  /**
+   * Optional hook that runs when this step is successfully completed.
+   */
+  onStepComplete?: () => void;
+  /**
+   * Optional hook that runs when leaving this step (next/prev/skip).
+   */
+  onStepExit?: () => void;
+  /**
+   * Deprecated: use onStepStart instead.
+   */
+  onEnter?: () => void;
   action: TourAction;
   position?: Placement; // For anchored tooltips (from @floating-ui/dom)
 }

@@ -1,4 +1,11 @@
-import { performHotkey, type TourConfig } from '@core/component/Tour';
+import { resolveTourTargetElement, type TourConfig } from '@core/component/Tour';
+
+const focusDocEditor = () => {
+  const el = resolveTourTargetElement('doc-editor');
+  if (el instanceof HTMLElement) {
+    el.focus();
+  }
+};
 
 export const documentTourConfig: TourConfig = {
   id: 'document-onboarding',
@@ -10,7 +17,8 @@ export const documentTourConfig: TourConfig = {
       title: 'Write a Note',
       description: 'This is the note block. Type `/` for blocks and formatting.',
       hint: 'Press / to open the block menu',
-      action: { type: 'await-keypress', key: '/', perform: () => performHotkey('/') },
+      onStepStart: focusDocEditor,
+      action: { type: 'await-keypress', key: '/' },
       position: 'top',
     },
     {
@@ -20,7 +28,8 @@ export const documentTourConfig: TourConfig = {
       title: 'Mention Anything',
       description: 'Type `@` to mention docs, people, and more.',
       hint: 'Press @ to mention',
-      action: { type: 'await-keypress', key: '@', perform: () => performHotkey('@') },
+      onStepStart: focusDocEditor,
+      action: { type: 'await-keypress', key: 'shift+2' },
       position: 'top',
     },
     {
@@ -30,11 +39,7 @@ export const documentTourConfig: TourConfig = {
       title: 'Share & Collaborate',
       description: 'Press `⌘S` to open the share panel.',
       hint: 'Press ⌘S to share',
-      action: {
-        type: 'await-keypress',
-        key: 'cmd+s',
-        perform: () => performHotkey('cmd+s'),
-      },
+      action: { type: 'await-keypress', key: 'cmd+s' },
       position: 'left',
     },
     {
@@ -44,11 +49,7 @@ export const documentTourConfig: TourConfig = {
       title: 'Find Anything',
       description: 'Press `⌘K` to open the command menu and jump anywhere.',
       hint: 'Press ⌘K to open the menu',
-      action: {
-        type: 'await-keypress',
-        key: 'cmd+k',
-        perform: () => performHotkey('cmd+k'),
-      },
+      action: { type: 'await-keypress', key: 'cmd+k' },
       position: 'top',
     },
   ],

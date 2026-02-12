@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import type { TourStep } from './types';
-import { anchorVersion, resolveTourAnchor } from './anchors';
+import { anchorVersion, resolveTourTargetElement } from './anchors';
 
 interface TourOverlayProps {
   step: TourStep;
@@ -36,29 +36,18 @@ export function TourOverlay(props: TourOverlayProps) {
         }
       };
 
-      const resolveElement = () => {
-        let element = resolveTourAnchor(props.step.target!, props.scopeContainer);
-
-        if (!element) {
-          const selector = `[data-tour-target="${props.step.target}"]`;
-          if (props.scopeContainer) {
-            element = props.scopeContainer.querySelector(selector) ?? undefined;
-          }
-          element = element ?? document.querySelector(selector) ?? undefined;
-        }
-
-        return element ?? null;
-      };
-
       const updateTargetRect = () => {
-        const element = resolveElement();
+        const element = resolveTourTargetElement(
+          props.step.target!,
+          props.scopeContainer
+        );
 
         if (element) {
           observeElement(element);
           setTargetRect(element.getBoundingClientRect());
           return true;
         } else {
-          setTargetRect(null); // Clear previous rect when target is missing
+          setTargetRect(null);
           return false;
         }
       };
@@ -66,10 +55,8 @@ export function TourOverlay(props: TourOverlayProps) {
       observer = new ResizeObserver(updateTargetRect);
       mutationObserver = new MutationObserver(updateTargetRect);
 
-      // Initial attempt
       const found = updateTargetRect();
 
-      // If target not found, poll indefinitely for it to appear
       let pollInterval: number | undefined;
       if (!found) {
         pollInterval = window.setInterval(() => {
@@ -79,7 +66,6 @@ export function TourOverlay(props: TourOverlayProps) {
         }, 100);
       }
 
-      // Update on resize/scroll
       window.addEventListener('resize', updateTargetRect);
       window.addEventListener('scroll', updateTargetRect, true);
 
