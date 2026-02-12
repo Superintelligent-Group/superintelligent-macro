@@ -1,4 +1,4 @@
-use crate::domain::StreamRepo;
+use crate::domain::{StreamId, StreamRepo};
 use crate::outbound::redis::*;
 use redis::Client;
 use std::cell::RefCell;

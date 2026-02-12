@@ -2,7 +2,7 @@ use crate::{
     model::{
         connection::ConnectionContext, message::OutgoingMessage, websocket::ToWebsocketMessage,
     },
-    service::tracker,
+    service::{stream, tracker},
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
@@ -98,6 +98,11 @@ pub async fn handle_message(
             )
             .await
             .ok();
+        }
+        ToWebsocketMessage::SubscribeEntity(message) => {
+            stream::subscribe_entity(connection_context, message, sender)
+                .await
+                .ok();
         }
     };
 

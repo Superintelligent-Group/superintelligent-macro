@@ -1,4 +1,4 @@
-use crate::{config::Config, model::message::OutgoingMessage};
+use crate::config::Config;
 use axum::extract::FromRef;
 use frecency::{
     domain::services::EventIngestorImpl,
@@ -17,7 +17,7 @@ pub struct ApiContext {
     pub connection_manager: crate::service::connection::ConnectionManager,
     pub frecency_ingestor_service: EventIngestorImpl<FrecencyPgStorage>,
     pub redis_client: Arc<redis::Client>,
-    pub stream_manager: Arc<dyn StreamManager<OutgoingMessage> + Send + Sync>,
+    pub stream_manager: Arc<dyn StreamManager + Send + Sync>,
 }
 
 impl ApiContext {

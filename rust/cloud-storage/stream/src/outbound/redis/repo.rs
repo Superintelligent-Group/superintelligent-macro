@@ -1,4 +1,3 @@
-use super::task_util::{ActiveTask, TaskBuilder};
 use crate::domain::*;
 use async_stream::stream;
 use async_trait::async_trait;
@@ -8,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::sync::OnceCell;
+use tokio::task::JoinHandle;
 
 const NOTIFY_CHANNEL: &str = "stream:notifications";
 const NOTIFY_CHANNEL_BUFFER: usize = 1024;
@@ -20,7 +20,7 @@ enum StoredStreamItem {
 }
 
 struct StreamNotifier {
-    _listener: ActiveTask,
+    _listener: JoinHandle<()>,
     tx: broadcast::Sender<StreamId>,
 }
 
@@ -41,9 +41,9 @@ impl StreamNotifier {
         self.tx.subscribe()
     }
 
-    fn spawn_subscriber(client: Client, tx: broadcast::Sender<StreamId>) -> ActiveTask {
+    fn spawn_subscriber(client: Client, tx: broadcast::Sender<StreamId>) -> JoinHandle<()> {
         tracing::info!("Start notification subscriber");
-        let task = async move {
+        tokio::spawn(async move {
             loop {
                 match client.get_async_pubsub().await {
                     Ok(mut pubsub) => {
@@ -73,8 +73,13 @@ impl StreamNotifier {
                     }
                 }
             }
-        };
-        TaskBuilder::spawn(task).0
+        })
+    }
+}
+
+impl Drop for StreamNotifier {
+    fn drop(&mut self) {
+        self._listener.abort();
     }
 }
 
