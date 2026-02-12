@@ -1955,6 +1955,42 @@
           },
           {
             "type": "object",
+            "description": "The user message that initiated this stream, sent as the first item\nso other clients can add it to their local chat state.",
+            "required": [
+              "stream_id",
+              "chat_id",
+              "message_id",
+              "content",
+              "attachments",
+              "type"
+            ],
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                }
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_user_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Indicates a response from the chat completion API for a given message",
             "required": [
               "stream_id",
