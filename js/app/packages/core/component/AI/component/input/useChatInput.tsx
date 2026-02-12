@@ -1,14 +1,9 @@
 import { withAnalytics } from '@coparse/analytics';
-import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { SMART_MODE_MODEL } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
-import type {
-  CreateAndSend,
-  Model,
-  Send,
-  ToolSet,
-} from '@core/component/AI/types';
+import type { Model, ToolSet } from '@core/component/AI/types';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
@@ -33,7 +28,7 @@ import { useAiDataConsentGate } from './useAiDataConsent';
 const { track, TrackingEvents } = withAnalytics();
 
 export type ChatInputProps = {
-  onSend: (args: CreateAndSend | Send) => void;
+  onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
   isPersistent?: boolean;
   showActiveTabs?: boolean;
@@ -87,8 +82,6 @@ export function ChatInput(props: ChatInputComponentProps) {
     return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
   };
 
-  const buildChatSendRequest = useBuildChatSendRequest();
-
   const sendMessage = createCallback(async (modelOverride?: Model) => {
     if (!canSendMessage()) return;
 
@@ -97,17 +90,14 @@ export function ChatInput(props: ChatInputComponentProps) {
       return;
     }
 
-    const request = await buildChatSendRequest({
-      chatId: props.chatId,
-      userRequest: props.markdown.markdownText(),
-      isPersistent: props.isPersistent,
-      attachments: attachments.attached(),
+    const input: ChatSendInput = {
+      content: props.markdown.markdownText(),
       model: modelOverride ?? model(),
+      attachments: attachments.attached(),
       toolset: toolsetSignal[0](),
-      source: source(),
-    });
+    };
     props.markdown.clear();
-    props.onSend(request);
+    props.onSend(input);
   });
 
   function handleEnter(e: KeyboardEvent): boolean {

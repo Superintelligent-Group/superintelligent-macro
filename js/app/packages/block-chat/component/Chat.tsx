@@ -3,7 +3,8 @@ import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
@@ -16,11 +17,7 @@ import {
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import type {
-  CreateAndSend,
-  MessageStream,
-  Send,
-} from '@core/component/AI/types';
+import type { ChatMessageStream } from '@core/component/AI/types';
 import {
   getChatInputStoredState,
   type StoredStuff,
@@ -39,7 +36,6 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { invalidateUserQuota } from '@queries/auth';
-import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
@@ -82,17 +78,28 @@ function ChatInner(props: {
     addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
-  // Local stream signal for cancelStream and registerToolHandler
-  const [stream, setStream] = createSignal<MessageStream>();
-  const cancelStream = () => {
-    const s = stream();
-    if (s) {
-      cognitionWebsocketServiceClient.stopChatMessage({
-        stream_id: s.request.stream_id,
-      });
-      s.close();
-    }
-  };
+  // Local stream signal for registerToolHandler
+  const [stream, setStream] = createSignal<ChatMessageStream>();
+
+  // Pick up reconnected stream from ChatProvider (e.g. after page refresh)
+  createEffect(() => {
+    const chatStream = chat.stream();
+    if (!chatStream || chatStream.isDone()) return;
+    // Only sync if we don't already have a local stream (reconnection case)
+    if (stream()) return;
+
+    setStream(chatStream);
+    input.setIsGenerating(true);
+    createEffect(() => {
+      if (chatStream.data().length > 0) invalidateUserQuota();
+    });
+    createEffect(() => {
+      if (chatStream.isDone()) {
+        input.setIsGenerating(false);
+        invalidateUserQuota();
+      }
+    });
+  });
 
   const blockHandle = blockHandleSignal.get;
 
@@ -104,42 +111,49 @@ function ChatInner(props: {
   );
   false && droppable;
 
-  registerToolHandler(stream);
+  registerToolHandler(() => {
+    const s = stream();
+    if (!s) return undefined;
+    return { data: s.data };
+  });
   const { showPaywall } = usePaywallState();
 
-  const onSend = createCallback(async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        if (response.paymentError) showPaywall();
-        return;
-      } else {
-        return onSend(response);
-      }
-    } else {
-      chat.addMessage({
-        attachments: request.request.attachments ?? [],
-        content: request.request.content,
-        role: 'user',
-        id: '',
-      });
-      const stream = request.call();
-      chat.setStream(stream);
-      setStream(stream);
-      input.setIsGenerating(true);
-      invalidateUserQuota();
-      createEffect(() => {
-        if (stream.data().length > 0) {
-          invalidateUserQuota();
-        }
-      });
-      createEffect(() => {
-        if (stream.isDone()) {
-          input.setIsGenerating(false);
-          invalidateUserQuota();
-        }
-      });
+  const sendChatMessage = useSendChatMessage();
+
+  const onSend = createCallback(async (request: ChatSendInput) => {
+    chat.addMessage({
+      attachments: request.attachments ?? [],
+      content: request.content,
+      role: 'user',
+      id: '',
+    });
+
+    const result = await sendChatMessage({
+      ...request,
+      chatId: chat.chatId(),
+    });
+
+    if ('error' in result) {
+      if (result.paymentError) showPaywall();
+      return;
     }
+
+    chat.setStream(result.stream);
+    setStream(result.stream);
+    input.setIsGenerating(true);
+    invalidateUserQuota();
+
+    createEffect(() => {
+      if (result.stream.data().length > 0) {
+        invalidateUserQuota();
+      }
+    });
+    createEffect(() => {
+      if (result.stream.isDone()) {
+        input.setIsGenerating(false);
+        invalidateUserQuota();
+      }
+    });
   });
 
   const saveChatState = (state: StoredStuff) => {
@@ -154,12 +168,15 @@ function ChatInner(props: {
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
-  const buildChatSendRequest = useBuildChatSendRequest();
 
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
-      const send = await buildChatSendRequest(sendRequest);
-      onSend(send);
+      onSend({
+        content: sendRequest.userRequest,
+        model: sendRequest.model ?? input.model(),
+        attachments: sendRequest.attachments ?? [],
+        toolset: { type: 'all' },
+      });
     },
     goToLocationFromParams: (params: Record<string, string>) => {
       setPendingLocation(params);
@@ -169,13 +186,12 @@ function ChatInner(props: {
   // Check for pending send data (e.g., from SoupChatInput) and send it
   const pendingSend = getPendingSend();
   if (pendingSend) {
-    buildChatSendRequest({
-      chatId: props.data.chat.id,
-      userRequest: pendingSend.content,
-      attachments: pendingSend.attachments,
-      model: pendingSend.model,
-      isPersistent: true,
-    }).then((request) => onSend(request));
+    onSend({
+      content: pendingSend.content,
+      model: pendingSend.model ?? input.model(),
+      attachments: pendingSend.attachments ?? [],
+      toolset: { type: 'all' },
+    });
   }
 
   registerScopeSignalHotkey(scopeId, {
@@ -232,7 +248,6 @@ function ChatInner(props: {
               markdown={chatMarkdownArea}
               chatId={chat.chatId()}
               onSend={onSend}
-              onStop={cancelStream}
               captureEditor={setChatEditor}
               autoFocusOnMount={!navigatedFromJK()}
             />

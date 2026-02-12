@@ -1,6 +1,7 @@
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import type { Accessor, Setter } from 'solid-js';
-import { createEffect, createSignal, on } from 'solid-js';
+import { createSignal } from 'solid-js';
+import { createStore, produce } from 'solid-js/store';
 import { createConnectionWebsocketEffect } from './websocket';
 
 // entities that support streaming
@@ -20,17 +21,6 @@ export type StreamItem<K extends keyof StreamType> = {
   payload: StreamType[K];
 };
 
-// naked id indicates stream over
-type End = StreamId;
-
-type StreamEvent<K extends keyof StreamType> = End | StreamItem<K>;
-
-function isItem<K extends keyof StreamType>(
-  event: StreamEvent<K>
-): event is StreamItem<K> {
-  return 'payload' in event;
-}
-
 export interface Stream<K extends keyof StreamType> {
   id: Accessor<StreamId | undefined>;
   data: Accessor<StreamType[K][]>;
@@ -44,7 +34,7 @@ type StreamController<K extends keyof StreamType> = {
   id: StreamId;
 };
 
-function newStream<K extends keyof StreamType>(
+function newController<K extends keyof StreamType>(
   id: StreamId
 ): StreamController<K> {
   const [data, setData] = createSignal<StreamType[K][]>([]);
@@ -62,57 +52,131 @@ function newStream<K extends keyof StreamType>(
   };
 }
 
-/**
- Subscribe to all streams going to an entity.
- When a stream ends the accessor will not change until a new stream starts.
- `undefined` in only returned before any items have been returned by any stream
+type StreamWithType = {
+  stream: StreamController<keyof StreamType>;
+  type: keyof StreamType;
+};
 
- To subscribe, an entity must be properly tracked with connection_gateway ie: track(entity_id, "open")
- ^ this is done by default for all block
- */
-//This falls over for entities where multiple simultaneous streams are needed
-export function subscribe<K extends keyof StreamType>(
-  entity_id: Accessor<string | undefined>,
-  _: K
-): Accessor<Stream<K> | undefined> {
-  const [controller, setController] = createSignal<StreamController<K>>();
+// internal record of all streams
+// map<entity_id, map<stream_id, StreamWithType>>;
+const [streams, setStreams] = createStore<
+  Record<string, Record<string, StreamWithType>>
+>({});
 
-  createEffect(
-    on(entity_id, () => {
-      setController(undefined);
+export function unsubscribe(entity_id: string) {
+  if (entity_id) {
+    setStreams(
+      produce((s) => {
+        delete s[entity_id];
+      })
+    );
+  }
+}
+
+function streamIsDone<K extends keyof StreamType>(
+  kind: K,
+  item: StreamType[K]
+): boolean {
+  if (kind === 'chat' && item.type === 'stream_end') {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function addStream(
+  entity_id: string,
+  stream_id: string,
+  entry: StreamWithType
+) {
+  setStreams(
+    produce((s) => {
+      if (!s[entity_id]) s[entity_id] = {};
+      s[entity_id][stream_id] = entry;
     })
   );
+}
 
-  createConnectionWebsocketEffect((data) => {
-    if (data.type !== 'stream') {
+// new message!
+createConnectionWebsocketEffect((message) => {
+  // not a stream
+  if (message.type !== 'stream') return;
+
+  let item: StreamItem<keyof StreamType>;
+  try {
+    item = JSON.parse(message.data);
+  } catch {
+    console.error('unparsable stream payload', message);
+    return;
+  }
+  // if this is not the 1st item proces new item / add to stream
+  if (
+    streams[item.id.entity_id] &&
+    streams[item.id.entity_id][item.id.stream_id]
+  ) {
+    const stream = streams[item.id.entity_id][item.id.stream_id];
+    if (streamIsDone(item.id.entity_type, item.payload)) {
+      stream.stream.setDone();
+    } else {
+      stream.stream.setData((p) => [...p, item.payload]);
+    }
+  }
+  // is 1st item
+  else {
+    // new stream
+    const newStream = newController(item.id);
+    // process item
+    if (streamIsDone(item.id.entity_type, item.payload)) {
+      newStream.setDone();
+    } else {
+      newStream.setData([item.payload]);
+    }
+    addStream(item.id.entity_id, item.id.stream_id, {
+      stream: newStream,
+      type: item.id.entity_type,
+    });
+  }
+});
+
+// create a new stream or retreive existing stream
+// if a new stream is created it represents the expectation that items will arive to that stream
+export function subscribe<K extends keyof StreamType>(
+  entity_type: K,
+  entity_id: string,
+  stream_id: string
+): Stream<K> | undefined {
+  if (streams[entity_id]?.[stream_id]) {
+    if (streams[entity_id][stream_id].type !== entity_type) {
+      console.error('unexpected stream type');
       return;
     }
-    const eid = entity_id();
-    if (!eid) return;
-    let event: StreamEvent<K>;
-    try {
-      event = JSON.parse(data.data);
-    } catch {
-      console.error('unexpected stream message', data.data);
-      return;
-    }
-    if (isItem(event)) {
-      if (event.id.entity_id !== eid) return;
-      const current = controller();
-      if (!current || current.id.stream_id !== event.id.stream_id) {
-        const ctrl = newStream<K>(event.id);
-        ctrl.setData([event.payload]);
-        setController(ctrl);
-      } else {
-        current.setData((prev) => [...prev, event.payload]);
-      }
-    } else if (event.entity_id === eid) {
-      const current = controller();
-      if (current && current.id.stream_id === event.stream_id) {
-        current.setDone();
-      }
-    }
-  });
+    console.log('subscribe found stream');
+    return streams[entity_id][stream_id].stream.stream as Stream<K>;
+  } else {
+    console.log('subscribe create stream');
+    const controller = newController({
+      entity_id,
+      entity_type,
+      stream_id,
+    });
+    addStream(entity_id, stream_id, {
+      stream: controller,
+      type: entity_type,
+    });
+    return controller.stream as Stream<K>;
+  }
+}
 
-  return () => controller()?.stream;
+/** Reactive accessor for all streams on an entity. */
+export function getEntityStreams<K extends keyof StreamType>(
+  entity_type: K,
+  entity_id: string
+): Accessor<Stream<K>[]> {
+  return () => {
+    const entityStreams = streams[entity_id];
+    if (!entityStreams) return [];
+    return Object.values(entityStreams)
+      .filter((s) => s.type === entity_type)
+      .map((s) => s.stream.stream as Stream<K>);
+  };
 }

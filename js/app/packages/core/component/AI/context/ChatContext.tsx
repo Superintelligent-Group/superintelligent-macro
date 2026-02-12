@@ -4,19 +4,21 @@ import { useTabAttachments } from '@core/component/AI/signal/tabAttachments';
 import type {
   Attachment,
   Attachments,
+  ChatMessageStream,
   ChatMessageWithAttachments,
-  MessageStream,
   Model,
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
+import { getEntityStreams } from '@service-connection/stream';
 import type { Accessor, ParentProps, Setter } from 'solid-js';
 import {
   createContext,
   createEffect,
   createSignal,
   on,
+  untrack,
   useContext,
 } from 'solid-js';
 
@@ -100,8 +102,8 @@ export type ChatState = {
   messages: Accessor<ChatMessageWithAttachments[]>;
   setMessages: Setter<ChatMessageWithAttachments[]>;
   addMessage: (msg: ChatMessageWithAttachments) => void;
-  stream: Accessor<MessageStream | undefined>;
-  setStream: Setter<MessageStream | undefined>;
+  stream: Accessor<ChatMessageStream | undefined>;
+  setStream: Setter<ChatMessageStream | undefined>;
 };
 
 const ChatCtx = createContext<ChatState>();
@@ -116,16 +118,16 @@ export function ChatProvider(
         Setter<ChatMessageWithAttachments[]>,
       ];
       stream: [
-        Accessor<MessageStream | undefined>,
-        Setter<MessageStream | undefined>,
+        Accessor<ChatMessageStream | undefined>,
+        Setter<ChatMessageStream | undefined>,
       ];
     };
   }
 ) {
   let messages: Accessor<ChatMessageWithAttachments[]>;
   let setMessages: Setter<ChatMessageWithAttachments[]>;
-  let stream: Accessor<MessageStream | undefined>;
-  let setStream: Setter<MessageStream | undefined>;
+  let stream: Accessor<ChatMessageStream | undefined>;
+  let setStream: Setter<ChatMessageStream | undefined>;
 
   if (props.external) {
     [messages, setMessages] = props.external.messages;
@@ -134,7 +136,7 @@ export function ChatProvider(
     const [_messages, _setMessages] = createSignal<
       ChatMessageWithAttachments[]
     >(props.messages ?? []);
-    const [_stream, _setStream] = createSignal<MessageStream>();
+    const [_stream, _setStream] = createSignal<ChatMessageStream>();
     messages = _messages;
     setMessages = _setMessages;
     stream = _stream;
@@ -145,6 +147,31 @@ export function ChatProvider(
   const addMessage = (msg: ChatMessageWithAttachments) => {
     _setMessages((p) => [...p, msg]);
   };
+
+  // --- Reconnect active streams on page refresh ---
+  // Reactive to props.chatId (ChatProvider may not remount on chat switch).
+  // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
+  createEffect(() => {
+    const activeStreams = getEntityStreams('chat', props.chatId)();
+    if (untrack(stream)) return;
+
+    for (const s of activeStreams) {
+      const sid = s.id()?.stream_id;
+      if (!sid || s.isDone()) continue;
+
+      const isInMessages = untrack(() => messages().some((m) => m.id === sid));
+      if (isInMessages) continue;
+
+      setStream({
+        data: s.data,
+        isDone: s.isDone,
+        model: DEFAULT_MODEL,
+        attachments: [],
+        streamId: sid,
+      });
+      break;
+    }
+  });
 
   return (
     <ChatCtx.Provider

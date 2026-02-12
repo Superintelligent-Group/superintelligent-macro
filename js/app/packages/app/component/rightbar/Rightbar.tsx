@@ -2,7 +2,8 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
@@ -17,11 +18,9 @@ import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   Attachment,
+  ChatMessageStream,
   ChatMessageWithAttachments,
-  CreateAndSend,
-  MessageStream,
   Model,
-  Send,
 } from '@core/component/AI/types';
 import { parseModel } from '@core/component/AI/util';
 import {
@@ -57,10 +56,10 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { invalidateUserQuota } from '@queries/auth';
-import {
-  cognitionApiServiceClient,
-  cognitionWebsocketServiceClient,
-} from '@service-cognition/client';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { connectionGatewayClient } from '@service-connection/client';
+import { state as connectionState } from '@service-connection/websocket';
+import { WebsocketConnectionState } from '@websocket';
 import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
@@ -306,7 +305,11 @@ function RightbarChatArea(props: { isBig?: boolean }) {
     }
   });
 
-  registerToolHandler(chat.stream);
+  registerToolHandler(() => {
+    const s = chat.stream();
+    if (!s) return undefined;
+    return { data: s.data };
+  });
 
   return (
     <>
@@ -335,8 +338,7 @@ function RightbarChatArea(props: { isBig?: boolean }) {
 
 export function Rightbar(props: {
   chatId: string | undefined;
-  onSend: (args: CreateAndSend | Send) => void;
-  stopGenerating: () => void;
+  onSend: (args: ChatSendInput) => void;
   chatName: string | undefined;
   isBig?: boolean;
   userPermissions: Accessor<Permissions>;
@@ -461,7 +463,6 @@ export function Rightbar(props: {
                 isPersistent
                 showActiveTabs
                 onSend={props.onSend}
-                onStop={props.stopGenerating}
                 captureEditor={setEditor}
               />
             </div>
@@ -488,7 +489,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   >();
   const [model, setModel] = createSignal<Model | undefined>();
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const [initialChatState, setInitialChatState] = createSignal<
     | {
         model: Model | undefined;
@@ -546,49 +547,43 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   });
 
   const { showPaywall } = usePaywallState();
+  const sendChatMessage = useSendChatMessage();
 
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if (response.type === 'error') {
-        // TODO: show error state
-        console.error('error creating chat', response);
-        if (response.paymentError) {
-          showPaywall();
-        }
-        return;
+  const onSend = async (request: ChatSendInput) => {
+    setMessages((p) => [
+      ...p,
+      {
+        attachments: request.attachments ?? [],
+        content: request.content,
+        role: 'user',
+        id: '',
+      },
+    ]);
+
+    const result = await sendChatMessage({
+      ...request,
+      chatId: chatId(),
+    });
+
+    if ('error' in result) {
+      if (result.paymentError) {
+        showPaywall();
       }
-      const newChatId = response.chat_id;
-      setNewChatId(newChatId);
-      setChatId(newChatId);
-      setUserAccessLevel(AccessLevel.owner);
-
-      refetchHistory();
-      useWaitChatRename(newChatId);
-      return await onSend(response);
-    } else if (request.type === 'send') {
-      setMessages((p) => {
-        return [
-          ...p,
-          {
-            attachments: request.request.attachments ?? [],
-            content: request.request.content,
-            role: 'user',
-            // TODO: no id because it's a user message that hasn't been uploaded yet
-            id: '',
-          },
-        ];
-      });
-
-      const stream = request.call();
-      setStream(stream);
-      invalidateUserQuota();
-    } else {
-      console.error('Invalid send request', request);
+      return;
     }
-  };
 
-  const buildChatSendRequest = useBuildChatSendRequest();
+    // If no chatId existed, a new chat was created
+    if (!chatId()) {
+      setNewChatId(result.chat_id);
+      setChatId(result.chat_id);
+      setUserAccessLevel(AccessLevel.owner);
+      refetchHistory();
+      useWaitChatRename(result.chat_id);
+    }
+
+    setStream(result.stream);
+    invalidateUserQuota();
+  };
 
   // Check for pending sends from SoupChatInput when bigchat opens
   createEffect(
@@ -596,15 +591,12 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       if (isOpen && !wasOpen) {
         const pending = getPendingSend();
         if (pending) {
-          // Build and send the request
-          const request = await buildChatSendRequest({
-            chatId: chatId(),
-            userRequest: pending.content,
-            attachments: pending.attachments,
-            model: pending.model,
-            isPersistent: true,
+          onSend({
+            content: pending.content,
+            model: pending.model ?? model() ?? 'claude-haiku-4-5-20251001',
+            attachments: pending.attachments ?? [],
+            toolset: { type: 'all' },
           });
-          onSend(request);
         }
       }
     })
@@ -653,6 +645,28 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     })
   );
 
+  // Track/untrack chat entity with connection gateway for stream delivery
+  createEffect(() => {
+    const id = chatId();
+    const connected = connectionState() === WebsocketConnectionState.Open;
+    if (id && connected) {
+      connectionGatewayClient.trackEntity({
+        entity_type: 'chat',
+        entity_id: id,
+        action: 'open',
+      });
+    }
+    onCleanup(() => {
+      if (id) {
+        connectionGatewayClient.trackEntity({
+          entity_type: 'chat',
+          entity_id: id,
+          action: 'close',
+        });
+      }
+    });
+  });
+
   const toggleRightPanel = useToggleRightPanel();
 
   registerHotkey({
@@ -685,21 +699,14 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     },
   });
 
-  const stopGenerating = () => {
-    const stream_ = stream();
-    if (!stream_) return false;
-    cognitionWebsocketServiceClient.stopChatMessage({
-      stream_id: stream_.request.stream_id,
-    });
-    stream_.close();
-    return true;
-  };
-
   registerHotkey({
     scopeId,
     hotkey: 'ctrl+c',
     description: 'Stop stream',
-    keyDownHandler: stopGenerating,
+    keyDownHandler: () => {
+      // TODO: implement stop for connection gateway streams
+      return true;
+    },
     runWithInputFocused: true,
   });
   return (
@@ -733,7 +740,6 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
                   onUnmount={getChatInputState}
                   initialState={initialChatState()}
                   onSend={onSend}
-                  stopGenerating={stopGenerating}
                   userPermissions={userPermissions}
                   setState={{
                     setChatId,
