@@ -4,15 +4,17 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { AssistantMessagePart } from './assistantMessagePart';
+import type { ChatAttachmentWithName } from './chatAttachmentWithName';
 import type { ChatStreamOneOfSixType } from './chatStreamOneOfSixType';
 
 /**
- * Indicates a response from the chat completion API for a given message
+ * The user message that initiated this stream, sent as the first item
+so other clients can add it to their local chat state.
  */
 export type ChatStreamOneOfSix = {
+  attachments: ChatAttachmentWithName[];
   chat_id: string;
-  content: AssistantMessagePart;
+  content: string;
   message_id: string;
   stream_id: string;
   type: ChatStreamOneOfSixType;

@@ -6,6 +6,9 @@
  */
 import type { ChatStreamOneOfTwosevenType } from './chatStreamOneOfTwosevenType';
 
+/**
+ * pdf completion
+ */
 export type ChatStreamOneOfTwoseven = {
   completion_id: string;
   content: string;

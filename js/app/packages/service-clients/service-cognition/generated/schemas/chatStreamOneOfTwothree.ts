@@ -4,8 +4,15 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChatStreamOneOfTwothreeType } from './chatStreamOneOfTwothreeType';
 
+import type { ChatStreamOneOfTwothreeType } from './chatStreamOneOfTwothreeType';
+import type { ExtractionStatusEnum } from './extractionStatusEnum';
+
+/**
+ * Status update for the extraction status
+ */
 export type ChatStreamOneOfTwothree = {
+  attachment_id: string;
+  status: ExtractionStatusEnum;
   type: ChatStreamOneOfTwothreeType;
 };

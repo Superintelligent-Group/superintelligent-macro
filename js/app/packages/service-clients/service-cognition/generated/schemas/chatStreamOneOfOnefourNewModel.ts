@@ -6,4 +6,4 @@
  */
 import type { Model } from './model';
 
-export type ChatStreamOneOfOnetwoNewModel = null | Model;
+export type ChatStreamOneOfOnefourNewModel = null | Model;

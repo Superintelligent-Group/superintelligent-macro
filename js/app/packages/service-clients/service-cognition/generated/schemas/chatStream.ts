@@ -7,12 +7,13 @@
 import type { ChatStreamOneOf } from './chatStreamOneOf';
 import type { ChatStreamOneOfEight } from './chatStreamOneOfEight';
 import type { ChatStreamOneOfFour } from './chatStreamOneOfFour';
-import type { ChatStreamOneOfOnefive } from './chatStreamOneOfOnefive';
+import type { ChatStreamOneOfOnefour } from './chatStreamOneOfOnefour';
 import type { ChatStreamOneOfOnenine } from './chatStreamOneOfOnenine';
 import type { ChatStreamOneOfOneseven } from './chatStreamOneOfOneseven';
 import type { ChatStreamOneOfOnetwo } from './chatStreamOneOfOnetwo';
 import type { ChatStreamOneOfOnezero } from './chatStreamOneOfOnezero';
 import type { ChatStreamOneOfSix } from './chatStreamOneOfSix';
+import type { ChatStreamOneOfThreeone } from './chatStreamOneOfThreeone';
 import type { ChatStreamOneOfTwofive } from './chatStreamOneOfTwofive';
 import type { ChatStreamOneOfTwonine } from './chatStreamOneOfTwonine';
 import type { ChatStreamOneOfTwoone } from './chatStreamOneOfTwoone';
@@ -26,11 +27,12 @@ export type ChatStream =
   | ChatStreamOneOfEight
   | ChatStreamOneOfOnezero
   | ChatStreamOneOfOnetwo
-  | ChatStreamOneOfOnefive
+  | ChatStreamOneOfOnefour
   | ChatStreamOneOfOneseven
   | ChatStreamOneOfOnenine
   | ChatStreamOneOfTwoone
   | ChatStreamOneOfTwothree
   | ChatStreamOneOfTwofive
   | ChatStreamOneOfTwoseven
-  | ChatStreamOneOfTwonine;
+  | ChatStreamOneOfTwonine
+  | ChatStreamOneOfThreeone;

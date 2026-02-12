@@ -7,6 +7,8 @@
 import type { ChatStreamOneOfTwonineType } from './chatStreamOneOfTwonineType';
 
 export type ChatStreamOneOfTwonine = {
-  stream_id: string;
+  completion_id: string;
+  content: string;
+  done: boolean;
   type: ChatStreamOneOfTwonineType;
 };

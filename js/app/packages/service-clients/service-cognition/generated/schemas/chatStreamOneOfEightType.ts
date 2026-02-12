@@ -10,5 +10,5 @@ export type ChatStreamOneOfEightType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfEightType = {
-  chat_message_finished: 'chat_message_finished',
+  chat_message_response: 'chat_message_response',
 } as const;

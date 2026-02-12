@@ -6,12 +6,8 @@
  */
 import type { ChatStreamOneOfOnesevenType } from './chatStreamOneOfOnesevenType';
 
-/**
- * Status update
- */
 export type ChatStreamOneOfOneseven = {
   chat_id: string;
-  message: string;
-  message_id: string;
+  token_count: number;
   type: ChatStreamOneOfOnesevenType;
 };

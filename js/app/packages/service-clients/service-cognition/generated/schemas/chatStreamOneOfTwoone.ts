@@ -9,7 +9,10 @@ import type { ChatStreamOneOfTwooneType } from './chatStreamOneOfTwooneType';
 import type { ExtractionStatusEnum } from './extractionStatusEnum';
 
 /**
- * Status update for the extraction status
+ * Acknowledges the request to get extraction status
+if the `status` field is 'incomplete', we need to await the extraction status updates
+if the `status` field is 'empty', extraction is complete but text content is empty
+if the `status` field is 'complete', the extraction is already complete
  */
 export type ChatStreamOneOfTwoone = {
   attachment_id: string;

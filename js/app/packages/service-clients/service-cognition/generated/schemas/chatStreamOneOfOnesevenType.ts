@@ -10,5 +10,5 @@ export type ChatStreamOneOfOnesevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfOnesevenType = {
-  chat_message_status_update: 'chat_message_status_update',
+  token_count_changed: 'token_count_changed',
 } as const;
