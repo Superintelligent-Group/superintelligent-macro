@@ -1,5 +1,5 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import {
   ChatInputProvider,

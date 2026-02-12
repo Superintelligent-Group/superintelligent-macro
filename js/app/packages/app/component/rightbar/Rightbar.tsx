@@ -4,7 +4,6 @@ import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState'
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
@@ -29,12 +28,13 @@ import {
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Hotkey } from '@core/component/Hotkey';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { getPermissions } from '@core/component/SharePermissions';
-import type { Permissions } from '@core/component/SharePermissions';
 import { Resize } from '@core/component/Resize';
+import type { Permissions } from '@core/component/SharePermissions';
+import { getPermissions } from '@core/component/SharePermissions';
+import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { settingsOpen } from '@core/constant/SettingsState';
@@ -56,11 +56,14 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { invalidateUserQuota } from '@queries/auth';
+import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
 import { connectionGatewayClient } from '@service-connection/client';
 import { state as connectionState } from '@service-connection/websocket';
+import { Button } from '@ui/components/Button';
 import { WebsocketConnectionState } from '@websocket';
-import { refetchHistory, useHistoryQuery } from '@queries/history/history';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -77,6 +80,8 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { useWaitChatRename } from '../../../macro-entity/src/queries/rename';
+import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
@@ -693,7 +698,6 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     description: 'Create a new chat',
     runWithInputFocused: true,
     keyDownHandler: () => {
-      console.log('create new chat');
       setChatId(undefined);
       return true;
     },

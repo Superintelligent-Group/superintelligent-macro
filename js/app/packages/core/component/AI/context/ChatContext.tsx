@@ -153,7 +153,6 @@ export function ChatProvider(
   // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
   createEffect(() => {
     const activeStreams = getEntityStreams('chat', props.chatId)();
-    if (untrack(stream)) return;
 
     for (const s of activeStreams) {
       const sid = s.id()?.stream_id;

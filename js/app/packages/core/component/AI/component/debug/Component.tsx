@@ -14,7 +14,7 @@ import {
 } from '../../context';
 import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
-import { ChatInput } from '../input/useChatInput';
+import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
 import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { ChatMessages } from '../message/ChatMessages';
