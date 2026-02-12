@@ -1,23 +1,31 @@
 use crate::domain::{ItemStream, Result, StreamManager, StreamRepo};
 use async_stream::stream;
 use async_trait::async_trait;
+use dashmap::DashMap;
 use futures::stream::{SelectAll, StreamExt};
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
+/// Manages stream subscriptions backed by Redis.
 pub struct RedisStreamManager {
     repo: Arc<dyn StreamRepo>,
+    subscriptions: DashMap<String, oneshot::Sender<()>>,
 }
 
 impl RedisStreamManager {
+    /// Create a new manager wrapping the given repo.
     pub fn new(repo: Arc<dyn StreamRepo>) -> Arc<Self> {
-        Arc::new(Self { repo })
+        Arc::new(Self {
+            repo,
+            subscriptions: DashMap::new(),
+        })
     }
 }
 
 #[async_trait]
 impl StreamManager for RedisStreamManager {
     #[tracing::instrument(err, skip(self))]
-    async fn subscribe(&self, entity_id: String) -> Result<ItemStream> {
+    async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream> {
         let repo = self.repo.clone();
 
         let active = repo.active_streams(&entity_id).await?;
@@ -29,9 +37,13 @@ impl StreamManager for RedisStreamManager {
             merged.push(s);
         }
 
+        let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
+        self.subscriptions.insert(sender_id, cancel_tx);
+
         let out = stream! {
             loop {
                 tokio::select! {
+                    _ = &mut cancel_rx => break,
                     item = merged.next(), if !merged.is_empty() => {
                         match item {
                             Some(item) => {
@@ -60,5 +72,13 @@ impl StreamManager for RedisStreamManager {
         };
 
         Ok(Box::pin(out))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn unsubscribe(&self, sender_id: String) -> Result<()> {
+        if let Some((_, cancel_tx)) = self.subscriptions.remove(&sender_id) {
+            let _ = cancel_tx.send(());
+        }
+        Ok(())
     }
 }

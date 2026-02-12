@@ -9034,6 +9034,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
+ "dashmap",
  "futures",
  "model-entity",
  "redis",

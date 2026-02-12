@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 async-stream = { workspace = true }
 model-entity = { path = "../model-entity" }
 anyhow = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

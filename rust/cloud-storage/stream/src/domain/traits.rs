@@ -45,5 +45,8 @@ pub trait StreamRepo: Send + Sync + 'static {
 pub trait StreamManager: Send + Sync + 'static {
     /// Subscribe to all current and future streams for an entity.
     /// Returns a merged stream of items from all streams.
-    async fn subscribe(&self, entity_id: String) -> Result<ItemStream>;
+    /// `sender_id` uniquely identifies the subscriber (e.g. a connection, not a user).
+    async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream>;
+    /// Cancel the subscription for the given sender, stopping its stream.
+    async fn unsubscribe(&self, sender_id: String) -> Result<()>;
 }
