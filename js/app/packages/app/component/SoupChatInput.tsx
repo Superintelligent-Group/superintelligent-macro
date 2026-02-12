@@ -2,10 +2,10 @@ import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -29,9 +29,7 @@ function SoupChatInputInner() {
     attachHotkeys(containerRef);
   });
 
-  const handleSend = async (request: Send | CreateAndSend) => {
-    if (request.type !== 'createAndSend') return;
-
+  const handleSend = async (request: ChatSendInput) => {
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({
       isPersistent: true,
