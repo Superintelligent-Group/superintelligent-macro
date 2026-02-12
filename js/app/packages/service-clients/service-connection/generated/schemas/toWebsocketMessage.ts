@@ -5,8 +5,5 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ToWebsocketMessageOneOf } from './toWebsocketMessageOneOf';
-import type { ToWebsocketMessageOneOfFour } from './toWebsocketMessageOneOfFour';
 
-export type ToWebsocketMessage =
-  | ToWebsocketMessageOneOf
-  | ToWebsocketMessageOneOfFour;
+export type ToWebsocketMessage = ToWebsocketMessageOneOf;
