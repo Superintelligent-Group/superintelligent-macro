@@ -35,7 +35,6 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useTaskProperties } from '@core/component/Properties/hooks';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { useIsAuthenticated } from '@core/auth';
 import { useSettingsState } from '@core/constant/SettingsState';
 import {
   type EntityData,
@@ -87,7 +86,12 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import { Tour, useAutoTour, useTourAnchor } from '@core/component/Tour';
+import {
+  Tour,
+  useAutoTour,
+  useTourAnchor,
+  useTourEligibility,
+} from '@core/component/Tour';
 import { soupTourConfig } from '@app/component/next-soup/soup-tour-config';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
@@ -140,15 +144,14 @@ const cacheMap = new Map<
 export const SoupView = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
-  const isAuthenticated = useIsAuthenticated();
   const { settingsOpen } = useSettingsState();
 
   const [soupContainerRef, setSoupContainerRef] =
     createSignal<HTMLDivElement>();
 
-  const shouldShowTour = createMemo(
-    () => isAuthenticated() && !isMobile() && !settingsOpen()
-  );
+  const shouldShowTour = useTourEligibility({
+    when: () => !settingsOpen(),
+  });
   const { tourActive, handleComplete, handleSkip } = useAutoTour(
     'soup-onboarding',
     {

@@ -9,17 +9,34 @@ import {
 import { getKeyString, normalizeEventKeyPress } from '@core/hotkey/utils';
 import type { TourConfig } from './types';
 import { resolveTourAnchor } from './anchors';
+import { useTourStorage } from './useTourStorage';
 
 export function useTourState(
   config: TourConfig,
   onComplete: () => void,
   scopeContainer?: HTMLElement
 ) {
-  const [currentStepIndex, setCurrentStepIndex] = createSignal(0);
+  const { getTourProgress, setTourProgress, clearTourProgress } =
+    useTourStorage();
+
+  const getInitialStepIndex = () => {
+    const stored = getTourProgress(config.id);
+    if (stored == null) return 0;
+    const clamped = Math.max(0, Math.min(stored, config.steps.length - 1));
+    return Number.isFinite(clamped) ? clamped : 0;
+  };
+
+  const [currentStepIndex, setCurrentStepIndex] = createSignal(
+    getInitialStepIndex()
+  );
   const [actionWaiting, setActionWaiting] = createSignal(false);
 
   const currentStep = () => config.steps[currentStepIndex()];
   const isLastStep = () => currentStepIndex() === config.steps.length - 1;
+
+  createEffect(() => {
+    setTourProgress(config.id, currentStepIndex());
+  });
 
   // Helper to query elements within scope, with fallback to document for portals
   const queryScopedElement = (selector: string): Element | null => {
@@ -130,6 +147,7 @@ export function useTourState(
 
   const advanceToNextStep = () => {
     if (isLastStep()) {
+      clearTourProgress(config.id);
       onComplete();
     } else {
       setCurrentStepIndex((prev) => prev + 1);

@@ -9,7 +9,8 @@ export function useAutoTour(
     delayMs?: number;
   }
 ) {
-  const { isTourCompleted, markTourCompleted } = useTourStorage();
+  const { isTourCompleted, markTourCompleted, clearTourProgress } =
+    useTourStorage();
   const [tourActive, setTourActive] = createSignal(false);
 
   createEffect(() => {
@@ -28,19 +29,24 @@ export function useAutoTour(
     }
   });
 
+  // Default behavior: pause the tour when the relevant UI is no longer eligible.
+  createEffect(() => {
+    if (!options.enabled() && tourActive()) {
+      deactivateTour(tourId);
+      setTourActive(false);
+    }
+  });
+
   const handleComplete = () => {
     markTourCompleted(tourId);
+    clearTourProgress(tourId);
     deactivateTour(tourId);
     setTourActive(false);
   };
 
   const handleSkip = () => {
     markTourCompleted(tourId);
-    deactivateTour(tourId);
-    setTourActive(false);
-  };
-
-  const stopTour = () => {
+    clearTourProgress(tourId);
     deactivateTour(tourId);
     setTourActive(false);
   };
@@ -51,5 +57,5 @@ export function useAutoTour(
     }
   });
 
-  return { tourActive, handleComplete, handleSkip, stopTour };
+  return { tourActive, handleComplete, handleSkip };
 }

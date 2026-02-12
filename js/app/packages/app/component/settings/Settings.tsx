@@ -18,8 +18,12 @@ import { Shortcuts } from './Shortcuts';
 import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { Tour, useAutoTour, useTourStorage } from '@core/component/Tour';
-import { useIsAuthenticated } from '@core/auth';
+import {
+  Tour,
+  useAutoTour,
+  useTourEligibility,
+  useTourStorage,
+} from '@core/component/Tour';
 import { settingsTourConfig } from './settings-tour-config';
 
 const SCROLL_THRESHOLD = 10;
@@ -34,7 +38,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const [spotlight, setSpotlight] = createSignal(false);
-  const isAuthenticated = useIsAuthenticated();
   const { isTourCompleted } = useTourStorage();
 
   // Set up hotkey scope for settings panel
@@ -118,10 +121,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
     }
   });
 
-  const shouldShowTour = createMemo(
-    () => settingsOpen() && isAuthenticated() && !isMobile()
-  );
-  const { tourActive, handleComplete, handleSkip, stopTour } = useAutoTour(
+  const shouldShowTour = useTourEligibility({
+    when: () => settingsOpen(),
+  });
+  const { tourActive, handleComplete, handleSkip } = useAutoTour(
     'settings-onboarding',
     { enabled: shouldShowTour, delayMs: 250 }
   );
@@ -129,12 +132,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
   createEffect(() => {
     if (shouldShowTour() && !isTourCompleted('settings-onboarding')) {
       setActiveTabId('Appearance');
-    }
-  });
-
-  createEffect(() => {
-    if (!settingsOpen() && tourActive()) {
-      stopTour();
     }
   });
 

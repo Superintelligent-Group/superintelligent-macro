@@ -5,17 +5,8 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { Tour, useAutoTour } from '@core/component/Tour';
-import { useIsAuthenticated } from '@core/auth';
-import { isMobile } from '@core/mobile/isMobile';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onMount,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { Tour, useAutoTour, useTourEligibility } from '@core/component/Tour';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';
@@ -30,14 +21,11 @@ export default function BlockMarkdown() {
   const blockId = useBlockId();
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const isAuthenticated = useIsAuthenticated();
   const isInstructionsMd = () => {
     return blockId === instructionsMdId.data;
   };
 
-  const shouldShowTour = createMemo(
-    () => isAuthenticated() && !isMobile() && !isInstructionsMd()
-  );
+  const shouldShowTour = useTourEligibility({ when: () => !isInstructionsMd() });
   const { tourActive, handleComplete, handleSkip } = useAutoTour(
     'document-onboarding',
     { enabled: shouldShowTour, delayMs: 500 }
