@@ -2,13 +2,13 @@ use crate::{
     model::{
         connection::ConnectionContext, message::OutgoingMessage, websocket::ToWebsocketMessage,
     },
-    service::{stream, tracker},
+    service::tracker,
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{StreamExt, stream::SplitStream};
-use model_entity::{TrackAction, TrackingData};
-use std::{error::Error, f64};
+use model_entity::TrackingData;
+use std::error::Error;
 use tokio::sync::mpsc::Sender;
 use tungstenite::error::{Error as TungsteniteError, ProtocolError};
 
@@ -86,10 +86,10 @@ pub async fn handle_message(
 
     match parsed_message {
         ToWebsocketMessage::TrackEntityMessage(message) => {
-            let is_open = matches!(message.action, TrackAction::Open);
             let entity_id = message.extra.entity_id.to_string();
 
             tracker::track_entity(
+                sender,
                 connection_context,
                 TrackingData {
                     entity: message
@@ -103,15 +103,6 @@ pub async fn handle_message(
             )
             .await
             .ok();
-
-            if is_open {
-                let stream_manager = connection_context.api_context.stream_manager.clone();
-                let sender = sender.clone();
-                stream::subscribe_entity(stream_manager, entity_id, sender)
-                    .await
-                    .inspect_err(|e| tracing::error!(error=?e, "stream subscription failed"))
-                    .ok();
-            }
         }
     };
 

@@ -13,7 +13,7 @@ async fn test_no_streams() {
     let manager = RedisStreamManager::new(service);
 
     let mut stream = manager
-        .subscribe("entity_1".into())
+        .subscribe("sender_1".into(), "entity_1".into())
         .await
         .expect("subscribe should succeed");
 
@@ -30,7 +30,7 @@ async fn test_sub_then_start_related() {
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -57,7 +57,7 @@ async fn test_sub_then_start_unrelated() {
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe("different_entity".into())
+        .subscribe("sender_1".into(), "different_entity".into())
         .await
         .expect("subscribe should succeed");
 
@@ -101,7 +101,7 @@ async fn test_start_then_sub() {
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -161,7 +161,7 @@ async fn test_late_join_multiple_streams_same_entity() {
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -207,7 +207,7 @@ async fn test_late_join_during_active_streaming() {
 
     // First subscriber joins
     let mut stream1 = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -222,7 +222,7 @@ async fn test_late_join_during_active_streaming() {
 
     // Second subscriber joins mid-stream
     let mut stream2 = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_2".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -277,9 +277,8 @@ async fn test_late_join_during_active_streaming() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_unsub_during_stream() {
-    // Dropping the stream should stop receiving items (no explicit unsubscribe needed)
-
     let entity_id = "manager_unsub_during";
+    let sender_id = "sender_unsub";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
     let manager = RedisStreamManager::new(service.clone());
 
@@ -291,7 +290,7 @@ async fn test_unsub_during_stream() {
         .expect("append should succeed");
 
     let mut stream = manager
-        .subscribe(entity_id.into())
+        .subscribe(sender_id.into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -302,8 +301,18 @@ async fn test_unsub_during_stream() {
         .expect("stream should not be closed");
     assert_eq!(received.payload, item1);
 
-    // Drop the stream to "unsubscribe"
-    drop(stream);
+    // Unsubscribe via the manager
+    manager
+        .unsubscribe(sender_id.into())
+        .await
+        .expect("unsubscribe should succeed");
+
+    // Stream should terminate
+    let result = tokio::time::timeout(Duration::from_millis(500), stream.next()).await;
+    assert!(
+        matches!(result, Ok(None)),
+        "stream should end after unsubscribe"
+    );
 
     // Append more items — should not panic
     service
@@ -314,19 +323,79 @@ async fn test_unsub_during_stream() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+async fn test_unsub_no_items_after() {
+    let entity_id = "manager_unsub_no_items_after";
+    let sender_id = "sender_unsub_no_items";
+    let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
+    let manager = RedisStreamManager::new(service.clone());
+
+    service
+        .append(&stream_id, serde_json::json!({"seq": 1}))
+        .await
+        .expect("append should succeed");
+
+    let mut stream = manager
+        .subscribe(sender_id.into(), entity_id.into())
+        .await
+        .expect("subscribe should succeed");
+
+    // Confirm subscription is live
+    let received = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("should receive message")
+        .expect("stream should not be closed");
+    assert_eq!(received.payload, serde_json::json!({"seq": 1}));
+
+    // Unsubscribe
+    manager
+        .unsubscribe(sender_id.into())
+        .await
+        .expect("unsubscribe should succeed");
+
+    // Stream must yield None (terminated)
+    let terminated = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("stream should resolve, not hang");
+    assert!(terminated.is_none(), "stream should end after unsubscribe");
+
+    // Append items *after* the stream has ended
+    for i in 2..=10 {
+        service
+            .append(&stream_id, serde_json::json!({"seq": i}))
+            .await
+            .expect("append should succeed");
+    }
+
+    // Drain anything remaining — nothing should come through
+    let mut leaked = Vec::new();
+    while let Ok(Some(item)) = tokio::time::timeout(Duration::from_millis(500), stream.next()).await
+    {
+        leaked.push(item.payload);
+    }
+    assert!(
+        leaked.is_empty(),
+        "no items should arrive after unsubscribe, but got: {leaked:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_connection_closed() {
-    // Dropping the stream and re-subscribing should work fine
+    // Unsubscribing and re-subscribing should work fine
 
     let entity_id = "manager_connection_closed";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
     let manager = RedisStreamManager::new(service.clone());
 
-    // Subscribe and immediately drop
-    let stream = manager
-        .subscribe(entity_id.into())
+    // Subscribe and immediately unsubscribe
+    let _stream = manager
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
-    drop(stream);
+    manager
+        .unsubscribe("sender_1".into())
+        .await
+        .expect("unsubscribe should succeed");
 
     // Append data
     service
@@ -338,7 +407,7 @@ async fn test_connection_closed() {
 
     // Re-subscribe should work
     let mut stream2 = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_2".into(), entity_id.into())
         .await
         .expect("new subscribe should succeed");
 
@@ -368,7 +437,7 @@ async fn test_stream_ends_close() {
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe(entity_id.into())
+        .subscribe("sender_1".into(), entity_id.into())
         .await
         .expect("subscribe should succeed");
 
@@ -406,7 +475,7 @@ async fn util_test_stream_exhausted(
     let manager = RedisStreamManager::new(service.clone());
 
     let mut stream = manager
-        .subscribe(entity_id.clone())
+        .subscribe(entity_id.clone(), entity_id.clone())
         .await
         .expect("subscribe should succeed");
 
