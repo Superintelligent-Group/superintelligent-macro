@@ -32,7 +32,6 @@ fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
     })
 }
 
-/// Builds message-level SQL WHERE conditions. Thread-level literals map to TRUE.
 fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> String {
     let formatting = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
@@ -387,7 +386,6 @@ fn build_query<'a>(
         builder.push(view_thread_filter);
     }
 
-    // Add thread-level email filters (e.g. thread ID filtering) before LIMIT
     if has_thread_literals(email_filter) {
         builder.push(build_thread_email_filter(email_filter));
     }
@@ -432,7 +430,6 @@ fn build_query<'a>(
         builder.push(view_message_filter);
     }
 
-    // Add dynamic message-level email filters
     if has_message_literals(email_filter) {
         builder.push(build_message_email_filter(email_filter));
     }

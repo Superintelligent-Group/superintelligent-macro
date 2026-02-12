@@ -25,7 +25,7 @@ pub enum EmailLiteral {
     Bcc(Email),
     /// The recipient field of the email
     Recipient(Email),
-    /// This node value filters by email thread ID
+    /// This value filters by email thread ID
     ThreadId(Uuid),
     /// This node value filters by email importance. false short-circuits to match nothing.
     Importance(bool),
