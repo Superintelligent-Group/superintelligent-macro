@@ -2,18 +2,21 @@ import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
+import type { DateValue } from '@core/util/date';
 import { formatRelativeDate } from '@core/util/time';
 import CaretRight from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
+import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 
 export function ThreadReplyIndicator(props: {
   countCollapsedMessages: number;
-  timestamp: string;
+  timestamp?: DateValue;
   users: string[];
   onClick: () => void;
   justifyRight?: boolean;
   isThreadOpen?: boolean;
   hasDraft?: boolean;
+  isParentNewMessage?: boolean;
 }) {
   const [hover, setHover] = createSignal(false);
   let countText = () => {
@@ -27,7 +30,10 @@ export function ThreadReplyIndicator(props: {
 
   return (
     <div
-      class="flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge-muted border pr-2 select-none hover:bg-hover focus:bracket-offset-2"
+      class={cn(
+        'flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge-muted border pr-2 select-none hover:bg-hover focus:bracket-offset-2',
+        props.isParentNewMessage && 'border-accent'
+      )}
       onClick={props.onClick}
       onKeyDown={onKeyDownClick(props.onClick)}
       onKeyUp={onKeyUpClick(props.onClick)}
@@ -83,10 +89,12 @@ export function ThreadReplyIndicator(props: {
                 {props.isThreadOpen ? 'Close thread' : 'Expand thread'}
               </p>
             </Match>
-            <Match when={!hover()}>
-              <p class="text-ink-muted">
-                Last reply {formatRelativeDate(props.timestamp)}
-              </p>
+            <Match when={!hover() && props.timestamp}>
+              {(timestamp) => (
+                <p class="text-ink-muted">
+                  Last reply {formatRelativeDate(timestamp())}
+                </p>
+              )}
             </Match>
           </Switch>
         </div>

@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import { Entity } from '../entity';
 import {
   isChannelEntity,
@@ -5,6 +6,7 @@ import {
   isProjectContainedEntity,
   type ProjectEntity,
   type EntityData,
+  isTaskEntity,
 } from '../types/entity';
 import { Match, Show, Switch, type Ref } from 'solid-js';
 import {
@@ -34,19 +36,22 @@ import { mergeRefs } from '@solid-primitives/refs';
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
-  timestamp?: number;
+  timestamp?: DateValue | null;
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
+  hovered?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseOver?: () => void;
-  onMouseLeave?: () => void;
+  onMouseMove?: () => void;
   showUnrollNotifications?: boolean;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
-  onContentHitClick?: (location?: SearchLocation) => void;
+  onContentHitClick?: (
+    e: PointerEvent | MouseEvent,
+    location?: SearchLocation
+  ) => void;
 }
 
 interface LayoutProps {
@@ -93,7 +98,7 @@ function NarrowLayout(props: LayoutProps) {
         <Show when={props.unread}>
           <UnreadIndicator active />
         </Show>
-        <div class="size-4">
+        <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} />
         </div>
         <Switch>
@@ -113,6 +118,9 @@ function NarrowLayout(props: LayoutProps) {
             {(entity) => <Entity.Title entity={entity()} />}
           </Match>
         </Switch>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
       </Entity.Slot>
 
       <Entity.Slot
@@ -152,10 +160,10 @@ function NarrowLayout(props: LayoutProps) {
                 <Show when={entity().latestMessage}>
                   {(msg) => (
                     <div class="flex items-center gap-2 w-full truncate">
-                      <span class="font-semibold truncate">
+                      <span class="font-semibold truncate min-w-min max-w-1/3">
                         <DisplayName id={msg().senderId} format="firstName" />
                       </span>
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center">
+                      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
                         <StaticMarkdown
                           theme={unifiedListMarkdownTheme}
                           markdown={msg().content}
@@ -193,7 +201,7 @@ function WideLayout(props: LayoutProps) {
         </div>
         <div
           class={cn(
-            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
+            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
             {
               'opacity-100': props.checked,
             }
@@ -210,7 +218,7 @@ function WideLayout(props: LayoutProps) {
         placement="content"
         class="font-semibold truncate items-center gap-2 flex"
       >
-        <div class="size-4">
+        <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} />
         </div>
         <Switch>
@@ -258,7 +266,7 @@ function WideLayout(props: LayoutProps) {
                   {(msg) => (
                     <>
                       <DisplayName id={msg().senderId} format="firstName" />
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center">
+                      <span class="text-ink/50 font-medium truncate inline-flex shrink items-center">
                         <StaticMarkdown
                           theme={unifiedListMarkdownTheme}
                           markdown={msg().content}
@@ -290,6 +298,9 @@ function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={props.isShared}>
           <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
       </Entity.Slot>
 
@@ -347,11 +358,13 @@ export function ListEntity(props: ListEntityProps) {
       ref={mergeRefs(props.ref, draggable)}
       class={cn('@container/entity w-full min-h-10 relative group/narrow', {
         'bg-accent/5': props.checked,
+        'hover:bg-hover/30':
+          !props.checked && !props.highlighted && !props.hovered,
+        'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
         'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
           props.highlighted,
       })}
-      onMouseOver={props.onMouseOver}
-      onMouseLeave={props.onMouseLeave}
+      onMouseMove={props.onMouseMove}
     >
       <div
         class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {

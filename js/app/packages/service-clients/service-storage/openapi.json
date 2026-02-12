@@ -2095,6 +2095,54 @@
         }
       }
     },
+    "/entity/{entity_type}/{entity_id}/permissions": {
+      "get": {
+        "tags": ["entity::get_entity_permission"],
+        "summary": "Get the current user's permission for a given entity.",
+        "operationId": "get_entity_permission",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (document, chat, project, thread, email_thread, channel)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPermissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Entity not found"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -4473,15 +4521,7 @@
       },
       "BasicDocument": {
         "type": "object",
-        "required": [
-          "id",
-          "documentVersionId",
-          "owner",
-          "name",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["id", "documentVersionId", "owner", "name"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -4493,13 +4533,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
@@ -4548,8 +4588,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -4779,24 +4819,16 @@
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "isPersistent",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -4823,8 +4855,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -4877,27 +4909,19 @@
       },
       "Comment": {
         "type": "object",
-        "required": [
-          "commentId",
-          "threadId",
-          "owner",
-          "text",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["commentId", "threadId", "owner", "text"],
         "properties": {
           "commentId": {
             "type": "integer",
             "format": "int64"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "metadata": {},
           "order": {
@@ -4918,8 +4942,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -5483,10 +5507,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5499,13 +5520,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentBom": {
@@ -5568,8 +5589,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -5678,7 +5699,7 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner", "updated_at"],
+        "required": ["document_id", "document_name", "owner"],
         "properties": {
           "document_id": {
             "type": "string",
@@ -5708,8 +5729,8 @@
             ]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last updated"
           }
         }
@@ -5752,9 +5773,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5767,8 +5786,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentBom": {
@@ -5823,8 +5842,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -6039,6 +6058,13 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
@@ -6088,6 +6114,69 @@
             "description": "the bundled [ProjectFilters]"
           }
         }
+      },
+      "EntityPermission": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Permission for item-based entities (document, chat, project, thread).",
+            "required": ["access_level", "type"],
+            "properties": {
+              "access_level": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level the user has."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["access_level"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Permission for channel-based entities.",
+            "required": ["role", "type"],
+            "properties": {
+              "role": {
+                "$ref": "#/components/schemas/ParticipantRole",
+                "description": "The role the user has in the channel."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel_role"]
+              }
+            }
+          }
+        ],
+        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+      },
+      "EntityPermissionResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["permission", "status"],
+            "properties": {
+              "permission": {
+                "$ref": "#/components/schemas/EntityPermission"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_access"]
+              }
+            }
+          }
+        ],
+        "description": "API response envelope for entity permissions."
       },
       "EntityReference": {
         "type": "object",
@@ -6425,13 +6514,7 @@
       },
       "GetDocumentListResult": {
         "type": "object",
-        "required": [
-          "documentId",
-          "documentVersionId",
-          "documentName",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["documentId", "documentVersionId", "documentName"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -6443,8 +6526,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentFamilyId": {
@@ -6470,8 +6553,8 @@
             "description": "The file type of the document"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -6891,6 +6974,7 @@
       },
       "ParticipantRole": {
         "type": "string",
+        "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
       },
       "PatchProjectRequestV2": {
@@ -7077,9 +7161,6 @@
           "text",
           "pageViewportWidth",
           "pageViewportHeight",
-          "createdAt",
-          "updatedAt",
-          "deletedAt",
           "highlightRects"
         ],
         "properties": {
@@ -7092,12 +7173,12 @@
             "format": "int32"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -7142,8 +7223,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "uuid": {
             "type": "string",
@@ -7506,23 +7587,16 @@
       },
       "Project": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -7537,8 +7611,8 @@
             "description": "The parent project id"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "userId": {
@@ -7667,7 +7741,7 @@
       },
       "ProjectPreviewData": {
         "type": "object",
-        "required": ["id", "name", "owner", "path", "updatedAt"],
+        "required": ["id", "name", "owner", "path"],
         "properties": {
           "id": {
             "type": "string"
@@ -7685,8 +7759,8 @@
             }
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8283,8 +8357,8 @@
             "type": ["string", "null"]
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "filename": {
             "type": ["string", "null"]
@@ -8341,19 +8415,17 @@
           "isPersistent",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -8386,13 +8458,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last viewed"
           }
         }
@@ -8429,8 +8501,6 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
@@ -8445,13 +8515,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
@@ -8509,13 +8579,13 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -8551,13 +8621,12 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt",
-          "viewedAt"
+          "updatedAt"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -8597,16 +8666,16 @@
             "type": ["string", "null"]
           },
           "sortTs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8793,19 +8862,17 @@
           "ownerId",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was deleted"
           },
           "id": {
@@ -8834,13 +8901,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -8896,23 +8963,15 @@
       },
       "Thread": {
         "type": "object",
-        "required": [
-          "threadId",
-          "owner",
-          "resolved",
-          "documentId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["threadId", "owner", "resolved", "documentId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -8929,8 +8988,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
