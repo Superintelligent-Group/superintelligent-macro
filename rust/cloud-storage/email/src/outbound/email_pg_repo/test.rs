@@ -781,4 +781,3 @@ async fn test_dynamic_query_thread_id_with_sender_filter(
 
     Ok(())
 }
-
