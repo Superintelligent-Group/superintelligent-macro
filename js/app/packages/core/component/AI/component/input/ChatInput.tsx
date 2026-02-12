@@ -8,6 +8,7 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { pressedKeys } from '@core/hotkey/state';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
@@ -15,15 +16,13 @@ import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
-import type { Source } from './ToolsetSelector';
-import type { UseChatMarkdown } from './useChatMarkdownArea';
-import { cn } from '@ui/utils/classname';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useAiDataConsentGate } from './useAiDataConsent';
+import type { UseChatMarkdown } from './useChatMarkdownArea';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -52,7 +51,6 @@ export function ChatInput(props: ChatInputComponentProps) {
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 
-  const [source] = createSignal<Source>('everything');
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();

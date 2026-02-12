@@ -2,10 +2,10 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
+import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
@@ -17,13 +17,11 @@ import {
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import type { ChatMessageStream } from '@core/component/AI/types';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
-import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -37,6 +35,7 @@ import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
@@ -79,26 +78,15 @@ function ChatInner(props: {
   });
 
   // Local stream signal for registerToolHandler
-  const [stream, setStream] = createSignal<ChatMessageStream>();
 
-  // Pick up reconnected stream from ChatProvider (e.g. after page refresh)
   createEffect(() => {
     const chatStream = chat.stream();
-    if (!chatStream || chatStream.isDone()) return;
-    // Only sync if we don't already have a local stream (reconnection case)
-    if (stream()) return;
-
-    setStream(chatStream);
+    if (!chatStream || chatStream.isDone()) {
+      input.setIsGenerating(false);
+      return;
+    }
     input.setIsGenerating(true);
-    createEffect(() => {
-      if (chatStream.data().length > 0) invalidateUserQuota();
-    });
-    createEffect(() => {
-      if (chatStream.isDone()) {
-        input.setIsGenerating(false);
-        invalidateUserQuota();
-      }
-    });
+    if (chatStream.data().length > 0) invalidateUserQuota();
   });
 
   const blockHandle = blockHandleSignal.get;
@@ -112,7 +100,7 @@ function ChatInner(props: {
   false && droppable;
 
   registerToolHandler(() => {
-    const s = stream();
+    const s = chat.stream();
     if (!s) return undefined;
     return { data: s.data };
   });
@@ -139,21 +127,8 @@ function ChatInner(props: {
     }
 
     chat.setStream(result.stream);
-    setStream(result.stream);
     input.setIsGenerating(true);
     invalidateUserQuota();
-
-    createEffect(() => {
-      if (result.stream.data().length > 0) {
-        invalidateUserQuota();
-      }
-    });
-    createEffect(() => {
-      if (result.stream.isDone()) {
-        input.setIsGenerating(false);
-        invalidateUserQuota();
-      }
-    });
   });
 
   const saveChatState = (state: StoredStuff) => {

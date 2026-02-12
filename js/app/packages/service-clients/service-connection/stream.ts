@@ -2,8 +2,8 @@ import type { ChatStream } from '@service-cognition/generated/schemas';
 import type { Accessor, Setter } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import { createConnectionWebsocketEffect } from './websocket';
-
 // entities that support streaming
 export type StreamType = {
   chat: ChatStream;
@@ -63,25 +63,22 @@ const [streams, setStreams] = createStore<
   Record<string, Record<string, StreamWithType>>
 >({});
 
-export function unsubscribe(entity_id: string) {
-  if (entity_id) {
-    setStreams(
-      produce((s) => {
-        delete s[entity_id];
-      })
-    );
-  }
+export function clearStream(entity_id: string) {
+  setStreams(
+    produce((s) => {
+      delete s[entity_id];
+    })
+  );
 }
 
-function streamIsDone<K extends keyof StreamType>(
-  kind: K,
-  item: StreamType[K]
+function streamIsDone(
+  kind: keyof StreamType,
+  item: StreamType[keyof StreamType]
 ): boolean {
-  if (kind === 'chat' && item.type === 'stream_end') {
-    return true;
-  } else {
-    return false;
-  }
+  const isDone = match({ kind, item })
+    .with({ kind: 'chat' }, ({ item }) => item.type === 'stream_end')
+    .exhaustive();
+  return isDone;
 }
 
 function addStream(
@@ -150,10 +147,8 @@ export function subscribe<K extends keyof StreamType>(
       console.error('unexpected stream type');
       return;
     }
-    console.log('subscribe found stream');
     return streams[entity_id][stream_id].stream.stream as Stream<K>;
   } else {
-    console.log('subscribe create stream');
     const controller = newController({
       entity_id,
       entity_type,

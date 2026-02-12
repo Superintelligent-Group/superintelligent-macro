@@ -1,17 +1,17 @@
+import { useSoup } from '@app/component/next-soup/soup-context';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
-import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/useChatInput';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
-import { useSoup } from '@app/component/next-soup/soup-context';
 
 function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
