@@ -220,7 +220,7 @@ pub async fn send_chat_message(
     };
 
     // Store the incoming user message
-    let _user_message_id =
+    let user_message_id =
         store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, model, &payload)
             .await
             .map_err(|err| {
@@ -270,6 +270,9 @@ pub async fn send_chat_message(
         messages_tx,
         model,
         now,
+        request.content.clone(),
+        user_message_id,
+        request.attachments.clone().unwrap_or_default(),
     );
 
     // Use the extension trait to handle spawning and stream management
@@ -380,6 +383,9 @@ fn create_chat_payload_stream(
     messages_tx: oneshot::Sender<Vec<ChatMessage>>,
     model: Model,
     now: std::time::Instant,
+    user_message_content: String,
+    user_message_id: String,
+    user_message_attachments: Vec<ChatAttachmentWithName>,
 ) -> PayloadStream {
     // Check for abort before starting
     if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
@@ -404,6 +410,18 @@ fn create_chat_payload_stream(
     };
 
     let payload_stream = stream! {
+        // Yield the user message as the first item so other clients can display it
+        let user_msg = ChatStream::ChatUserMessage {
+            stream_id: stream_id.clone(),
+            chat_id: chat_id.clone(),
+            message_id: user_message_id,
+            content: user_message_content,
+            attachments: user_message_attachments,
+        };
+        if let Ok(json) = serde_json::to_value(&user_msg) {
+            yield json;
+        }
+
         let client = ToolLoop::new(toolset, tool_context);
         let mut chat = client.chat();
 

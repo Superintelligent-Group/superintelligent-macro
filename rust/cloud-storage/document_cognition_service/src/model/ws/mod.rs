@@ -158,6 +158,16 @@ pub enum ChatStream {
         chat_id: String,
     },
 
+    /// The user message that initiated this stream, sent as the first item
+    /// so other clients can add it to their local chat state.
+    ChatUserMessage {
+        stream_id: String,
+        chat_id: String,
+        message_id: String,
+        content: String,
+        attachments: Vec<ChatAttachmentWithName>,
+    },
+
     /// Indicates a response from the chat completion API for a given message
     ChatMessageResponse {
         stream_id: String,

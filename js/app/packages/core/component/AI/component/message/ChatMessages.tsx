@@ -14,6 +14,7 @@ import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement, Setter } from 'solid-js';
 import {
+  on,
   createEffect,
   createMemo,
   createSelector,
@@ -174,6 +175,33 @@ export function ChatMessages(props: ChatMessagesProps) {
     if (!stream) return [];
     return stream.attachments ?? [];
   };
+
+  const streamData = () => {
+    const stream = streamTuple?.[0]?.();
+    if (!stream) return [];
+    return stream.data();
+  };
+  // when a user message arrives via stream, append if not already present
+  createEffect(
+    on(streamData, (data) => {
+      const latest = data.at(-1);
+      if (!latest) return;
+      if (latest.type !== 'chat_user_message') return;
+      setMessages((p) => {
+        if (p.at(-1)?.role === 'user' && p.at(-1)?.content === latest.content)
+          return p;
+        return [
+          ...p,
+          {
+            id: latest.message_id,
+            content: latest.content,
+            role: 'user' as const,
+            attachments: latest.attachments,
+          },
+        ];
+      });
+    })
+  );
 
   // when messages finish streaming, append and scroll
   createEffect(() => {
