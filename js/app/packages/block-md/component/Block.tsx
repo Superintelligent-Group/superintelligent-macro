@@ -11,7 +11,7 @@ import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { InstructionsTopBar, TopBar } from './TopBar';
-import { documentTourConfig } from './document-tour-config';
+import { createDocumentTourConfig } from './document-tour-config';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -30,6 +30,7 @@ export default function BlockMarkdown() {
     'document-onboarding',
     { enabled: shouldShowTour, delayMs: 500 }
   );
+  const documentTourConfig = createDocumentTourConfig(docContainerRef);
 
   // Set initial data.
   onMount(() => {

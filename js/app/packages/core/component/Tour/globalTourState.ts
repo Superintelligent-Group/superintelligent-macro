@@ -7,7 +7,7 @@ const [activeTourId, setActiveTourId] = createSignal<string | null>(null);
  * Attempts to activate a tour. Returns true if successful, false if another tour is already active.
  */
 export function activateTour(tourId: string): boolean {
-  if (activeTourId() !== null && activeTourId() !== tourId) {
+  if (activeTourId() !== null) {
     return false; // Another tour is already active
   }
   setActiveTourId(tourId);

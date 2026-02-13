@@ -29,6 +29,7 @@ export function Tour(props: TourProps) {
       description: 'Skip tour',
       registrationType: 'add', // Don't override existing escape handlers
       runWithInputFocused: true,
+      condition: () => !showExitConfirm(),
       keyDownHandler: () => {
         setShowExitConfirm(true);
         return true; // Consume the event to show the confirm dialog
@@ -46,7 +47,7 @@ export function Tour(props: TourProps) {
       registrationType: 'add',
       handlerPriority: HOTKEY_PRIORITY_CRITICAL,
       runWithInputFocused: true,
-      condition: () => !state.actionWaiting(),
+      condition: () => !state.actionWaiting() && !showExitConfirm(),
       keyDownHandler: () => {
         state.advanceToNextStep();
         return true;
@@ -64,6 +65,7 @@ export function Tour(props: TourProps) {
       registrationType: 'add',
       handlerPriority: HOTKEY_PRIORITY_HIGH,
       runWithInputFocused: true,
+      condition: () => !showExitConfirm(),
       keyDownHandler: () => {
         state.goToPreviousStep();
         return true;
@@ -76,6 +78,7 @@ export function Tour(props: TourProps) {
       registrationType: 'add',
       handlerPriority: HOTKEY_PRIORITY_HIGH,
       runWithInputFocused: true,
+      condition: () => !showExitConfirm(),
       keyDownHandler: () => {
         if (state.actionWaiting()) {
           const perform = getActionPerform(state.currentStep().action);

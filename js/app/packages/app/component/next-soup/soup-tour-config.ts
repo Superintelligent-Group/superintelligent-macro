@@ -1,5 +1,7 @@
+import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { performHotkey, type TourConfig } from '@core/component/Tour';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 
 const returnFocusToActiveSplit = () => {
   const manager = globalSplitManager();
@@ -13,9 +15,38 @@ const returnFocusToActiveSplit = () => {
   splitContainer?.focus();
 };
 
+const getActiveSplitHandle = () => {
+  const manager = globalSplitManager();
+  const activeSplitId = manager?.activeSplitId();
+  if (!manager || !activeSplitId) return;
+  return manager.getSplit(activeSplitId);
+};
+
+const getContentKey = (content?: SplitContent) =>
+  content ? `${content.type}:${content.id}` : undefined;
+
+const isDocumentContent = (content?: SplitContent) => {
+  if (!content || content.type === 'component') return false;
+  const baseType = isBlockAlias(content.type)
+    ? resolveBlockAlias(content.type)
+    : content.type;
+  return baseType === 'md';
+};
+
+const hasShareToolbarInActiveSplit = () => {
+  const manager = globalSplitManager();
+  const activeSplitId = manager?.activeSplitId();
+  if (!activeSplitId) return false;
+  const splitContainer = document.querySelector<HTMLElement>(
+    `[data-split-id="${activeSplitId}"]`
+  );
+  if (!splitContainer) return false;
+  return !!splitContainer.querySelector('[data-tour-target="share-toolbar"]');
+};
+
 const getSplitCount = () => globalSplitManager()?.splits().length ?? 0;
 let splitCountAtStart = 0;
-let activeSplitIdAtStart: string | undefined;
+let docContentKeyAtStart: string | undefined;
 
 export const soupTourConfig: TourConfig = {
   id: 'soup-onboarding',
@@ -53,7 +84,6 @@ export const soupTourConfig: TourConfig = {
       onStepStart: () => {
         returnFocusToActiveSplit();
         splitCountAtStart = getSplitCount();
-        activeSplitIdAtStart = globalSplitManager()?.activeSplitId();
       },
       action: {
         type: 'await-signal',
@@ -61,9 +91,7 @@ export const soupTourConfig: TourConfig = {
           const manager = globalSplitManager();
           if (!manager) return false;
           const splitCountChanged = getSplitCount() > splitCountAtStart;
-          const activeSplitChanged =
-            manager.activeSplitId() !== activeSplitIdAtStart;
-          return splitCountChanged || activeSplitChanged;
+          return splitCountChanged;
         },
       },
       position: 'top',
@@ -98,9 +126,21 @@ export const soupTourConfig: TourConfig = {
       title: 'New Document',
       description: 'Press `D` to create a new document.',
       hint: 'Choose Document to open it',
+      onStepStart: () => {
+        returnFocusToActiveSplit();
+        docContentKeyAtStart = getContentKey(getActiveSplitHandle()?.content());
+      },
       action: {
-        type: 'await-anchor',
-        targetId: 'share-toolbar',
+        type: 'await-signal',
+        check: () => {
+          const handle = getActiveSplitHandle();
+          if (!handle) return false;
+          const content = handle.content();
+          if (!isDocumentContent(content)) return false;
+          const contentKey = getContentKey(content);
+          if (!contentKey || contentKey === docContentKeyAtStart) return false;
+          return hasShareToolbarInActiveSplit();
+        },
         perform: () => performHotkey('d'),
       },
       position: 'bottom',

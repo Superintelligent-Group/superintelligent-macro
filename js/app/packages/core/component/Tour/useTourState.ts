@@ -1,13 +1,10 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
-import {
-  shiftPunctuationMap,
-  shiftPunctuationReverseMap,
-} from '@core/hotkey/constants';
 import type { ValidHotkey } from '@core/hotkey/types';
 import type { TourConfig } from './types';
 import { resolveTourTargetElement } from './anchors';
 import { useTourStorage } from './useTourStorage';
+import { matchesActionKey } from './matchesActionKey';
 
 export function useTourState(
   config: TourConfig,
@@ -40,33 +37,6 @@ export function useTourState(
       step.onStepExit?.();
     });
   });
-
-  const matchesActionKey = (pressed: ValidHotkey, target: ValidHotkey) => {
-    if (pressed === target) return true;
-    if (!target.includes('+')) {
-      const baseFromShifted =
-        shiftPunctuationMap[
-          target as keyof typeof shiftPunctuationMap
-        ];
-      if (baseFromShifted) {
-        if (
-          pressed === baseFromShifted ||
-          pressed === (`shift+${baseFromShifted}` as ValidHotkey)
-        ) {
-          return true;
-        }
-      }
-      const shiftedFromBase =
-        shiftPunctuationReverseMap[
-          target as keyof typeof shiftPunctuationReverseMap
-        ];
-      if (shiftedFromBase) {
-        const shifted = `shift+${target}` as ValidHotkey;
-        if (pressed === shifted) return true;
-      }
-    }
-    return false;
-  };
 
   useSubscribeToKeypress((context) => {
     if (context.eventType !== 'keydown' || context.event.repeat) return;

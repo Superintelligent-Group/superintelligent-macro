@@ -138,9 +138,7 @@ export const SoupView = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const { settingsOpen } = useSettingsState();
-
-  const [soupContainerRef, setSoupContainerRef] =
-    createSignal<HTMLDivElement>();
+  const [tourScopeRef, setTourScopeRef] = createSignal<HTMLElement>();
 
   const shouldShowTour = useTourEligibility({
     when: () => !settingsOpen(),
@@ -165,8 +163,8 @@ export const SoupView = () => {
     >
       <SoupViewContextProvider soup={soup}>
         <div
-          ref={setSoupContainerRef}
           class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full"
+          ref={setTourScopeRef}
         >
           <SoupToolbar />
           <SoupViewFileDropzone>
@@ -181,7 +179,7 @@ export const SoupView = () => {
             config={soupTourConfig}
             onComplete={handleComplete}
             onSkip={handleSkip}
-            scopeContainer={soupContainerRef()}
+            scopeContainer={tourScopeRef()}
           />
         </Show>
       </SoupViewContextProvider>

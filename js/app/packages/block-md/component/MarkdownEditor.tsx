@@ -890,7 +890,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         class="relative"
         ref={(el) => {
           editorContainerRef = el;
-          attachDocEditorAnchor(el);
         }}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
@@ -911,6 +910,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             onElementConnect(el, () => {
               onConnect(el);
             });
+            if (el) {
+              attachDocEditorAnchor(el);
+            }
           }}
           contentEditable={isContentEditable()}
           class="w-full max-w-full"
