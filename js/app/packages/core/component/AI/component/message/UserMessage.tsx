@@ -138,7 +138,7 @@ export function UserMessage(props: {
                 attachments={props.message.attachments}
                 initialText={props.message.content.toString()}
                 model={(props.message.model as Model) ?? DEFAULT_MODEL}
-                onAccept={props.edit!.makeEdit}
+                onAccept={() => {}}
                 onCancel={() => setIsEditing(false)}
               />
             </Match>
