@@ -139,9 +139,6 @@
       "@block-ai/*": [
         "./packages/block-ai/*"
       ],
-      "@macro-entity": [
-        "./packages/macro-entity/src/index.tsx"
-      ],
       "@macro-icons/*": [
         "./packages/macro-icons/*"
       ],

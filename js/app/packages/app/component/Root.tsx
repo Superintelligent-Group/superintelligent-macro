@@ -20,7 +20,7 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
-import { Provider as EntityProvider } from '@macro-entity';
+import { QueryProvider } from '@app/component/QueryProvider';
 import {
   createNotificationSource,
   type UnifiedNotification,
@@ -399,7 +399,7 @@ export function Root() {
   return (
     <MaybeTauriProvider>
       <MetaProvider>
-        <EntityProvider>
+        <QueryProvider>
           <UserContextProvider>
             <QuerySyncProviderWithUserId />
             <UserInfoSideEffects />
@@ -430,7 +430,7 @@ export function Root() {
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
           </UserContextProvider>
-        </EntityProvider>
+        </QueryProvider>
       </MetaProvider>
     </MaybeTauriProvider>
   );

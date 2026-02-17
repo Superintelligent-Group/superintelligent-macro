@@ -1,6 +1,6 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
-import { createBulkRenameDssEntityMutation } from '@macro-entity';
+import { createBulkRenameDssEntityMutation } from '@queries/entity';
 import type { EntityData } from '@entity';
 import {
   BulkEditEntityModalActionFooter,

@@ -80,7 +80,7 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { useWaitChatRename } from '@macro-entity';
+import { useWaitChatRename } from '@queries/entity';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 
 type ChatData = {

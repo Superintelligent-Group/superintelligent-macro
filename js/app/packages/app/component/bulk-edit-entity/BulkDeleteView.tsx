@@ -1,5 +1,5 @@
 import type { EntityData } from '@entity';
-import { createBulkDeleteDssItemsMutation } from '@macro-entity';
+import { createBulkDeleteDssItemsMutation } from '@queries/entity';
 import { konsoleContextInformation } from '../command/KonsoleItem';
 import {
   BulkEditEntityModalActionFooter,

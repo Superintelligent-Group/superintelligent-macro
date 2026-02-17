@@ -15,7 +15,7 @@ import {
   type TaskEntityWithProperties,
   type WithSearch,
 } from '@entity';
-import { queryKeys } from '@macro-entity';
+import { emailKeys } from '@queries/email/keys';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import {
@@ -376,12 +376,12 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  await queryClient.cancelQueries({ queryKey: emailKeys._def });
 
   const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
-    queryKey: queryKeys.all.email,
+    queryKey: emailKeys._def,
   });
 
   const current = getSoupEntityById(id);
@@ -425,7 +425,7 @@ export async function archiveEmail(
     }
   } finally {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: emailKeys._def }),
       invalidateSoupEntity(id),
     ]);
   }

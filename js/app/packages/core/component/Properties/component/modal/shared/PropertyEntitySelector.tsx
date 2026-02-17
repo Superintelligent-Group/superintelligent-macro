@@ -13,7 +13,7 @@ import {
 } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import { createEmailsInfiniteQuery } from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@queries/email/previews';
 import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { useEmail, useUserId } from '@core/context/user';

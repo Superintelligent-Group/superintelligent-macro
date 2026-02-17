@@ -22,7 +22,7 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { VList } from 'virtua/solid';
-import { createMoveToProjectDssEntityMutation } from '@macro-entity';
+import { createMoveToProjectDssEntityMutation } from '@queries/entity';
 import type { EntityData } from '@entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
