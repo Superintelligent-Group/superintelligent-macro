@@ -29,9 +29,7 @@ vi.mock('@service-comms/client', () => ({
   commsServiceClient: {},
 }));
 
-vi.mock('@macro-entity', () => ({
-  queryKeys: { all: { channel: ['channel'] } },
-}));
+// NOTE: @macro-entity mock removed - channelKeys from @queries/channel/keys is now used
 
 // Import after mocks are set up
 import {
