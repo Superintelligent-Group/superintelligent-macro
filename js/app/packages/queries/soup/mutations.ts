@@ -257,10 +257,6 @@ export function createBulkMoveToProjectSoupEntityMutation() {
   }));
 }
 
-// ============================================================================
-// Rename Mutations
-// ============================================================================
-
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
 

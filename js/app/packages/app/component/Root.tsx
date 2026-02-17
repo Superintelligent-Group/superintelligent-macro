@@ -20,7 +20,7 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
-import { QueryProvider } from '@app/component/QueryProvider';
+import { QueryProvider } from '@app/component/query-provider';
 import {
   createNotificationSource,
   type UnifiedNotification,
