@@ -293,16 +293,6 @@
         "vitest": "^3.0.7",
       },
     },
-    "packages/macro-entity": {
-      "name": "macro-entity",
-      "version": "1.0.0",
-      "dependencies": {
-        "@phosphor-icons/core": "^2.1.1",
-      },
-      "peerDependencies": {
-        "solid-js": "^1.9.7",
-      },
-    },
     "packages/notifications": {
       "name": "notifications",
       "dependencies": {
@@ -2436,8 +2426,6 @@
     "lunr": ["lunr@2.3.9", "", {}, "sha512-zTU3DaZaF3Rt9rhN3uBMGQD3dD2/vFQqnvZCDv4dl5iOzq2IZQqTxu90r4E5J+nP70J3ilqVCrbho2eWaeW8Ow=="],
 
     "lz-string": ["lz-string@1.5.0", "", { "bin": { "lz-string": "bin/bin.js" } }, "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ=="],
-
-    "macro-entity": ["macro-entity@workspace:packages/macro-entity"],
 
     "magic-string": ["magic-string@0.30.17", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0" } }, "sha512-sNPKHvyjVf7gyjwS4xGTaW/mCnF8wnjtifKBEhxfZ7E/S8tQ0rssrwGNn6q8JH/ohItJfSQp9mBtQYuTlH5QnA=="],
 

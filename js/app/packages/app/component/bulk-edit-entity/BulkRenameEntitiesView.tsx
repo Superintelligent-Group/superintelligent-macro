@@ -1,6 +1,6 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
-import { createBulkRenameDssEntityMutation } from '@queries/entity';
+import { createBulkRenameSoupEntityMutation } from '@queries/soup/mutations';
 import type { EntityData } from '@entity';
 import {
   BulkEditEntityModalActionFooter,
@@ -14,7 +14,7 @@ export const BulkRenameEntitiesView = (props: {
   onFinish: () => void;
   onCancel: () => void;
 }) => {
-  const renameMutation = createBulkRenameDssEntityMutation();
+  const renameMutation = createBulkRenameSoupEntityMutation();
 
   let inputRef: HTMLInputElement | undefined;
 

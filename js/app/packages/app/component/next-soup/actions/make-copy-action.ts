@@ -1,10 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
-import { createBulkCopyDssEntityMutation } from '@queries/entity';
+import { createBulkCopySoupEntityMutation } from '@queries/soup/mutations';
 
 export const makeCopyAction = () => {
-  const bulkCopyMutation = createBulkCopyDssEntityMutation();
+  const bulkCopyMutation = createBulkCopySoupEntityMutation();
 
   const canExecute = (entity: EntityData): boolean => {
     return entity.type !== 'channel' && entity.type !== 'email';

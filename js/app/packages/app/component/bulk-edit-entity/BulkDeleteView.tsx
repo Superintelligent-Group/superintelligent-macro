@@ -1,5 +1,5 @@
 import type { EntityData } from '@entity';
-import { createBulkDeleteDssItemsMutation } from '@queries/entity';
+import { createBulkDeleteSoupItemsMutation } from '@queries/soup/mutations';
 import { konsoleContextInformation } from '../command/KonsoleItem';
 import {
   BulkEditEntityModalActionFooter,
@@ -11,7 +11,7 @@ export const BulkDeleteView = (props: {
   onFinish: () => void;
   onCancel: () => void;
 }) => {
-  const bulkDelete = createBulkDeleteDssItemsMutation();
+  const bulkDelete = createBulkDeleteSoupItemsMutation();
 
   const handleDelete = async () => {
     try {

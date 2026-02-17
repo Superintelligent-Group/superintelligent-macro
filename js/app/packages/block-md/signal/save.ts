@@ -12,7 +12,7 @@ import { refetchHistory } from '@queries/history/history';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
-import { createRenameDssEntityMutation } from '@queries/entity';
+import { createRenameSoupEntityMutation } from '@queries/soup/mutations';
 
 export const useBlockSave = () => {
   const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);
@@ -45,7 +45,7 @@ export function useSaveMarkdownDocument() {
 
 export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameSoupEntityMutation();
 
   return async (newName: string, oldName: string) => {
     await renameMutation.mutateAsync({

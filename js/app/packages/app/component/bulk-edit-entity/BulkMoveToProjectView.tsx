@@ -4,7 +4,7 @@ import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { createBulkMoveToProjectDssEntityMutation } from '@queries/entity';
+import { createBulkMoveToProjectSoupEntityMutation } from '@queries/soup/mutations';
 import type { EntityData } from '@entity';
 import {
   BulkEditEntityModalActionFooter,
@@ -19,7 +19,7 @@ export const BulkMoveToProjectView = (props: {
   onCancel: () => void;
 }) => {
   let listRef!: HTMLDivElement;
-  const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
+  const bulkMoveToProjectMutation = createBulkMoveToProjectSoupEntityMutation();
   const projectsQuery = useProjectsQuery();
   const projects = () => projectsQuery.data ?? [];
   const [searchQuery, setSearchQuery] = createSignal('');

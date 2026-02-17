@@ -1,5 +1,5 @@
 import { createSignal, onMount } from 'solid-js';
-import { createRenameDssEntityMutation } from '@queries/entity';
+import { createRenameSoupEntityMutation } from '@queries/soup/mutations';
 import type { EntityData } from '@entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
@@ -9,7 +9,7 @@ export const RenameView = (props: {
   onFinish: () => void;
   onCancel: () => void;
 }) => {
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameSoupEntityMutation();
   let inputRef: HTMLInputElement | undefined;
 
   const [editValue, setEditValue] = createSignal(props.entity?.name || '');

@@ -22,7 +22,7 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { VList } from 'virtua/solid';
-import { createMoveToProjectDssEntityMutation } from '@queries/entity';
+import { createMoveToProjectSoupEntityMutation } from '@queries/soup/mutations';
 import type { EntityData } from '@entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
@@ -32,7 +32,7 @@ export const MoveToProjectView = (props: {
   onCancel: () => void;
 }) => {
   let listRef!: HTMLDivElement;
-  const moveToProjectMutation = createMoveToProjectDssEntityMutation();
+  const moveToProjectMutation = createMoveToProjectSoupEntityMutation();
   const projectsQuery = useProjectsQuery();
   const projects = () => projectsQuery.data ?? [];
   const [searchQuery, setSearchQuery] = createSignal('');
