@@ -179,7 +179,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
             isSlim() && 'flex-col'
           )}
         >
-          <LogoIcon class="size-6 text-accent" />
+          <div class="size-7 flex items-center justify-center">
+            <LogoIcon class="text-accent" />
+          </div>
           <div class="flex items-center gap-1">
             <Show when={isExpanded()}>
               <Tooltip tooltip={<LabelAndHotKey label="Search" shortcut="/" />}>
@@ -324,9 +326,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
       variant="ghost"
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default',
-        isActive() && 'bg-ink/15 not-disabled:hover:bg-ink/15 text-ink',
-        props.sidebarState === 'slim' && 'justify-center aspect-square',
+        'relative overflow-hidden flex items-center justify-start text-sm gap-2 cursor-default rounded-none',
+        'not-disabled:hover:text-accent',
+        props.sidebarState !== 'slim' && 'not-disabled:hover:bg-accent/5 not-disabled:hover:outline-1 not-disabled:hover:outline-accent/20 not-disabled:hover:outline-offset-[-1px] not-disabled:active:bg-accent/10',
+        props.sidebarState !== 'slim' && isActive() && 'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px] not-disabled:hover:bg-accent/5 text-accent',
+        props.sidebarState === 'slim' && isActive() && 'text-accent',
+        props.sidebarState === 'slim' && 'justify-center aspect-square not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
         props.sidebarState !== 'slim' && 'w-full'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
@@ -350,6 +355,15 @@ const SidebarLink = (props: SidebarLinkProps) => {
         );
       }}
     >
+      {/* Accent bar indicator */}
+      <Show when={props.sidebarState !== 'slim'}>
+        <div
+          class={cn(
+            'absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 transition-opacity',
+            (isHovering() || isActive()) && 'opacity-100'
+          )}
+        />
+      </Show>
       <Show when={props.icon}>
         <div class="shrink-0 [&_svg]:size-4">
           <Dynamic component={props.icon} triggerAnimation={isHovering()} />
