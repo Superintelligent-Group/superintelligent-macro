@@ -11,7 +11,7 @@ import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { useLocation } from '@solidjs/router';
 import LogoIcon from '@macro-icons/macro-logo.svg';
-import PlusIcon from '@macro-icons/wide/plus.svg';
+import PlusIcon from '@phosphor-icons/core/assets/regular/plus.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import CommandIcon from '@phosphor-icons/core/assets/regular/command.svg';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
