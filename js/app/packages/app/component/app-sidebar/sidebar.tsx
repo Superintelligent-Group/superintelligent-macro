@@ -175,8 +175,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
       >
         <div
           class={cn(
-            'flex items-center justify-between py-2 gap-2 px-2',
-            isSlim() && 'flex-col'
+            'flex items-center justify-between gap-2 px-2 border-y-1 border-transparent',
+            !isSlim() && 'h-[41px] ',
+            isSlim() && 'flex-col py-2'
           )}
         >
           <div class="size-7 flex items-center justify-center">
