@@ -328,9 +328,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
       size={props.sidebarState === 'slim' ? 'icon-sm' : 'sm'}
       class={cn(
         'relative overflow-hidden flex items-center justify-start text-sm gap-2 cursor-default rounded-none',
-        'not-disabled:hover:text-accent',
-        props.sidebarState !== 'slim' && 'not-disabled:hover:bg-accent/5 not-disabled:hover:outline-1 not-disabled:hover:outline-accent/20 not-disabled:hover:outline-offset-[-1px] not-disabled:active:bg-accent/10',
-        props.sidebarState !== 'slim' && isActive() && 'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px] not-disabled:hover:bg-accent/5 text-accent',
+        'not-disabled:hover:text-accent not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
+        props.sidebarState !== 'slim' && isActive() && 'text-accent',
         props.sidebarState === 'slim' && isActive() && 'text-accent',
         props.sidebarState === 'slim' && 'justify-center aspect-square not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
         props.sidebarState !== 'slim' && 'w-full'
