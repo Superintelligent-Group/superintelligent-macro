@@ -163,7 +163,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
       <div
         class={cn(
-          'h-full bg-page pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content transition-[width_transform_opacity] duration-200 ease-in-out',
+          'h-full bg-page pt-2 flex flex-col gap-4 mobile:absolute mobile:z-modal-content',
           isExpanded() &&
             'max-w-56 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
           props.sidebarState === 'hidden' &&
