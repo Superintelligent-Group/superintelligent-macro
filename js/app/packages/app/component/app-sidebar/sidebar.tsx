@@ -331,7 +331,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
         'not-disabled:hover:text-accent not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
         props.sidebarState !== 'slim' && isActive() && 'text-accent',
         props.sidebarState === 'slim' && isActive() && 'text-accent',
-        props.sidebarState === 'slim' && 'justify-center aspect-square not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
+        props.sidebarState === 'slim' &&
+          'justify-center aspect-square not-disabled:hover:bg-transparent not-disabled:active:bg-transparent',
         props.sidebarState !== 'slim' && 'w-full'
       )}
       href={`${ROUTER_BASE}/component${props.href}`}
