@@ -170,17 +170,17 @@ export const AppSidebar = (props: AppSidebarProps) => {
             '-translate-x-full overflow-hidden opacity-0',
 
           isSlim() &&
-            'max-w-10 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+            'max-w-11 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
         )}
       >
         <div
           class={cn(
-            'flex items-center justify-between gap-2 px-2 border-y-1 border-transparent',
-            !isSlim() && 'h-[41px] ',
-            isSlim() && 'flex-col py-2'
+            'flex items-center justify-between gap-2 px-2 border-t-1 border-transparent',
+            !isSlim() && 'h-[41px] border-b-1',
+            isSlim() && 'flex-col'
           )}
         >
-          <div class="size-7 flex items-center justify-center">
+          <div class="w-[28px] h-[39px] flex items-center justify-center">
             <LogoIcon class="text-accent" />
           </div>
           <div class="flex items-center gap-1">
