@@ -175,8 +175,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
       >
         <div
           class={cn(
-            'flex items-center justify-between py-2 pl-3 pr-2',
-            isSlim() && 'flex-col gap-2 px-2 justify-center'
+            'flex items-center justify-between py-2 gap-2 px-2',
+            isSlim() && 'flex-col'
           )}
         >
           <LogoIcon class="size-6 text-accent" />
