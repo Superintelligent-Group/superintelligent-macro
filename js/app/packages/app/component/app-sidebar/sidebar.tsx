@@ -102,7 +102,7 @@ export const SIDEBAR_LINKS = [
   },
   {
     id: 'files',
-    label: 'Files',
+    label: 'Folders',
     href: LIST_VIEW_PATHS.files,
     icon: AnimatedFolderIcon,
     hotkey: 'f',

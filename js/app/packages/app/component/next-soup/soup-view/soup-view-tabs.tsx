@@ -254,6 +254,7 @@ const DocumentsTabs = () => {
         list={[
           { value: 'owned', label: 'Owned' },
           { value: 'shared', label: 'Shared' },
+          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
@@ -313,8 +314,6 @@ const FilesTabs = () => {
       <SegmentedControl
         list={[
           { value: 'owned', label: 'Owned' },
-          { value: 'shared', label: 'Shared' },
-          { value: 'attachments', label: 'Attachments' },
           { value: 'all', label: 'All' },
         ]}
         value={activeTab()}
