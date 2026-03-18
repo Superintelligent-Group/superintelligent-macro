@@ -22,10 +22,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
 
-import FileCodeIcon from '@icon/regular/file-code.svg';
-import FileImageIcon from '@icon/regular/file-image.svg';
-import FilePdfIcon from '@icon/regular/file-pdf.svg';
-import FileIcon from '@icon/regular/file.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
@@ -112,17 +108,17 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'attachment-pdf',
         label: 'PDFs',
-        icon: () => <FilePdfIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'attachment-image',
         label: 'Images',
-        icon: () => <FileImageIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'attachment-document',
         label: 'Documents',
-        icon: () => <FileIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="unknown" size="xs" />,
       },
     ],
     multiple: true,
@@ -248,27 +244,35 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
     id: 'type',
     label: 'Type',
     options: [
-      { id: 'doc-markdown', label: 'Markdown' },
-      { id: 'doc-canvas', label: 'Canvas' },
+      {
+        id: 'doc-markdown',
+        label: 'Markdown',
+        icon: () => <EntityIcon targetType="md" size="xs" />,
+      },
+      {
+        id: 'doc-canvas',
+        label: 'Canvas',
+        icon: () => <EntityIcon targetType="canvas" size="xs" />,
+      },
       {
         id: 'file-code',
         label: 'Code',
-        icon: () => <FileCodeIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="code" size="xs" />,
       },
       {
         id: 'file-image',
         label: 'Images',
-        icon: () => <FileImageIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
-        icon: () => <FilePdfIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'file-other',
         label: 'Other',
-        icon: () => <FileIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="unknown" size="xs" />,
       },
     ],
     multiple: true,
@@ -283,22 +287,22 @@ const FILES_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'file-code',
         label: 'Code',
-        icon: () => <FileCodeIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="code" size="xs" />,
       },
       {
         id: 'file-image',
         label: 'Images',
-        icon: () => <FileImageIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'file-pdf',
         label: 'PDFs',
-        icon: () => <FilePdfIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'file-other',
         label: 'Other',
-        icon: () => <FileIcon class="size-3.5" />,
+        icon: () => <EntityIcon targetType="unknown" size="xs" />,
       },
     ],
     multiple: true,
