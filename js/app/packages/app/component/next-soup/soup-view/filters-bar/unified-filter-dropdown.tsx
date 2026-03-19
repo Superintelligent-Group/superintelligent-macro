@@ -279,36 +279,6 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
-const FILES_FILTER_CATEGORIES: FilterCategory[] = [
-  {
-    id: 'type',
-    label: 'Type',
-    options: [
-      {
-        id: 'file-code',
-        label: 'Code',
-        icon: () => <EntityIcon targetType="code" size="xs" />,
-      },
-      {
-        id: 'file-image',
-        label: 'Images',
-        icon: () => <EntityIcon targetType="image" size="xs" />,
-      },
-      {
-        id: 'file-pdf',
-        label: 'PDFs',
-        icon: () => <EntityIcon targetType="pdf" size="xs" />,
-      },
-      {
-        id: 'file-other',
-        label: 'Other',
-        icon: () => <EntityIcon targetType="unknown" size="xs" />,
-      },
-    ],
-    multiple: true,
-  },
-];
-
 export function buildContactLabel(
   contact: { id: string; name?: string | null },
   currentUserId: string | undefined
@@ -326,7 +296,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
   channels: [],
-  files: [],
+  folders: [],
   search: [],
 };
 

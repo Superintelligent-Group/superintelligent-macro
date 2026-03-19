@@ -141,7 +141,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             },
             project_filters: { project_ids: EXCLUDE },
           },
-          clientFilters: {},
+          clientFilters: { and: ['not-task'] },
         };
       },
       shared: () => ({
@@ -153,7 +153,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: { and: ['shared-entity'] },
+        clientFilters: { and: ['not-task', 'shared-entity'] },
       }),
       attachments: () => ({
         queryFilters: {
@@ -163,14 +163,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: {},
+        clientFilters: { and: ['not-task'] },
       }),
       all: () => ({
         queryFilters: {
           ...QUERY_FILTERS.documentAndFile,
           project_filters: { project_ids: EXCLUDE },
         },
-        clientFilters: {},
+        clientFilters: { and: ['not-task'] },
       }),
     },
   },
@@ -223,7 +223,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  files: {
+  folders: {
     default: 'owned',
     tabs: {
       owned: (ctx) => {
@@ -236,7 +236,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             document_filters: { document_ids: EXCLUDE },
             project_filters: { owners: [ctx.userId] },
           },
-          clientFilters: { and: ['folders'] },
+          clientFilters: {},
         };
       },
       all: () => ({
@@ -247,7 +247,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           document_filters: { document_ids: EXCLUDE },
           project_filters: {},
         },
-        clientFilters: { and: ['folders'] },
+        clientFilters: {},
       }),
     },
   },
@@ -265,7 +265,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
 };
 
 /** Views whose default tab requires user context */
-type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'files';
+type ContextRequiredView = 'agents' | 'documents' | 'tasks' | 'folders';
 
 /** Views whose default tab works without user context */
 type ContextOptionalView = Exclude<ListView, ContextRequiredView>;

@@ -101,9 +101,9 @@ export const SIDEBAR_LINKS = [
     hotkey: 'c',
   },
   {
-    id: 'files',
+    id: 'folders',
     label: 'Folders',
-    href: LIST_VIEW_PATHS.files,
+    href: LIST_VIEW_PATHS.folders,
     icon: AnimatedFolderIcon,
     hotkey: 'f',
   },
@@ -302,10 +302,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
           variant="ghost"
           tooltipPlacement="right"
           tooltip={
-            <LabelAndHotKey
-              label="Create new"
-              hotkeyToken={TOKENS.global.createCommand}
-            />
+            isSlim() ? (
+              <LabelAndHotKey
+                label="Create new"
+                hotkeyToken={TOKENS.global.createCommand}
+              />
+            ) : undefined
           }
           onClick={handleCreateClick}
           onMouseEnter={() => setCreateBtnHovering(true)}
@@ -329,10 +331,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
           variant="ghost"
           tooltipPlacement="right"
           tooltip={
-            <LabelAndHotKey
-              label="Create new split"
-              hotkeyToken={TOKENS.global.createNewSplit}
-            />
+            isSlim() ? (
+              <LabelAndHotKey
+                label="Create new split"
+                hotkeyToken={TOKENS.global.createNewSplit}
+              />
+            ) : undefined
           }
           onClick={handleNewSplitClick}
           disabled={!canCreateNewSplit()}
@@ -351,10 +355,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
           variant="ghost"
           tooltipPlacement="right"
           tooltip={
-            <LabelAndHotKey
-              label="Command palette"
-              hotkeyToken={TOKENS.global.commandMenu}
-            />
+            isSlim() ? (
+              <LabelAndHotKey
+                label="Command palette"
+                hotkeyToken={TOKENS.global.commandMenu}
+              />
+            ) : undefined
           }
           onClick={handleCommandPaletteClick}
           onMouseEnter={() => setCommandBtnHovering(true)}
@@ -381,10 +387,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
           onMouseEnter={() => setSettingsBtnHovering(true)}
           onMouseLeave={() => setSettingsBtnHovering(false)}
           tooltip={
-            <LabelAndHotKey
-              label="Settings"
-              hotkeyToken={TOKENS.global.toggleSettings}
-            />
+            isSlim() ? (
+              <LabelAndHotKey
+                label="Settings"
+                hotkeyToken={TOKENS.global.toggleSettings}
+              />
+            ) : undefined
           }
         >
           <div
@@ -475,14 +483,19 @@ const SidebarLink = (props: SidebarLinkProps) => {
           )}
           tooltipPlacement="right"
           tooltip={
-            <LabelAndHotKey
-              label={`Go to ${props.label}`}
-              hotkeySequence={
-                props.standaloneHotkey
-                  ? [{ shortcut: props.hotkey }]
-                  : [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: props.hotkey }]
-              }
-            />
+            props.sidebarState === 'slim' ? (
+              <LabelAndHotKey
+                label={`Go to ${props.label}`}
+                hotkeySequence={
+                  props.standaloneHotkey
+                    ? [{ shortcut: props.hotkey }]
+                    : [
+                        { shortcut: GO_TO_LEADER_KEY },
+                        { shortcut: props.hotkey },
+                      ]
+                }
+              />
+            ) : undefined
           }
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
