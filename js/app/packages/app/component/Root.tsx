@@ -73,9 +73,16 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { SuspenseContextComp } from './SuspenseContext';
+import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+
+const InteractiveOnboarding = lazy(
+  () => import('./interactive-onboarding/InteractiveOnboarding')
+);
 import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
+import { AnalyticsContextProvider } from '@app/component/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -177,7 +184,9 @@ function BasePathComponent() {
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={isNativeMobilePlatform() ? '/login' : '/signup'} />
+        <Navigate
+          href={`${isNativeMobilePlatform() ? '/login' : '/signup'}${window.location.search}`}
+        />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
@@ -284,6 +293,14 @@ const ROUTES: RouteDefinition[] = [
     component: () => (
       <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
         <Onboarding />
+      </div>
+    ),
+  },
+  {
+    path: '/welcome',
+    component: () => (
+      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
+        <InteractiveOnboarding />
       </div>
     ),
   },
@@ -428,40 +445,46 @@ export function Root() {
   return (
     <MaybeTauriProvider>
       <MetaProvider>
-        <EntityProvider>
-          <UserContextProvider>
-            <QuerySyncProviderWithUserId />
-            <UserInfoSideEffects />
-            <ConfiguredGlobalAppStateProvider>
-              <ChannelsContextProvider>
-                <QuickAccessProvider>
-                  <SearchProvider>
-                    <TabAttachmentsInit />
-                    <ReactiveFavicon />
-                    <Title>{tabTitle()}</Title>
-                    <MacroJump />
-                    <Visor />
-                    <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                      <IsomorphicRouter
-                        transformUrl={transformShortIdInUrlPathname}
-                        root={Layout}
-                        rootPreload={rootPreload}
-                        base={ROUTER_BASE}
-                      >
-                        {{
-                          path: '/',
-                          component: TauriRouteListener,
-                          children: ROUTES,
-                        }}
-                      </IsomorphicRouter>
-                    </SuspenseContextComp>
-                    <ToastRegion />
-                  </SearchProvider>
-                </QuickAccessProvider>
-              </ChannelsContextProvider>
-            </ConfiguredGlobalAppStateProvider>
-          </UserContextProvider>
-        </EntityProvider>
+        <PosthogProvider>
+          <AnalyticsContextProvider>
+            <EntityProvider>
+              <UserContextProvider>
+                <QuerySyncProviderWithUserId />
+                <UserInfoSideEffects />
+                <ConfiguredGlobalAppStateProvider>
+                  <ChannelsContextProvider>
+                    <QuickAccessProvider>
+                      <SearchProvider>
+                        <TabAttachmentsInit />
+                        <ReactiveFavicon />
+                        <Title>{tabTitle()}</Title>
+                        <MacroJump />
+                        <Visor />
+                        <SuspenseContextComp
+                          fallback={<RootSuspenseFallback />}
+                        >
+                          <IsomorphicRouter
+                            transformUrl={transformShortIdInUrlPathname}
+                            root={Layout}
+                            rootPreload={rootPreload}
+                            base={ROUTER_BASE}
+                          >
+                            {{
+                              path: '/',
+                              component: TauriRouteListener,
+                              children: ROUTES,
+                            }}
+                          </IsomorphicRouter>
+                        </SuspenseContextComp>
+                        <ToastRegion />
+                      </SearchProvider>
+                    </QuickAccessProvider>
+                  </ChannelsContextProvider>
+                </ConfiguredGlobalAppStateProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </AnalyticsContextProvider>
+        </PosthogProvider>
       </MetaProvider>
     </MaybeTauriProvider>
   );

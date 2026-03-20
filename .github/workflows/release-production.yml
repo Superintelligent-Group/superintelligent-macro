@@ -12,21 +12,21 @@ env:
   WEB_APP_VERSION: ${{ github.ref_name }}
 
 jobs:
-  # migrate-db:
-  #   name: Run Database Migrations
-  #   runs-on: db-migrator
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: .github/
-  #     - name: Run migrations
-  #       uses: ./.github/actions/migrate-cloud-storage-db
-  #       with:
-  #         environment: prod
+  migrate-db:
+    name: Run Database Migrations
+    runs-on: db-migrator
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/
+      - name: Run migrations
+        uses: ./.github/actions/migrate-cloud-storage-db
+        with:
+          environment: prod
 
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
-    # needs: [migrate-db]
+    needs: [migrate-db]
     uses: ./.github/workflows/deploy-all-services.yml
     with:
       environment: prod
@@ -58,6 +58,7 @@ jobs:
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
           VITE_DD_HASH: ${{ github.sha }}
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:

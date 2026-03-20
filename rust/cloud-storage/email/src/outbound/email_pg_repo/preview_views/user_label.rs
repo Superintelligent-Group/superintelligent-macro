@@ -30,6 +30,7 @@ pub(crate) async fn user_label_preview_cursor(
             t.effective_ts AS "sort_ts!",
             t.created_at AS "created_at!",
             t.updated_at AS "updated_at!",
+            t.project_id,
             t.viewed_at AS "viewed_at?",
             lmp.subject AS "name?",
             lmp.snippet AS "snippet?",
@@ -57,6 +58,7 @@ pub(crate) async fn user_label_preview_cursor(
                 t.link_id,
                 t.inbox_visible,
                 t.is_read,
+                t.project_id,
                 llpt.latest_labeled_ts AS created_at,
                 llpt.latest_labeled_ts AS updated_at,
                 uh.updated_at AS viewed_at,
@@ -75,6 +77,11 @@ pub(crate) async fn user_label_preview_cursor(
                 JOIN email_message_labels ml ON m.id = ml.message_id
                 JOIN email_labels l ON ml.label_id = l.id
                 WHERE m.link_id = $1 AND l.name = $5
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_message_labels ml2
+                      JOIN email_labels l2 ON ml2.label_id = l2.id
+                      WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = $1
+                  )
                 GROUP BY m.thread_id
             ) llpt
             JOIN email_threads t ON llpt.thread_id = t.id
@@ -102,6 +109,11 @@ pub(crate) async fn user_label_preview_cursor(
             JOIN email_message_labels ml ON m.id = ml.message_id
             JOIN email_labels l ON ml.label_id = l.id
             WHERE m.thread_id = t.id AND m.is_draft = FALSE AND l.link_id = t.link_id AND l.name = $5
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml2
+                  JOIN email_labels l2 ON ml2.label_id = l2.id
+                  WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = t.link_id
+              )
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
         ) AS lmp

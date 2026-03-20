@@ -13,6 +13,8 @@ export const TOKENS = {
       '7': 'soup.tabs.7',
       '8': 'soup.tabs.8',
       '9': 'soup.tabs.9',
+      next: 'soup.tabs.next',
+      prev: 'soup.tabs.prev',
     },
   },
 
@@ -211,6 +213,14 @@ export const TOKENS = {
     focusNextMessage: 'channel.focusNextMessage',
     focusInput: 'channel.focusInput',
     sendMessage: 'channel.sendMessage',
+    clearSelection: 'channel.clearSelection',
+    cancelReply: 'channel.cancelReply',
+    threadPreviousReply: 'channel.threadPreviousReply',
+    threadNextReply: 'channel.threadNextReply',
+    threadExit: 'channel.threadExit',
+    threadCollapse: 'channel.threadCollapse',
+    threadReply: 'channel.threadReply',
+    threadEditReply: 'channel.threadEditReply',
   },
 
   // drawer

@@ -1416,10 +1416,6 @@ export const createDocumentResponse = zod.object({
 /**
  * This endpoint creates task metadata and sets properties atomically.
 Task content should be set separately via the sync service.
-
-NOTE: Ideally content initialization would happen here on the backend, but that requires
-adding Loro/Lexical support to initialize sync service documents server-side. Deferring
-for now — client must call `syncServiceClient.initializeFromSnapshot()` after this returns.
  * @summary Creates a task document with properties in a single call.
  */
 export const createTaskHandlerBody = zod
@@ -1428,12 +1424,12 @@ export const createTaskHandlerBody = zod
       .string()
       .uuid()
       .nullish()
-      .describe('Optional project id to associate the task with'),
+      .describe('Optional project ID to associate the task with.'),
     propertyValues: zod
       .array(
         zod
           .object({
-            propertyId: zod.string().describe('The property definition ID'),
+            propertyId: zod.string().describe('The property definition ID.'),
             value: zod
               .union([
                 zod
@@ -1563,19 +1559,19 @@ export const createTaskHandlerBody = zod
                 'Type-safe enum for setting entity property values - provides compile-time validation.'
               ),
           })
-          .describe('Property input for setting a property value on the task')
+          .describe('Property input for setting a property value on a task.')
       )
       .nullish()
-      .describe('Optional property values to set on the task'),
-    taskName: zod.string().describe('The name of the task'),
+      .describe('Optional property values to set on the task.'),
+    taskName: zod.string().describe('The name of the task.'),
   })
-  .describe('Request body for create_task');
+  .describe('Request body for creating a task.');
 
 export const createTaskHandlerResponse = zod
   .object({
-    documentId: zod.string().describe('The document id of the created task'),
+    documentId: zod.string().describe('The document ID of the created task.'),
   })
-  .describe('Response for create_task');
+  .describe('Response for creating a task.');
 
 export const initializeUserDocumentsResponse = zod.object({
   success: zod.boolean().describe('Indicates if the request was successful'),
@@ -3698,6 +3694,7 @@ export const getItemsSoupResponse = zod.object({
               isRead: zod.boolean(),
               name: zod.string().nullish(),
               ownerId: zod.string(),
+              projectId: zod.string().nullish(),
               providerId: zod.string().nullish(),
               senderEmail: zod.string().nullish(),
               senderName: zod.string().nullish(),
@@ -4212,6 +4209,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
+        is_email_attachment: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by email attachment status. true = only email attachments, false = only non-email attachments, None = both.'
+          ),
         notification_filters: zod
           .object({
             done: zod
@@ -4240,6 +4243,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          ),
+        sub_types: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Filter by document sub type. Examples: ['task']. Empty to search all sub types."
           ),
         task_filters: zod
           .object({
@@ -4312,6 +4321,12 @@ export const postItemsSoupBody = zod
           })
           .optional()
           .describe('Notification-level filters that apply to an entity type.'),
+        project_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'A list of project ids to search within. Empty to ignore project filtering.'
+          ),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -4371,6 +4386,38 @@ export const postItemsSoupBody = zod
       .describe(
         'The project filters used to filter down what projects you search over.'
       ),
+    property_filters: zod
+      .array(
+        zod
+          .object({
+            entity_ids: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "Entity reference IDs to match. Multiple values are OR'd together."
+              ),
+            entity_type: zod
+              .string()
+              .nullish()
+              .describe(
+                'The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types.'
+              ),
+            option_ids: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "Select option UUIDs to match. Multiple values are OR'd together."
+              ),
+            property_definition_id: zod
+              .string()
+              .describe('The UUID of the property definition to filter on.'),
+          })
+          .describe(
+            "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together."
+          )
+      )
+      .optional()
+      .describe('property-based filters applied across entity types'),
   })
   .describe('a bundle of all of the filters for each entity type')
   .and(
@@ -5239,6 +5286,7 @@ export const postItemsSoupResponse = zod.object({
               isRead: zod.boolean(),
               name: zod.string().nullish(),
               ownerId: zod.string(),
+              projectId: zod.string().nullish(),
               providerId: zod.string().nullish(),
               senderEmail: zod.string().nullish(),
               senderName: zod.string().nullish(),
