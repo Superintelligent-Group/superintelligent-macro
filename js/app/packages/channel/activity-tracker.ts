@@ -1,18 +1,18 @@
-import type { DateValue } from '@core/util/date';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import {
   isNewMessage as isNewMessagePure,
   type NewMessageCheckable,
 } from './Channel/util';
+import type { DateValue } from '@core/util/date';
 
 export type ActivityTracker = {
-  openedAt: Accessor<Date>;
   newMessagesDismissed: Accessor<boolean>;
   dismissNewMessages: () => void;
   isNewMessage: (message: NewMessageCheckable) => boolean;
 };
 
 type ActivityTrackerOptions = {
+  unreadMessageIds: Accessor<Set<string>>;
   lastViewedAt: Accessor<DateValue | undefined | null>;
   userId: Accessor<string | undefined>;
 };
@@ -25,9 +25,12 @@ export function createActivityTracker(
 
   const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
 
-  // Freeze lastViewedAt at the value present when the channel was first opened.
-  // This prevents a query refetch (triggered by the activity mutation on mount)
-  // from resetting viewed_at to "now" and hiding all the new-message indicators.
+  // Freeze both the unread IDs and lastViewedAt at the point the channel opens.
+  // Without this, scrolling (which marks notifications read) or the activity
+  // mutation on mount (which resets viewed_at to now) would immediately clear
+  // the "New" indicators.
+  const frozenUnreadMessageIds = props.unreadMessageIds();
+
   const frozenLastViewedAt = createMemo<DateValue | undefined | null>((prev) =>
     prev !== undefined ? prev : props.lastViewedAt()
   );
@@ -35,6 +38,7 @@ export function createActivityTracker(
   const isNewMessage = (message: NewMessageCheckable) =>
     isNewMessagePure(message, {
       dismissed: newMessagesDismissed(),
+      unreadMessageIds: frozenUnreadMessageIds,
       lastViewedAt: frozenLastViewedAt(),
       openedAt: openedChannelAt(),
       userId: props.userId(),
@@ -45,7 +49,6 @@ export function createActivityTracker(
   };
 
   return {
-    openedAt: openedChannelAt,
     isNewMessage,
     newMessagesDismissed,
     dismissNewMessages,

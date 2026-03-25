@@ -29,7 +29,6 @@ import {
   usePatchMessageMutation,
   useSendMessageMutation,
 } from '@queries/channel/message';
-import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { ChannelThread } from '../Thread';
@@ -73,7 +72,7 @@ type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
-  lastViewedAt?: DateValue | null;
+  unreadMessageIds: Accessor<Set<string>>;
   onHandleReady?: (handle: ChannelHandle) => void;
 };
 
@@ -154,6 +153,7 @@ export function Channel(props: ChannelProps) {
   const shift = () => threadPaginator.isShifting();
 
   const activityTracker = createActivityTracker({
+    unreadMessageIds: props.unreadMessageIds,
     lastViewedAt: () => activity()?.viewed_at,
     userId,
   });
