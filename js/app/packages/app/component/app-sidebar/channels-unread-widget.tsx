@@ -24,8 +24,9 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { ENABLE_NEW_CHANNELS } from '@core/constant/featureFlags';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { compareDateDesc } from '@core/util/date';
+import { ContextMenuContent, MenuItem } from '@core/component/Menu';
+import { ContextMenu } from '@kobalte/core/context-menu';
 
 function getChannelInfo(notification: UnifiedNotification): {
   channelName: string | null;
@@ -122,6 +123,12 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       : 'Unknown Channel';
   };
 
+  const content = () =>
+    ({
+      type: 'channel',
+      id: props.group.entityId,
+    }) as const;
+
   const handleClick = async (e: MouseEvent) => {
     if (e.button === 1) return;
     e.preventDefault();
@@ -137,57 +144,125 @@ function ChannelGroupItem(props: { group: ChannelGroup; animate?: boolean }) {
       const notification = getMostRecentNotification(nextStack);
       await openNotification(notification, splitManager, e.shiftKey);
     } else {
-      layout!.openWithSplit(
-        {
-          type: 'channel',
-          id: props.group.entityId,
-        },
-        {
-          preferNewSplit: e.shiftKey,
-        }
-      );
+      layout!.openWithSplit(content(), {
+        preferNewSplit: e.shiftKey,
+        referredFrom: 'sidebar',
+      });
+    }
+  };
+
+  const canOpenInNewSplit = () =>
+    globalSplitManager()?.canAppendSplit() ?? false;
+
+  const openInCurrentSplit = async () => {
+    if (ENABLE_NEW_CHANNELS) {
+      const splitManager = globalSplitManager();
+      if (!splitManager) return;
+
+      const stacks = stackNotifications(props.group.notifications);
+      const nextStack = stacks[0];
+      if (!nextStack) return;
+
+      const notification = getMostRecentNotification(nextStack);
+      await openNotification(notification, splitManager, false);
+    } else {
+      return layout!.openWithSplit(content(), { referredFrom: 'sidebar' });
+    }
+  };
+
+  const openInNewSplit = async () => {
+    if (!canOpenInNewSplit()) return;
+
+    if (ENABLE_NEW_CHANNELS) {
+      const splitManager = globalSplitManager();
+      if (!splitManager) return;
+
+      const stacks = stackNotifications(props.group.notifications);
+      const nextStack = stacks[0];
+      if (!nextStack) return;
+
+      const notification = getMostRecentNotification(nextStack);
+      await openNotification(notification, splitManager, true);
+    } else {
+      const manager = globalSplitManager()!;
+      manager.createNewSplit({
+        content: content(),
+        activate: true,
+        allowDuplicate: true,
+        referredFrom: 'sidebar',
+      });
+    }
+  };
+
+  const openFullscreen = async () => {
+    if (ENABLE_NEW_CHANNELS) {
+      await openInCurrentSplit();
+    } else {
+      const split = layout!.openWithSplit(content(), {
+        referredFrom: 'sidebar',
+      });
+      split?.toggleSpotlight(true);
     }
   };
 
   return (
-    <Button
-      as={'a'}
-      href={`/channel/${props.group.entityId}`}
-      class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
-      variant="ghost"
-      size="sm"
-      classList={{
-        'opacity-0 -translate-y-2': !isVisible(),
-        'opacity-100 translate-y-0': isVisible(),
-      }}
-      onClick={handleClick}
-    >
-      <div class="flex-shrink-0">
-        <Show
-          when={props.group.isDM && props.group.latestSenderId}
-          fallback={
-            <div class="size-4 text-ink-muted">
-              <ChannelIcon />
-            </div>
-          }
+    <ContextMenu>
+      <ContextMenu.Trigger class="w-full">
+        <Button
+          as={'a'}
+          href={`/channel/${props.group.entityId}`}
+          class="flex items-center justify-start gap-3 w-full cursor-default rounded-xs"
+          draggable={false}
+          variant="ghost"
+          size="sm"
+          classList={{
+            'opacity-0 -translate-y-2': !isVisible(),
+            'opacity-100 translate-y-0': isVisible(),
+          }}
+          onClick={handleClick}
         >
-          <UserIcon
-            id={props.group.latestSenderId!}
-            size="xs"
-            suppressClick
-            showTooltip={false}
+          <div class="flex-shrink-0">
+            <Show
+              when={props.group.isDM && props.group.latestSenderId}
+              fallback={
+                <div class="size-4 text-ink-muted">
+                  <ChannelIcon />
+                </div>
+              }
+            >
+              <UserIcon
+                id={props.group.latestSenderId!}
+                size="xs"
+                suppressClick
+                showTooltip={false}
+              />
+            </Show>
+          </div>
+
+          <span class="text-sm font-medium text-ink truncate">
+            {displayName()}
+          </span>
+
+          <Show when={count() > 0}>
+            <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
+              {count()}
+            </span>
+          </Show>
+        </Button>
+      </ContextMenu.Trigger>
+
+      <ContextMenu.Portal>
+        <ContextMenuContent class="text-xs text-ink-muted">
+          <MenuItem
+            text="Open in new split"
+            onClick={openInNewSplit}
+            disabled={!canOpenInNewSplit()}
           />
-        </Show>
-      </div>
-
-      <span class="text-sm font-medium text-ink truncate">{displayName()}</span>
-
-      <Show when={count() > 0}>
-        <span class="flex-shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-accent/10 text-accent rounded ml-auto">
-          {count()}
-        </span>
-      </Show>
-    </Button>
+          <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
   );
 }
 

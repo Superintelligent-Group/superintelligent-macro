@@ -29,7 +29,10 @@ use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
-    outbound::{customer_repo::CustomerRepositoryImpl, team_repo::TeamRepositoryImpl},
+    outbound::{
+        customer_repo::CustomerRepositoryImpl, team_channels_repo::TeamChannelsRepositoryImpl,
+        team_repo::TeamRepositoryImpl,
+    },
 };
 
 use referral::{
@@ -226,12 +229,14 @@ async fn main() -> anyhow::Result<()> {
         stripe_client.clone(),
         &config.stripe_price_ids.stripe_price_id_haiku,
     );
+    let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
 
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let teams_service_impl = TeamServiceImpl::new(
         teams_repo_impl,
         customer_repo_impl,
+        team_channels_repo_impl,
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
     );
@@ -247,17 +252,17 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    let rate_limit = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client,
+        },
+    };
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
         discount_client: StripeDiscountClient::new(
             stripe_client.clone(),
             10000, /*100$ credit, in cents*/
         ),
-        rate_limit: RateLimitServiceImpl {
-            repo: RedisRateLimitAdapter {
-                redis: redis_client,
-            },
-        },
         notification_ingress: notification_ingress_service.clone(),
     };
 
@@ -273,6 +278,7 @@ async fn main() -> anyhow::Result<()> {
             notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
+            rate_limit_service: rate_limit,
             jwt_args,
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,

@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
@@ -66,6 +67,11 @@ const createBlock = async (spec: {
     const id = await createFn();
     if (!id) return;
 
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
+
     const block = { type: blockName, id };
 
     openWithSplit(block, {
@@ -88,6 +94,11 @@ const createBlock = async (spec: {
       split?.goBack();
       return;
     }
+
+    analytics.track('create_entity', {
+      entityType: blockName,
+      source: 'launcher',
+    });
 
     if (split)
       split.replace({
@@ -572,21 +583,21 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
   });
   registerHotkey({
-    hotkey: 'arrowleft',
+    hotkey: ['arrowleft', 'h'],
     scopeId: launcherScope,
     description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
   });
 
   registerHotkey({
-    hotkey: 'arrowright' as ValidHotkey,
+    hotkey: ['arrowright', 'l'],
     scopeId: launcherScope,
     description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
   });
 
   registerHotkey({
-    hotkey: 'arrowup' as ValidHotkey,
+    hotkey: ['arrowup', 'k'],
     scopeId: launcherScope,
     description: 'Navigate Up',
     keyDownHandler: (e) => {
@@ -596,7 +607,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    hotkey: 'arrowdown' as ValidHotkey,
+    hotkey: ['arrowdown', 'j'],
     scopeId: launcherScope,
     description: 'Navigate Down',
     keyDownHandler: (e) => {

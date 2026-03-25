@@ -176,6 +176,27 @@ impl IsEmpty for ChatFilters {
     }
 }
 
+/// Controls whether shared email threads are included in results.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum SharedEmailFilter {
+    /// Only show the user's own threads (default)
+    #[default]
+    Exclude,
+    /// Show both own and shared threads
+    Include,
+    /// Show only threads shared with the user
+    Only,
+}
+
+impl SharedEmailFilter {
+    /// Returns true if this is the default (Exclude) variant.
+    pub fn is_default(&self) -> bool {
+        matches!(self, SharedEmailFilter::Exclude)
+    }
+}
+
 /// The email filters used to filter down what emails you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -220,6 +241,11 @@ pub struct EmailFilters {
     /// Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_labels: Vec<String>,
+
+    /// Controls whether shared email threads are included in results.
+    /// Defaults to "exclude" (only the user's own threads).
+    #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
+    pub shared: SharedEmailFilter,
 }
 
 impl IsEmpty for EmailFilters {
@@ -235,6 +261,7 @@ impl IsEmpty for EmailFilters {
             notification_filters,
             include_labels,
             exclude_labels,
+            shared,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -246,6 +273,7 @@ impl IsEmpty for EmailFilters {
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
+            && shared.is_default()
     }
 }
 
@@ -262,6 +290,9 @@ pub struct ChannelFilters {
     /// Channel organization ID to search within. Empty to ignore organization filtering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub org_id: Option<i64>,
+    /// Channel team ID to search within. Empty to ignore team filtering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     /// Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel_ids: Vec<String>,
@@ -288,6 +319,7 @@ impl IsEmpty for ChannelFilters {
             thread_ids,
             mentions,
             org_id,
+            team_id,
             channel_ids,
             sender_ids,
             channel_types,
@@ -297,6 +329,7 @@ impl IsEmpty for ChannelFilters {
         thread_ids.is_empty()
             && mentions.is_empty()
             && org_id.is_none()
+            && team_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
             && channel_types.is_empty()

@@ -905,7 +905,15 @@ export const getChannelMessagesResponse = zod
                       .describe('When the attachment was created.'),
                     entity_id: zod.string().describe('Entity id.'),
                     entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
                     id: zod.string().uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
                   })
                   .describe('An attachment on a message.')
               )
@@ -963,10 +971,18 @@ export const getChannelMessagesResponse = zod
                                 entity_type: zod
                                   .string()
                                   .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
                                 id: zod
                                   .string()
                                   .uuid()
                                   .describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
                               })
                               .describe('An attachment on a message.')
                           )
@@ -1052,7 +1068,9 @@ export const getThreadRepliesResponseItem = zod
               .describe('When the attachment was created.'),
             entity_id: zod.string().describe('Entity id.'),
             entity_type: zod.string().describe('Type of entity.'),
+            height: zod.number().nullish().describe('Height (for images).'),
             id: zod.string().uuid().describe('Attachment id.'),
+            width: zod.number().nullish().describe('Width (for images).'),
           })
           .describe('An attachment on a message.')
       )
@@ -1563,6 +1581,12 @@ export const createTaskHandlerBody = zod
       )
       .nullish()
       .describe('Optional property values to set on the task.'),
+    shareWithTeam: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether to share the task with your team or not\nDefaults to true'
+      ),
     taskName: zod.string().describe('The name of the task.'),
   })
   .describe('Request body for creating a task.');
@@ -3975,6 +3999,7 @@ export const getItemsSoupResponse = zod.object({
                   'organization',
                   'private',
                   'direct_message',
+                  'team',
                 ]),
                 created_at: zod.string().datetime({}),
                 id: zod.string().uuid(),
@@ -3984,6 +4009,7 @@ export const getItemsSoupResponse = zod.object({
                   .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
                   .nullish(),
                 owner_id: zod.string(),
+                team_id: zod.string().uuid().nullish(),
                 updated_at: zod.string().datetime({}),
               }),
               participants: zod.array(
@@ -4123,6 +4149,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          ),
+        team_id: zod
+          .string()
+          .nullish()
+          .describe(
+            'Channel team ID to search within. Empty to ignore team filtering.'
           ),
         thread_ids: zod
           .array(zod.string())
@@ -4338,6 +4370,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          ),
+        shared: zod
+          .enum(['exclude', 'include', 'only'])
+          .optional()
+          .describe(
+            'Controls whether shared email threads are included in results.'
           ),
       })
       .optional()
@@ -5567,6 +5605,7 @@ export const postItemsSoupResponse = zod.object({
                   'organization',
                   'private',
                   'direct_message',
+                  'team',
                 ]),
                 created_at: zod.string().datetime({}),
                 id: zod.string().uuid(),
@@ -5576,6 +5615,7 @@ export const postItemsSoupResponse = zod.object({
                   .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
                   .nullish(),
                 owner_id: zod.string(),
+                team_id: zod.string().uuid().nullish(),
                 updated_at: zod.string().datetime({}),
               }),
               participants: zod.array(
