@@ -12,7 +12,7 @@ export type ActivityTracker = {
 };
 
 type ActivityTrackerOptions = {
-  unreadMessageIds: Accessor<Set<string>>;
+  unreadMessageIds: Accessor<Set<string> | undefined>;
   lastViewedAt: Accessor<DateValue | undefined | null>;
   userId: Accessor<string | undefined>;
 };
@@ -26,10 +26,9 @@ export function createActivityTracker(
   const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
 
   // Freeze both the unread IDs and lastViewedAt at the point the channel opens.
-  // Without this, scrolling (which marks notifications read) or the activity
-  // mutation on mount (which resets viewed_at to now) would immediately clear
-  // the "New" indicators.
-  const frozenUnreadMessageIds = props.unreadMessageIds();
+  const frozenUnreadMessageIds = createMemo<Set<string> | undefined>((prev) =>
+    prev !== undefined ? prev : props.unreadMessageIds();
+  );
 
   const frozenLastViewedAt = createMemo<DateValue | undefined | null>((prev) =>
     prev !== undefined ? prev : props.lastViewedAt()
@@ -38,7 +37,7 @@ export function createActivityTracker(
   const isNewMessage = (message: NewMessageCheckable) =>
     isNewMessagePure(message, {
       dismissed: newMessagesDismissed(),
-      unreadMessageIds: frozenUnreadMessageIds,
+      unreadMessageIds: frozenUnreadMessageIds() ?? new Set(),
       lastViewedAt: frozenLastViewedAt(),
       openedAt: openedChannelAt(),
       userId: props.userId(),

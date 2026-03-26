@@ -4,8 +4,9 @@ import type { NotificationSource } from '@notifications/notification-source';
 export function createUnreadChannelMessageIds(
   channelId: string,
   notificationSource: NotificationSource
-): Accessor<Set<string>> {
+): Accessor<Set<string> | undefined> {
   return createMemo(() => {
+    if (notificationSource.isLoading()) return undefined;
     const ids = new Set<string>();
     for (const n of notificationSource.notifications()) {
       if (n.viewed_at || n.done) continue;
