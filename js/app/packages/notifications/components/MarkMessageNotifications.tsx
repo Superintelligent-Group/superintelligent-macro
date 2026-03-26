@@ -21,7 +21,7 @@ export function getUnreadMessageIdFromNotification(
   return undefined;
 }
 
-export function MarkMessaageNotifications(props: {
+export function MarkMessageNotifications(props: {
   messageId: string;
   channelId: string;
   children: JSXElement;
