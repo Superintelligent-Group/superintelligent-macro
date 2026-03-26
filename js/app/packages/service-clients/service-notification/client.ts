@@ -33,7 +33,7 @@ export type IncomingNotification = {
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
 
-export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
+export type UnifiedNotification = Omit<ApiUserNotification, 'owner_id'> & {
   senderId?: string | null;
   // whether the notification is incoming on the websocket and needs processing
   // as opposed to coming from the database or an already processed notification

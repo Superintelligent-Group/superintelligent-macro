@@ -27,7 +27,7 @@ export function createActivityTracker(
 
   // Freeze both the unread IDs and lastViewedAt at the point the channel opens.
   const frozenUnreadMessageIds = createMemo<Set<string> | undefined>((prev) =>
-    prev !== undefined ? prev : props.unreadMessageIds();
+    prev !== undefined ? prev : props.unreadMessageIds()
   );
 
   const frozenLastViewedAt = createMemo<DateValue | undefined | null>((prev) =>

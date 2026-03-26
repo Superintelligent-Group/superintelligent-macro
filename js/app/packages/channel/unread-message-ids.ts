@@ -1,5 +1,6 @@
 import { createMemo, type Accessor } from 'solid-js';
 import type { NotificationSource } from '@notifications/notification-source';
+import { getUnreadMessageIdFromNotification } from '@notifications/components/MarkMessageNotifications';
 
 export function createUnreadChannelMessageIds(
   channelId: string,
@@ -9,16 +10,8 @@ export function createUnreadChannelMessageIds(
     if (notificationSource.isLoading()) return undefined;
     const ids = new Set<string>();
     for (const n of notificationSource.notifications()) {
-      if (n.viewed_at || n.done) continue;
-      if (n.entity_id !== channelId) continue;
-      const meta = n.notification_metadata;
-      if (
-        meta.tag === 'channel_mention' ||
-        meta.tag === 'channel_message_send' ||
-        meta.tag === 'channel_message_reply'
-      ) {
-        ids.add(meta.content.messageId);
-      }
+      const messageId = getUnreadMessageIdFromNotification(n, channelId);
+      if (messageId) ids.add(messageId);
     }
     return ids;
   });
