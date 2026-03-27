@@ -36,7 +36,7 @@ export function NewChannelBlockAdapter() {
   useBlockEntityCommands();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
-  
+
   const onChannelReady = (handle: ChannelHandle) => {
     createMethodRegistration(blockHandle, {
       goToLocationFromParams: async (params: Record<string, unknown>) => {
