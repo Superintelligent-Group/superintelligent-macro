@@ -26,8 +26,10 @@ export function DateMention(props: DateMentionDecoratorProps) {
   let mentionRef!: HTMLSpanElement;
 
   const displayFormat = createMemo(() => {
-    const date = new Date(props.date);
-    return formatDate(date);
+    if (props.displayFormat) {
+      return props.displayFormat;
+    }
+    return formatDate(new Date(props.date));
   });
 
   const isSelectedAsNode = () => {
