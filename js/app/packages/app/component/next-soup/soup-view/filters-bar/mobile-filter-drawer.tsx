@@ -1,4 +1,7 @@
-import Drawer from '@corvu/drawer';
+import {
+  MobileDrawer,
+  scrollToFocusedInput,
+} from '@core/component/MobileDrawer';
 import { Accordion } from '@kobalte/core/accordion';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -150,17 +153,16 @@ export const MobileFilterDrawer = () => {
   const activeCount = () => activeFiltersList().length;
 
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
-  const [inputFocused, setInputFocused] = createSignal(false);
 
   return (
     <Show when={hasFiltersOrCategories()}>
-      <Drawer
+      <MobileDrawer
         side="bottom"
         preventScroll={false}
         preventScrollbarShift={false}
         breakPoints={[0.85]}
       >
-        <Drawer.Trigger
+        <MobileDrawer.Trigger
           as={Button}
           aria-label="Open filters"
           variant="ghost"
@@ -173,17 +175,11 @@ export const MobileFilterDrawer = () => {
               {activeCount()}
             </span>
           </Show>
-        </Drawer.Trigger>
+        </MobileDrawer.Trigger>
 
-        <Drawer.Portal>
-          <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-          <Drawer.Content
-            aria-label="Filters"
-            class={cn(
-              'fixed bottom-(--virtual-keyboard-height) left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col h-[calc(80*var(--dvh))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-              inputFocused() ? 'pb-0' : 'pb-(--safe-bottom)'
-            )}
-          >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+          <MobileDrawer.Content aria-label="Filters">
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">
               <div class="w-10 h-1 rounded-full bg-edge-muted" />
@@ -198,6 +194,7 @@ export const MobileFilterDrawer = () => {
               />
               <div
                 ref={setScrollRef}
+                onFocusIn={(e) => scrollToFocusedInput(e)}
                 class="overflow-y-auto scrollbar-hidden h-full pb-1"
               >
                 {/* Sort section */}
@@ -210,8 +207,7 @@ export const MobileFilterDrawer = () => {
                       Sort
                     </span>
                   </div>
-                  <div
-                    class="bg-menu rounded-2xl mx-3"
+                  <MobileDrawer.Section
                     role="radiogroup"
                     aria-labelledby="sort-section-label"
                   >
@@ -250,7 +246,7 @@ export const MobileFilterDrawer = () => {
                         );
                       }}
                     </For>
-                  </div>
+                  </MobileDrawer.Section>
                 </Show>
 
                 <Accordion
@@ -277,9 +273,10 @@ export const MobileFilterDrawer = () => {
                             ).length
                         );
                         return (
-                          <Accordion.Item
+                          <MobileDrawer.Section
+                            as={Accordion.Item}
                             value={category.id}
-                            class="bg-menu rounded-2xl mx-3 not-first:mt-3"
+                            class="not-first:mt-3"
                           >
                             <Accordion.Header>
                               <Accordion.Trigger
@@ -341,7 +338,7 @@ export const MobileFilterDrawer = () => {
                                 }}
                               </For>
                             </Accordion.Content>
-                          </Accordion.Item>
+                          </MobileDrawer.Section>
                         );
                       }}
                     </For>
@@ -349,9 +346,10 @@ export const MobileFilterDrawer = () => {
 
                   {/* Assignee section for tasks view */}
                   <Show when={isTasksView()}>
-                    <Accordion.Item
+                    <MobileDrawer.Section
+                      as={Accordion.Item}
                       value="assignee"
-                      class="bg-menu rounded-2xl mx-3 mt-3"
+                      class="mt-3"
                     >
                       <Accordion.Header>
                         <Accordion.Trigger
@@ -382,73 +380,59 @@ export const MobileFilterDrawer = () => {
                             onInput={(e) =>
                               setAssigneeSearch(e.currentTarget.value)
                             }
-                            onFocus={(e) => {
-                              setInputFocused(true);
-                              const scrollEl = scrollRef();
-                              if (!scrollEl) return;
-                              const inputRect =
-                                e.currentTarget.getBoundingClientRect();
-                              const containerRect =
-                                scrollEl.getBoundingClientRect();
-                              scrollEl.scrollTo({
-                                top:
-                                  scrollEl.scrollTop +
-                                  (inputRect.top - containerRect.top) -
-                                  20,
-                                behavior: 'smooth',
-                              });
-                            }}
-                            onBlur={() => setInputFocused(false)}
                             placeholder="Search assignees..."
                             class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-muted"
                           />
                         </div>
-                        <For each={filteredAssigneeOptions()}>
-                          {(option) => {
-                            const active = () =>
-                              assigneeFilter().includes(option.id);
-                            return (
-                              <button
-                                type="button"
-                                role="checkbox"
-                                aria-checked={active()}
-                                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
-                                onClick={() => toggleAssignee(option.id)}
-                              >
-                                <span
-                                  class={cn(
-                                    'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                    active()
-                                      ? 'bg-accent border-accent'
-                                      : 'border-edge'
-                                  )}
+                        <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto">
+                          <For each={filteredAssigneeOptions()}>
+                            {(option) => {
+                              const active = () =>
+                                assigneeFilter().includes(option.id);
+                              return (
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={active()}
+                                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                  onClick={() => toggleAssignee(option.id)}
                                 >
-                                  <Show when={active()}>
-                                    <CheckIcon class="size-2.5 text-page" />
-                                  </Show>
-                                </span>
-                                <span class="size-4 flex items-center justify-center shrink-0">
-                                  {option.icon()}
-                                </span>
-                                <span
-                                  class={cn(
-                                    'flex-1 truncate',
-                                    active() ? 'text-ink' : 'text-ink-muted'
-                                  )}
-                                >
-                                  {option.label}
-                                </span>
-                              </button>
-                            );
-                          }}
-                        </For>
+                                  <span
+                                    class={cn(
+                                      'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                      active()
+                                        ? 'bg-accent border-accent'
+                                        : 'border-edge'
+                                    )}
+                                  >
+                                    <Show when={active()}>
+                                      <CheckIcon class="size-2.5 text-page" />
+                                    </Show>
+                                  </span>
+                                  <span class="size-4 flex items-center justify-center shrink-0">
+                                    {option.icon()}
+                                  </span>
+                                  <span
+                                    class={cn(
+                                      'flex-1 truncate',
+                                      active() ? 'text-ink' : 'text-ink-muted'
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </button>
+                              );
+                            }}
+                          </For>
+                        </div>
+
                         <Show when={filteredAssigneeOptions().length === 0}>
                           <div class="px-4 py-2 text-sm text-ink-muted">
                             No results
                           </div>
                         </Show>
                       </Accordion.Content>
-                    </Accordion.Item>
+                    </MobileDrawer.Section>
                   </Show>
                 </Accordion>
               </div>
@@ -468,9 +452,9 @@ export const MobileFilterDrawer = () => {
                 />
               </div>
             </Show>
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
     </Show>
   );
 };
