@@ -198,7 +198,7 @@ export const registerSidebarHotkeys = ({
   registerHotkey({
     scopeId: 'global',
     hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Invite team',
+    description: 'Send Invites',
     keyDownHandler: (e) => {
       e?.preventDefault();
       setInviteModalOpen(true);
@@ -467,7 +467,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class=" w-full px-2 flex flex-col">
         <Show when={DEV_MODE_ENV}>
           <SidebarActionButton
-            label="Invite Team"
+            label="Invite"
             isSlim={isSlim}
             onClick={() => setInviteModalOpen(true)}
             icon={AnimatedUsersIcon}
