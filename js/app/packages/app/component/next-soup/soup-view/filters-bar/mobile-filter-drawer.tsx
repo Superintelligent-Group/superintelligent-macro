@@ -155,10 +155,10 @@ export const MobileFilterDrawer = () => {
         </Drawer.Trigger>
 
         <Drawer.Portal>
-          <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
+          <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
           <Drawer.Content
             aria-label="Filters"
-            class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg shadow-lg flex flex-col h-[80dvh] border-l border-r border-t border-edge transition-transform duration-100 ease-out data-[closing]:ease-in pb-(--safe-bottom)"
+            class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg flex flex-col h-[80dvh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out pb-(--safe-bottom)"
           >
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">

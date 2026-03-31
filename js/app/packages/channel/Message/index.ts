@@ -2,7 +2,9 @@ import {
   useMessage,
   useMessageActions,
   MessageActionsProvider,
+  MessageDrawerProvider,
   MessageSelectionProvider,
+  useMessageDrawer,
   useMessageSelection,
 } from './context';
 
@@ -15,11 +17,14 @@ export { DateDivider } from './DateDivider';
 export { NewDivider } from './NewDivider';
 export { MessageFlag } from './MessageFlag';
 export { ActionMenu } from './ActionMenu';
+export { ActionDrawer } from './ActionDrawer';
 export {
   useMessage,
   useMessageActions,
   MessageActionsProvider,
+  MessageDrawerProvider,
   MessageSelectionProvider,
+  useMessageDrawer,
   useMessageSelection,
 };
 export type { MessageSelectionState } from './context';

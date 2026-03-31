@@ -1,6 +1,11 @@
-import { splitProps, type JSX } from 'solid-js';
+import { createSignal, splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import { MessageActionsProvider, MessageProvider } from './context';
+import { touchHandler } from '@core/directive/touchHandler';
+import {
+  MessageActionsProvider,
+  MessageDrawerProvider,
+  MessageProvider,
+} from './context';
 import type { MessageActions, MessageData } from './types';
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
@@ -18,9 +23,19 @@ export function Root(props: RootProps) {
     'highlighted',
   ]);
 
+  const [isDrawerOpen, setIsDrawerOpen] = createSignal(false);
+  const drawerState = {
+    isOpen: isDrawerOpen,
+    open: () => setIsDrawerOpen(true),
+    close: () => setIsDrawerOpen(false),
+  };
+
   return (
     <div
-      class={cn('group/message relative', local.class)}
+      ref={(el) =>
+        touchHandler(el, () => ({ onLongPress: () => setIsDrawerOpen(true) }))
+      }
+      class={cn('group/message relative touch:no-select-children', local.class)}
       data-message
       data-message-id={local.message.id}
       data-highlighted={local.highlighted ? '' : undefined}
@@ -29,7 +44,9 @@ export function Root(props: RootProps) {
       <div class="absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0 message-accent-bar" />
       <MessageProvider value={() => local.message}>
         <MessageActionsProvider value={local.actions}>
-          {props.children}
+          <MessageDrawerProvider value={drawerState}>
+            {props.children}
+          </MessageDrawerProvider>
         </MessageActionsProvider>
       </MessageProvider>
     </div>

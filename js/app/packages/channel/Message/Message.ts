@@ -1,3 +1,4 @@
+import { ActionDrawer } from './ActionDrawer';
 import { Root } from './Root';
 import { Layout } from './Layout';
 import { Slot } from './Slot';
@@ -17,6 +18,7 @@ import { MediaPreview } from './MediaPreview';
 
 export const Message = {
   Root,
+  ActionDrawer,
   Layout,
   Slot,
   SenderName,
