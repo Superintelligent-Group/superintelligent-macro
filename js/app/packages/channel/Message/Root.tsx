@@ -1,11 +1,6 @@
 import { splitProps, type JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
-import { touchHandler } from '@core/directive/touchHandler';
-import {
-  MessageActionsProvider,
-  MessageProvider,
-  useMessageActionDrawer,
-} from './context';
+import { MessageActionsProvider, MessageProvider } from './context';
 import type { MessageActions, MessageData } from './types';
 
 type RootProps = JSX.HTMLAttributes<HTMLDivElement> & {
@@ -23,15 +18,8 @@ export function Root(props: RootProps) {
     'highlighted',
   ]);
 
-  const drawerManager = useMessageActionDrawer();
-
   return (
     <div
-      ref={(el) =>
-        touchHandler(el, () => ({
-          onLongPress: () => drawerManager?.open(local.message, local.actions),
-        }))
-      }
       class={cn('group/message relative touch:no-select-children', local.class)}
       data-message
       data-message-id={local.message.id}

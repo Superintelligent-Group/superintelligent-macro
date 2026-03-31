@@ -1,11 +1,17 @@
 import { Match, Show, Switch } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import type { MessageActions, MessageData } from './types';
 import { Message } from './Message';
 import type { ChannelMessageListMeta } from './list-meta';
-import { useMessage, MessageSelectionProvider } from './context';
+import {
+  useMessage,
+  MessageSelectionProvider,
+  useMessageActionDrawer,
+} from './context';
 import type { MessageSelectionState } from './context';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
+import { touchHandler } from '@core/directive/touchHandler';
 
 type ChannelMessageProps = {
   channelId: string;
@@ -131,11 +137,10 @@ function GroupedMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="content">
         <div
-          class="ph-no-capture flex gap-3 min-w-0"
-          classList={{
-            'items-center': !isEditing(),
-            'items-start': isEditing(),
-          }}
+          class={cn(
+            'ph-no-capture flex gap-3 min-w-0',
+            isEditing() ? 'items-start' : 'items-center'
+          )}
         >
           <MessageContentSlot
             channelId={props.channelId}
@@ -159,6 +164,7 @@ function GroupedMessageLayout(props: {
 }
 
 export function ChannelMessage(props: ChannelMessageProps) {
+  const drawerManager = useMessageActionDrawer();
   const isGrouped = () => props.listMeta?.isGroupedWithPrevious === true;
 
   return (
@@ -166,6 +172,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
       message={props.message}
       actions={props.actions}
       highlighted={props.highlighted}
+      ref={(el) =>
+        touchHandler(el, () => ({
+          onLongPress: () => drawerManager?.open(props.message, props.actions),
+        }))
+      }
     >
       <MessageSelectionProvider value={props.selectionState}>
         <Switch>

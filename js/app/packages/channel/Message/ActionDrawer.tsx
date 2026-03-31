@@ -35,9 +35,7 @@ type ActionItem = {
   destructive?: boolean;
 };
 
-function buildActionItems(
-  actions: MessageActions | undefined
-): ActionItem[] {
+function buildActionItems(actions: MessageActions | undefined): ActionItem[] {
   return [
     { id: 'reply', label: 'Reply', icon: ReplyIcon, onClick: actions?.onReply },
     {
@@ -106,7 +104,10 @@ export function ActionDrawer() {
   const drawerState = useMessageActionDrawer();
   const [showEmojiSearch, setShowEmojiSearch] = createSignal(false);
 
-  if (!drawerState) return console.warn('No drawer state.');
+  if (!drawerState) {
+    console.warn('No drawer state.');
+    return null;
+  }
 
   const message = () => drawerState.message();
   const actions = () => drawerState.actions();

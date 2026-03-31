@@ -62,4 +62,5 @@ The app uses cookie-based authentication (`credentials: 'include'`) since `ENABL
 4. Going forward, all network calls to serice clients should be done through Tanstack query in the `queries` package. **DO NOT** introduce code that calls any client from `service-clients` outside of the queries package.
 5. For exhaustive switch statements use `match` from `ts-pattern`.
 6. When reaching for solid related utilities always check if a sufficient `solid-primitive` exists first (https://github.com/solidjs-community/solid-primitives).
-7. If you create a Lexical Node or make breaking changes to a Lexical Node, you must increment the lexical version counter (in packages/core/component/LexicalMarkdown/version.ts) along with a brief note about changes.
+7. Always use `cn()` from `@ui/utils/classname` for conditional or dynamic class names. Never use SolidJS's `classList` prop.
+8. If you create a Lexical Node or make breaking changes to a Lexical Node, you must increment the lexical version counter (in packages/core/component/LexicalMarkdown/version.ts) along with a brief note about changes.

@@ -1,3 +1,4 @@
+import { useMobileChannelInputVisibility } from '@channel/Channel/mobile-channel-input-visibility';
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
@@ -23,6 +24,7 @@ type ThreadReplyInputProps = {
 };
 
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
+  const mobileChannelInputVisibility = useMobileChannelInputVisibility();
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
@@ -43,7 +45,16 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   });
 
   return (
-    <div class="relative pt-2" style={{ 'margin-left': replyInputOffsetX }}>
+    <div
+      class="relative pt-2"
+      style={{ 'margin-left': replyInputOffsetX }}
+      onFocusIn={() => mobileChannelInputVisibility?.hide()}
+      onFocusOut={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          mobileChannelInputVisibility?.show();
+        }
+      }}
+    >
       <ThreadReplyInputConnector />
       {(() => {
         const droppable = entityDropZone.droppable;
@@ -66,6 +77,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 threadId: props.messageId,
               })}
               markdownNamespace={`thread-reply-input-${props.messageId}-markdown`}
+              onReady={(handle) => setTimeout(() => handle.focus(), 300)}
               onChange={(snapshot) => void props.setReplyInputState(snapshot)}
               onStartTyping={() =>
                 typingMutation.mutate({

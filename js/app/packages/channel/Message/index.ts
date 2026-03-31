@@ -15,7 +15,7 @@ export { DateDivider } from './DateDivider';
 export { NewDivider } from './NewDivider';
 export { MessageFlag } from './MessageFlag';
 export { ActionMenu } from './ActionMenu';
-export { MessageActionDrawerManager } from './MessageActionDrawerManager';
+export { MaybeMessageActionDrawerManager } from './MessageActionDrawerManager';
 export {
   useMessage,
   useMessageActions,
