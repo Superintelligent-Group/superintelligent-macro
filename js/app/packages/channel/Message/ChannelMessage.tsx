@@ -183,7 +183,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
         </Switch>
       </MessageSelectionProvider>
-      <Message.ActionDrawer />
     </Message.Root>
   );
 }

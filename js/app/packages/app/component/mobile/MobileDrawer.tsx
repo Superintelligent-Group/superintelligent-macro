@@ -2,7 +2,6 @@ import Drawer from '@corvu/drawer';
 import { cn } from '@ui/utils/classname';
 import {
   createSignal,
-  JSX,
   splitProps,
   type ComponentProps,
   type ValidComponent,
@@ -27,7 +26,7 @@ export function scrollToFocusedInput(
     return;
   const input = e.target as HTMLElement;
   const container = e.currentTarget;
-  // Delay until after the browser's native keyboard-show scroll completes
+  // Has to be delayed until after browser's native keyboard-show scroll completes
   setTimeout(() => {
     const inputRect = input.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
@@ -46,6 +45,8 @@ export function scrollToFocusedInput(
  * - Switches between `pb-(--safe-bottom)` and `pb-0` based on whether any
  *   input/textarea inside the drawer currently has focus (detected via
  *   bubbling focusin/focusout — no per-input wiring needed)
+ *
+ * Also handles default styling, which can be overridden via the `class` prop.
  */
 function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   const [local, rest] = splitProps(props, ['class']);
@@ -56,15 +57,17 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
 
   return (
     <Drawer.Content
-      onFocusIn={(e) => {
+      onFocusIn={(e: FocusEvent) => {
         if (isInputEl(e.target)) setInputFocused(true);
       }}
-      onFocusOut={(e) => {
+      onFocusOut={(e: FocusEvent) => {
         if (isInputEl(e.target)) setInputFocused(false);
       }}
       class={cn(
-        'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col h-[calc(80*var(--dvh))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
-        inputFocused() ? 'pb-0' : 'pb-(--safe-bottom)',
+        'bottom-(--virtual-keyboard-height) fixed left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col h-[80vh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+        inputFocused()
+          ? 'pb-0 h-[calc(80vh-var(--virtual-keyboard-height))]'
+          : 'pb-(--safe-bottom)',
         local.class
       )}
       {...rest}
@@ -78,7 +81,7 @@ type MobileDrawerSectionProps<T extends ValidComponent = 'div'> =
   };
 
 /**
- * Component for rendering Macro-styled Drawer sections.
+ * Component for rendering styled Drawer sections.
  */
 function MobileDrawerSection<T extends ValidComponent = 'div'>(
   props: MobileDrawerSectionProps<T>
@@ -100,9 +103,7 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
 }
 
 /**
- * Wrapper around Corvu's Drawer for mobile bottom sheets. Use exactly like
- * `Drawer` from `@corvu/drawer` but swap `Drawer.Content` for
- * `MobileDrawer.Content` to get automatic keyboard-safe behaviour.
+ * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
   (props: ComponentProps<typeof Drawer>) => <Drawer {...props} />,

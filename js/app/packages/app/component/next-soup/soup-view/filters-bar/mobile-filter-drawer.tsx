@@ -1,7 +1,7 @@
 import {
   MobileDrawer,
   scrollToFocusedInput,
-} from '@core/component/MobileDrawer';
+} from '@app/component/mobile/MobileDrawer';
 import { Accordion } from '@kobalte/core/accordion';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, Show } from 'solid-js';

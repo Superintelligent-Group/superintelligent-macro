@@ -1,12 +1,6 @@
 import { createContext, useContext, type Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 
-type MessageDrawerState = {
-  isOpen: Accessor<boolean>;
-  open: () => void;
-  close: () => void;
-};
-
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
 
@@ -23,11 +17,20 @@ export function useMessageActions(): MessageActions | undefined {
   return useContext(MessageActionsContext);
 }
 
-const MessageDrawerContext = createContext<MessageDrawerState>();
-export const MessageDrawerProvider = MessageDrawerContext.Provider;
+export type MessageActionDrawerState = {
+  isOpen: Accessor<boolean>;
+  message: Accessor<MessageData | undefined>;
+  actions: Accessor<MessageActions | undefined>;
+  open: (message: MessageData, actions: MessageActions | undefined) => void;
+  close: () => void;
+};
 
-export function useMessageDrawer(): MessageDrawerState | undefined {
-  return useContext(MessageDrawerContext);
+const MessageActionDrawerContext = createContext<MessageActionDrawerState>();
+export const MessageActionDrawerContextProvider =
+  MessageActionDrawerContext.Provider;
+
+export function useMessageActionDrawer(): MessageActionDrawerState | undefined {
+  return useContext(MessageActionDrawerContext);
 }
 
 export type MessageSelectionState = {
