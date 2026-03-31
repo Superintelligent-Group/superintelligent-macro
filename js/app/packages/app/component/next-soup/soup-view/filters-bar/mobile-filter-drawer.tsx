@@ -34,6 +34,26 @@ import {
   type SortOption,
 } from '@app/component/next-soup/soup-view/sort-options';
 
+function scrollAccordionItemToTop(
+  e: MouseEvent,
+  scrollEl: HTMLElement | undefined
+) {
+  if (!scrollEl) return;
+  const item = (e.currentTarget as HTMLElement).closest(
+    '[data-closed],[data-expanded]'
+  ) as HTMLElement | null;
+  if (!item) return;
+  requestAnimationFrame(() => {
+    if (!item.hasAttribute('data-expanded')) return;
+    const containerRect = scrollEl.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    scrollEl.scrollTo({
+      top: scrollEl.scrollTop + (itemRect.top - containerRect.top),
+      behavior: 'smooth',
+    });
+  });
+}
+
 export const MobileFilterDrawer = () => {
   const {
     activeFiltersList,
@@ -130,6 +150,7 @@ export const MobileFilterDrawer = () => {
   const activeCount = () => activeFiltersList().length;
 
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
+  const [inputFocused, setInputFocused] = createSignal(false);
 
   return (
     <Show when={hasFiltersOrCategories()}>
@@ -158,28 +179,15 @@ export const MobileFilterDrawer = () => {
           <Drawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
           <Drawer.Content
             aria-label="Filters"
-            class="fixed bottom-0 left-0 right-0 z-modal bg-menu rounded-t-lg flex flex-col h-[80dvh] data-transitioning:transition-transform data-transitioning:duration-200 ease-out pb-(--safe-bottom)"
+            class={cn(
+              'fixed bottom-(--virtual-keyboard-height) left-0 right-0 z-modal bg-page rounded-t-2xl flex flex-col h-[calc(80*var(--dvh))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+              inputFocused() ? 'pb-0' : 'pb-(--safe-bottom)'
+            )}
           >
             {/* Drag handle */}
             <div class="flex justify-center pt-3 pb-1 shrink-0">
               <div class="w-10 h-1 rounded-full bg-edge-muted" />
             </div>
-
-            {/* Header */}
-            {/*
-            <div class="flex items-center justify-between px-4 pb-2 shrink-0 border-b border-edge-muted/50">
-              <span class="text-md font-md text-ink-muted">Filters</span>
-              <div class="flex items-center gap-2">
-                <Drawer.Close
-                  as={Button}
-                  variant="ghost"
-                  class="rounded-xs size-11 [&_svg]:size-6 px-1"
-                >
-                  <XIcon />
-                </Drawer.Close>
-              </div>
-            </div>
-            */}
 
             {/* Scrollable filter list */}
             <div class="relative flex-1 min-h-0">
@@ -194,7 +202,7 @@ export const MobileFilterDrawer = () => {
               >
                 {/* Sort section */}
                 <Show when={sortOptions().length > 0}>
-                  <div class="px-4 pb-2 border-b border-edge-muted/30">
+                  <div class="px-4 pb-2">
                     <span
                       id="sort-section-label"
                       class="text-xs font-medium text-ink-muted uppercase tracking-wide"
@@ -202,7 +210,11 @@ export const MobileFilterDrawer = () => {
                       Sort
                     </span>
                   </div>
-                  <div role="radiogroup" aria-labelledby="sort-section-label">
+                  <div
+                    class="bg-menu rounded-2xl mx-3"
+                    role="radiogroup"
+                    aria-labelledby="sort-section-label"
+                  >
                     <For each={sortOptions()}>
                       {(option) => {
                         const active = () => activeSort() === option.value;
@@ -211,7 +223,7 @@ export const MobileFilterDrawer = () => {
                             type="button"
                             role="radio"
                             aria-checked={active()}
-                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
                             onClick={() => setSort(option.value)}
                           >
                             <Show when={option.icon}>
@@ -248,92 +260,106 @@ export const MobileFilterDrawer = () => {
                 >
                   {/* Filter section */}
                   <Show when={categories().length > 0 || isTasksView()}>
-                    <div class="px-4 pt-4 pb-2 border-b border-edge-muted/30">
+                    <div class="px-4 pt-4 pb-2">
                       <span class="text-xs font-medium text-ink-muted uppercase tracking-wide">
                         Filters
                       </span>
                     </div>
                   </Show>
 
-                  <For each={categories()}>
-                    {(category) => {
-                      const activeCount = createMemo(
-                        () =>
-                          category.options.filter((o) =>
-                            soup.filters.isActive(o.id)
-                          ).length
-                      );
-                      return (
-                        <Accordion.Item
-                          value={category.id}
-                          class="border-b border-edge-muted/30 last:border-b-0"
-                        >
-                          <Accordion.Header>
-                            <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
-                              <span class="font-medium">{category.label}</span>
-                              <div class="flex items-center gap-2">
-                                <Show when={activeCount() > 0}>
-                                  <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
-                                    {activeCount()}
-                                  </span>
-                                </Show>
-                                <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
-                              </div>
-                            </Accordion.Trigger>
-                          </Accordion.Header>
-                          <Accordion.Content class="pb-1">
-                            <For each={category.options}>
-                              {(option) => {
-                                const active = () =>
-                                  soup.filters.isActive(option.id);
-                                return (
-                                  <button
-                                    type="button"
-                                    role="checkbox"
-                                    aria-checked={active()}
-                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left"
-                                    onClick={() => toggleFilter(option.id)}
-                                  >
-                                    <span
-                                      class={cn(
-                                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                                        active()
-                                          ? 'bg-accent border-accent'
-                                          : 'border-edge'
-                                      )}
+                  <div>
+                    <For each={categories()}>
+                      {(category) => {
+                        const activeCount = createMemo(
+                          () =>
+                            category.options.filter((o) =>
+                              soup.filters.isActive(o.id)
+                            ).length
+                        );
+                        return (
+                          <Accordion.Item
+                            value={category.id}
+                            class="bg-menu rounded-2xl mx-3 not-first:mt-3"
+                          >
+                            <Accordion.Header>
+                              <Accordion.Trigger
+                                class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group"
+                                onClick={(e) =>
+                                  scrollAccordionItemToTop(e, scrollRef())
+                                }
+                              >
+                                <span class="font-medium">
+                                  {category.label}
+                                </span>
+                                <div class="flex items-center gap-2">
+                                  <Show when={activeCount() > 0}>
+                                    <span class="group-data-[expanded]:hidden size-4 flex items-center justify-center rounded-full bg-accent text-page text-[10px] font-medium leading-none">
+                                      {activeCount()}
+                                    </span>
+                                  </Show>
+                                  <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-[expanded]:rotate-180" />
+                                </div>
+                              </Accordion.Trigger>
+                            </Accordion.Header>
+                            <Accordion.Content class="pb-1">
+                              <For each={category.options}>
+                                {(option) => {
+                                  const active = () =>
+                                    soup.filters.isActive(option.id);
+                                  return (
+                                    <button
+                                      type="button"
+                                      role="checkbox"
+                                      aria-checked={active()}
+                                      class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                      onClick={() => toggleFilter(option.id)}
                                     >
-                                      <Show when={active()}>
-                                        <CheckIcon class="size-2.5 text-page" />
+                                      <span
+                                        class={cn(
+                                          'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                          active()
+                                            ? 'bg-accent border-accent'
+                                            : 'border-edge'
+                                        )}
+                                      >
+                                        <Show when={active()}>
+                                          <CheckIcon class="size-2.5 text-page" />
+                                        </Show>
+                                      </span>
+                                      <Show when={option.icon}>
+                                        {(icon) => (
+                                          <span class="size-4 flex items-center justify-center shrink-0">
+                                            {icon()()}
+                                          </span>
+                                        )}
                                       </Show>
-                                    </span>
-                                    <Show when={option.icon}>
-                                      {(icon) => (
-                                        <span class="size-4 flex items-center justify-center shrink-0">
-                                          {icon()()}
-                                        </span>
-                                      )}
-                                    </Show>
-                                    <span class={cn('flex-1 truncate')}>
-                                      {option.label}
-                                    </span>
-                                  </button>
-                                );
-                              }}
-                            </For>
-                          </Accordion.Content>
-                        </Accordion.Item>
-                      );
-                    }}
-                  </For>
+                                      <span class={cn('flex-1 truncate')}>
+                                        {option.label}
+                                      </span>
+                                    </button>
+                                  );
+                                }}
+                              </For>
+                            </Accordion.Content>
+                          </Accordion.Item>
+                        );
+                      }}
+                    </For>
+                  </div>
 
                   {/* Assignee section for tasks view */}
                   <Show when={isTasksView()}>
                     <Accordion.Item
                       value="assignee"
-                      class="border-b border-edge-muted/30 last:border-b-0"
+                      class="bg-menu rounded-2xl mx-3 mt-3"
                     >
                       <Accordion.Header>
-                        <Accordion.Trigger class="w-full flex items-center justify-between px-4 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group">
+                        <Accordion.Trigger
+                          class="w-full flex items-center justify-between px-3 py-3 text-sm text-ink hover:bg-hover transition-colors outline-none group"
+                          onClick={(e) =>
+                            scrollAccordionItemToTop(e, scrollRef())
+                          }
+                        >
                           <span class="font-medium">Assignee</span>
                           <div class="flex items-center gap-2">
                             <Show when={assigneeFilter().length > 0}>
@@ -347,7 +373,7 @@ export const MobileFilterDrawer = () => {
                       </Accordion.Header>
                       <Accordion.Content class="pb-1">
                         {/* Search */}
-                        <div class="flex items-center gap-2 px-4 py-2 border-b border-edge-muted/50 mb-1">
+                        <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted/50 mb-1">
                           <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                           <input
                             type="text"
@@ -356,6 +382,23 @@ export const MobileFilterDrawer = () => {
                             onInput={(e) =>
                               setAssigneeSearch(e.currentTarget.value)
                             }
+                            onFocus={(e) => {
+                              setInputFocused(true);
+                              const scrollEl = scrollRef();
+                              if (!scrollEl) return;
+                              const inputRect =
+                                e.currentTarget.getBoundingClientRect();
+                              const containerRect =
+                                scrollEl.getBoundingClientRect();
+                              scrollEl.scrollTo({
+                                top:
+                                  scrollEl.scrollTop +
+                                  (inputRect.top - containerRect.top) -
+                                  20,
+                                behavior: 'smooth',
+                              });
+                            }}
+                            onBlur={() => setInputFocused(false)}
                             placeholder="Search assignees..."
                             class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-muted"
                           />
@@ -420,7 +463,7 @@ export const MobileFilterDrawer = () => {
                   onReplace={replaceFilter}
                   onClearAll={resetToTabDefaults}
                   isOptionActive={isOptionActive}
-                  chipClass="min-h-11"
+                  chipClass="min-h-11 bg-menu border-none rounded-lg"
                   hideCategoryLabel
                 />
               </div>
