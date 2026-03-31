@@ -1,7 +1,6 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import ReplyIcon from '@icon/regular/arrow-bend-up-left.svg';
-import ArrowLeftIcon from '@icon/regular/arrow-left.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import PlusIcon from '@icon/regular/plus.svg';
@@ -20,7 +19,6 @@ import type {
   MessageActionEvent,
   MessageActionHandler,
   MessageActions,
-  MessageData,
 } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
