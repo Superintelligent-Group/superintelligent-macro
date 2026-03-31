@@ -118,8 +118,7 @@ export const Button = <T extends ValidComponent = 'button'>(
       'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
       variantStyles[variant()],
       sizeStyles[size()],
-      local.class,
-      'transition-none' // reset native k-button transition
+      local.class
     );
 
   return (
