@@ -1,4 +1,4 @@
-import { type JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { cn } from '@ui/utils/classname';
 import { useMobileChannelInputVisibility } from '@channel/Channel/mobile-channel-input-visibility';
 
