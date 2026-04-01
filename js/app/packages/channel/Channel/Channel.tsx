@@ -73,6 +73,7 @@ import { MaybeMessageActionDrawerManager } from '@channel/Message/MessageActionD
 import { MaybeMobileChannelInputVisibilityProvider } from './mobile-channel-input-visibility';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { scrollReplyInputIntoView } from '../scroll-utils';
 
 type ChannelProps = {
   channelId: string;
@@ -195,6 +196,7 @@ export function Channel(props: ChannelProps) {
         ctx.event?.target as HTMLElement | undefined
       );
       state.setIsReplying(true);
+      requestAnimationFrame(() => scrollReplyInputIntoView(ctx.message.id));
     },
     onEdit: ({ message }) => {
       messageEditor.start(message);

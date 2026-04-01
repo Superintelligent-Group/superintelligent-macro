@@ -54,6 +54,8 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
           mobileChannelInputVisibility?.show();
         }
       }}
+      data-reply-input
+      data-reply-input-id={props.messageId}
     >
       <ThreadReplyInputConnector />
       {(() => {

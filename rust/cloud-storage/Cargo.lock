@@ -1966,6 +1966,7 @@ dependencies = [
  "model_user",
  "models_comms",
  "models_pagination",
+ "readonly_pool",
  "recursion",
  "rootcause",
  "serde",
@@ -2928,6 +2929,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "properties",
+ "readonly_pool",
  "redis",
  "regex",
  "reqwest",
@@ -3047,6 +3049,7 @@ dependencies = [
  "properties_db_client",
  "properties_service",
  "rayon",
+ "readonly_pool",
  "redis",
  "regex",
  "reqwest",
@@ -6131,6 +6134,7 @@ dependencies = [
  "macro_uuid",
  "model_user",
  "properties",
+ "readonly_pool",
  "scribe",
  "search_service_client",
  "serde",
@@ -8052,6 +8056,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly_pool"
+version = "0.1.0"
+dependencies = [
+ "sqlx",
+]
+
+[[package]]
 name = "recursion"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9527,6 +9538,7 @@ dependencies = [
  "non_empty",
  "ordered-float",
  "properties_db_client",
+ "readonly_pool",
  "recursion",
  "rootcause",
  "schemars",
