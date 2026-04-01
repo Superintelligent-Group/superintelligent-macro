@@ -18,11 +18,18 @@ export function focusAndOpenKeyboard(
 
   const tempEl = document.createElement('input');
   let observer: MutationObserver | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  function cleanup() {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (document.body.contains(tempEl)) document.body.removeChild(tempEl);
+    observer?.disconnect();
+    window.removeEventListener('beforeunload', cleanup);
+  }
 
   function focusOnElementAndCleanup() {
-      getEl()?.focus();
-      if (document.body.contains(tempEl)) document.body.removeChild(tempEl);
-      observer?.disconnect();
+    getEl()?.focus();
+    cleanup();
   }
 
   function focusOnDummyElementToOpenIOSKeyboard() {
@@ -38,7 +45,7 @@ export function focusAndOpenKeyboard(
 
   const el = getEl();
   if (el && isVisible(el)) {
-    focusOnElementAndCleanup();
+    el.focus();
     return;
   }
 
@@ -49,6 +56,9 @@ export function focusAndOpenKeyboard(
     if (current && isVisible(current)) focusOnElementAndCleanup();
   });
   observer.observe(document.body, { childList: true, subtree: true });
+
+  timeoutId = setTimeout(cleanup, 5000);
+  window.addEventListener('beforeunload', cleanup, { once: true });
 }
 
 function isVisible(el: HTMLElement): boolean {
