@@ -148,6 +148,7 @@ export function ActionDrawer() {
       }}
       preventScroll={false}
       preventScrollbarShift={false}
+      restoreFocus={false}
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />

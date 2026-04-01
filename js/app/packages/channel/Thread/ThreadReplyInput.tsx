@@ -77,7 +77,6 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 threadId: props.messageId,
               })}
               markdownNamespace={`thread-reply-input-${props.messageId}-markdown`}
-              onReady={(handle) => setTimeout(() => handle.focus(), 300)}
               onChange={(snapshot) => void props.setReplyInputState(snapshot)}
               onStartTyping={() =>
                 typingMutation.mutate({

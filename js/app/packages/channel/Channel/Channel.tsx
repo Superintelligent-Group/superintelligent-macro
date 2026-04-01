@@ -67,6 +67,7 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import { resetKeyboardModality } from './util';
+import { focusAndOpenKeyboard } from '@core/mobile/focus-and-open-keyboard';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Message/MessageActionDrawerManager';
 import { MaybeMobileChannelInputVisibilityProvider } from './mobile-channel-input-visibility';
@@ -186,6 +187,13 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       const state = threadManager.getOrCreateThreadState(ctx.message.id);
+      focusAndOpenKeyboard(
+        () =>
+          document.querySelector(
+            `[data-input-id="thread-reply-input-${ctx.message.id}"] [contenteditable]`
+          ) as HTMLElement | null,
+        ctx.event?.target as HTMLElement | undefined
+      );
       state.setIsReplying(true);
     },
     onEdit: ({ message }) => {
