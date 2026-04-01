@@ -1,11 +1,16 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
-import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { getSoupEntityById, getSoupItemId } from './normalized-cache';
 import { soupKeys } from './keys';
 import type { SoupItemsQueryArgs } from './items';
+
+// NOTE: we only use this for merging viewedAt into history items.
+// This narrower type makes optimistic updates simpler if the item is not already in the normy cache.
+type RecentlyViewedItem = {
+  id: string;
+  viewedAt: string | undefined;
+};
 
 const RECENTLY_VIEWED_LIMIT = 50;
 const RECENTLY_VIEWED_STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -16,14 +21,13 @@ const recentlyViewedArgs: SoupItemsQueryArgs = {
   body: {},
 };
 
-export const recentlyViewedQueryKey =
-  soupKeys.items(recentlyViewedArgs).queryKey;
+const recentlyViewedQueryKey = soupKeys.items(recentlyViewedArgs).queryKey;
 
 export function useRecentlyViewedSoupQuery() {
   return useQuery(() => ({
     queryKey: recentlyViewedQueryKey,
-    queryFn: async () => {
-      return throwOnErr(
+    queryFn: async (): Promise<RecentlyViewedItem[]> => {
+      const page = await throwOnErr(
         async () =>
           await storageServiceClient.getSoupItems({
             params: {},
@@ -33,38 +37,29 @@ export function useRecentlyViewedSoupQuery() {
             },
           })
       );
+      return page.items.map((item) => ({
+        id: item.tag === 'channel' ? item.data.channel.id : item.data.id,
+        viewedAt:
+          (item.tag === 'channel' ? item.data.viewed_at : item.data.viewedAt) ??
+          undefined,
+      }));
     },
     staleTime: RECENTLY_VIEWED_STALE_TIME,
     gcTime: RECENTLY_VIEWED_GC_TIME,
-    placeholderData: (prev: any) => prev,
-    meta: { normalize: true },
+    placeholderData: (prev) => prev,
   }));
 }
 
-export function ensureItemInRecentlyViewed(itemId: string) {
-  const currentData = queryClient.getQueryData<SoupPage>(
-    recentlyViewedQueryKey
+export function updateRecentlyViewedItem(itemId: string, viewedAt?: string) {
+  queryClient.setQueryData<RecentlyViewedItem[]>(
+    recentlyViewedQueryKey,
+    (prev) => {
+      const filtered = prev?.filter((item) => item.id !== itemId) ?? [];
+      const updatedItem = {
+        id: itemId,
+        viewedAt: viewedAt ?? new Date().toISOString(),
+      };
+      return [updatedItem, ...filtered.slice(0, RECENTLY_VIEWED_LIMIT - 1)];
+    }
   );
-  if (!currentData) return;
-
-  const alreadyPresent = currentData.items.some(
-    (item) => getSoupItemId(item) === itemId
-  );
-  if (alreadyPresent) return;
-
-  const soupEntity = getSoupEntityById(itemId);
-  if (!soupEntity) return;
-
-  queryClient.setQueryData<SoupPage>(recentlyViewedQueryKey, (prev) => {
-    if (!prev) return prev;
-    return {
-      ...prev,
-      items: [
-        soupEntity,
-        ...prev.items
-          .filter((item) => getSoupItemId(item) !== itemId)
-          .slice(0, RECENTLY_VIEWED_LIMIT - 1),
-      ],
-    };
-  });
 }

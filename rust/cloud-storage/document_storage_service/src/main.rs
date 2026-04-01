@@ -29,7 +29,10 @@ use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use email::{
+    domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
+    outbound::EmailPgRepo,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -113,6 +116,22 @@ async fn main() -> anyhow::Result<()> {
         max_connections,
         "initialized db connection"
     );
+
+    let readonly_db = match PgPoolOptions::new()
+        .min_connections(min_connections)
+        .max_connections(max_connections)
+        .connect(&config.vars.database_url_readonly)
+        .await
+    {
+        Ok(pool) => {
+            tracing::trace!("initialized readonly db connection");
+            pool
+        }
+        Err(e) => {
+            tracing::warn!(error=?e, "failed to connect to readonly db, falling back to primary");
+            db.clone()
+        }
+    };
 
     let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
@@ -208,6 +227,13 @@ async fn main() -> anyhow::Result<()> {
         email::domain::ports::NoOpGmailLabelModifier,
         0,
     );
+    let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
+        EmailPgRepo::new(readonly_db.clone()),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        email::domain::ports::NoOpGmailLabelModifier,
+        0,
+    ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsIngressQueue {
@@ -231,12 +257,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
     let channel_service_for_soup = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
-        PgUserRepo::new(db.clone()),
+        PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+        PgUserRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = ChannelServiceImpl::new(
-        PgCommsRepo { pool: db.clone() },
+        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         PgUserRepo::new(db.clone()),
         frecency_storage.clone(),
     );
@@ -332,9 +358,9 @@ async fn main() -> anyhow::Result<()> {
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
-                PgSoupRepo::new(db.clone()),
+                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
                 frecency_service,
-                email_service.clone(),
+                readonly_email_service,
                 channel_service_for_soup,
             ),
             email_service,
