@@ -75,6 +75,7 @@ export const TOKENS = {
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
     toggleVisor: 'global.toggleVisor',
+    inviteTeam: 'global.inviteTeam',
   },
 
   // email
@@ -91,6 +92,8 @@ export const TOKENS = {
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
     blockSender: 'email.blockSender',
+    markSenderSignal: 'email.markSenderSignal',
+    markSenderNoise: 'email.markSenderNoise',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',

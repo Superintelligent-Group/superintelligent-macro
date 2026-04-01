@@ -69,6 +69,8 @@ import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
 import { resetKeyboardModality } from './util';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import { scrollReplyInputIntoView } from '../scroll-utils';
 
 type ChannelProps = {
   channelId: string;
@@ -86,6 +88,7 @@ export function Channel(props: ChannelProps) {
   const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
   const deleteMessageMutation = useDeleteMessageMutation();
+  const typingMutation = usePostTypingUpdateMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
   const [threadListNavigation, setThreadListNavigation] =
@@ -190,6 +193,7 @@ export function Channel(props: ChannelProps) {
     onReply: (ctx) => {
       const state = threadManager.getOrCreateThreadState(ctx.message.id);
       state.setIsReplying(true);
+      requestAnimationFrame(() => scrollReplyInputIntoView(ctx.message.id));
     },
     onEdit: ({ message }) => {
       messageEditor.start(message);
@@ -292,12 +296,15 @@ export function Channel(props: ChannelProps) {
                 {(item) => {
                   const message = () => messageById().get(item.id);
                   const state = threadManager.getOrCreateThreadState(item.id);
+                  const isNewestThread = () =>
+                    item.id === messageIndex().keys.at(-1);
                   return (
                     <Show when={message()}>
                       {(m) => (
                         <ChannelThread
                           data={m}
                           channelId={() => props.channelId}
+                          isNewestThread={isNewestThread()}
                           getMessageActions={getMessageActions}
                           targetReplyId={targetMessageController.pendingTargetReplyId()}
                           highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
@@ -358,6 +365,18 @@ export function Channel(props: ChannelProps) {
                 }}
                 onChange={(snapshot) => void setChannelInputSnapshot(snapshot)}
                 onSend={onSend}
+                onStartTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'start',
+                  })
+                }
+                onStopTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'stop',
+                  })
+                }
               />
             </div>
           </DebugSuspense>

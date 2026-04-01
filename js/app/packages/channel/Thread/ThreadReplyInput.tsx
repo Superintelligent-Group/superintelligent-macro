@@ -1,5 +1,6 @@
 import { useUserId } from '@core/context/user';
 import { useSendMessageMutation } from '@queries/channel/message';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import type { Accessor, Setter } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import type { InputSnapshot } from '../Input';
@@ -24,6 +25,7 @@ type ThreadReplyInputProps = {
 export function ThreadReplyInput(props: ThreadReplyInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
+  const typingMutation = usePostTypingUpdateMutation();
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -41,7 +43,12 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   });
 
   return (
-    <div class="relative pt-2" style={{ 'margin-left': replyInputOffsetX }}>
+    <div
+      class="relative pt-2"
+      style={{ 'margin-left': replyInputOffsetX }}
+      data-reply-input
+      data-reply-input-id={props.messageId}
+    >
       <ThreadReplyInputConnector />
       {(() => {
         const droppable = entityDropZone.droppable;
@@ -65,6 +72,20 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               })}
               markdownNamespace={`thread-reply-input-${props.messageId}-markdown`}
               onChange={(snapshot) => void props.setReplyInputState(snapshot)}
+              onStartTyping={() =>
+                typingMutation.mutate({
+                  channelId: props.channelId,
+                  action: 'start',
+                  threadId: props.messageId,
+                })
+              }
+              onStopTyping={() =>
+                typingMutation.mutate({
+                  channelId: props.channelId,
+                  action: 'stop',
+                  threadId: props.messageId,
+                })
+              }
               onClose={() => {
                 props.setReplyInputState(undefined);
                 props.setIsReplying(false);

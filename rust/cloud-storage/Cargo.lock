@@ -1815,6 +1815,7 @@ dependencies = [
  "model",
  "model_user",
  "models_permissions",
+ "roles_and_permissions",
  "serde",
  "serde_json",
  "sqlx",
@@ -1965,6 +1966,7 @@ dependencies = [
  "model_user",
  "models_comms",
  "models_pagination",
+ "readonly_pool",
  "recursion",
  "rootcause",
  "serde",
@@ -2294,6 +2296,7 @@ dependencies = [
  "remote_env_var",
  "rs-libreoffice-bindings",
  "s3_client",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -2926,10 +2929,12 @@ dependencies = [
  "models_permissions",
  "notification",
  "properties",
+ "readonly_pool",
  "redis",
  "regex",
  "reqwest",
  "rmcp",
+ "roles_and_permissions",
  "schemars",
  "scribe",
  "search_service_client",
@@ -3044,9 +3049,11 @@ dependencies = [
  "properties_db_client",
  "properties_service",
  "rayon",
+ "readonly_pool",
  "redis",
  "regex",
  "reqwest",
+ "s3_key",
  "saved_views",
  "schemars",
  "search_service",
@@ -3116,6 +3123,7 @@ dependencies = [
  "model",
  "openssl",
  "pdfium-render",
+ "s3_key",
  "serde",
  "serde_json",
  "sqlx",
@@ -3158,6 +3166,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "reqwest",
+ "s3_key",
  "schemars",
  "serde",
  "serde_json",
@@ -3198,6 +3207,7 @@ dependencies = [
  "openssl",
  "redis",
  "s3_client",
+ "s3_key",
  "serde",
  "serde_json",
  "sha2",
@@ -3301,6 +3311,7 @@ dependencies = [
  "macro_aws_config",
  "model",
  "models_bulk_upload",
+ "s3_key",
  "strum",
  "thiserror 2.0.17",
  "tokio",
@@ -4374,7 +4385,9 @@ dependencies = [
  "mail-builder",
  "mockall",
  "models_email",
+ "regex",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -5236,6 +5249,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "invite_email"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "macro_env",
+ "macro_user_id",
+ "notification",
+ "serde",
+ "serde_json",
+ "url",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -6106,6 +6134,7 @@ dependencies = [
  "macro_uuid",
  "model_user",
  "properties",
+ "readonly_pool",
  "scribe",
  "search_service_client",
  "serde",
@@ -6308,6 +6337,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "doppleganger",
+ "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
@@ -6315,7 +6345,6 @@ dependencies = [
  "models_pagination",
  "notification",
  "paste",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -6460,7 +6489,9 @@ dependencies = [
  "chrono",
  "document_sub_type",
  "item_filters",
+ "model_file_type",
  "models_opensearch",
+ "models_soup",
  "opensearch_client",
  "schemars",
  "serde",
@@ -8025,6 +8056,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly_pool"
+version = "0.1.0"
+dependencies = [
+ "sqlx",
+]
+
+[[package]]
 name = "recursion"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8098,6 +8136,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "http-body-util",
+ "invite_email",
  "ip_extractor",
  "macro_db_migrator",
  "macro_user_id",
@@ -8108,7 +8147,6 @@ dependencies = [
  "model_user",
  "notification",
  "rate_limit",
- "referral_invitation",
  "rootcause",
  "serde",
  "serde_json",
@@ -8117,22 +8155,10 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
+ "url",
  "urlencoding",
  "utoipa",
  "uuid",
-]
-
-[[package]]
-name = "referral_invitation"
-version = "0.1.0"
-dependencies = [
- "askama",
- "macro_env",
- "macro_user_id",
- "notification",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -8583,6 +8609,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "s3_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "urlencoding",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8765,6 +8799,7 @@ dependencies = [
  "pdfium-render",
  "rust-embed",
  "s3_client",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -8808,10 +8843,13 @@ dependencies = [
  "model",
  "models_email",
  "models_opensearch",
+ "models_properties",
  "models_search",
  "models_search_cursor",
+ "models_soup",
  "name_search",
  "opensearch_client",
+ "properties_db_client",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -8847,12 +8885,11 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
- "model_file_type",
  "openssl",
+ "s3_key",
  "sqs_client",
  "tokio",
  "tracing",
- "urlencoding",
 ]
 
 [[package]]
@@ -9501,6 +9538,7 @@ dependencies = [
  "non_empty",
  "ordered-float",
  "properties_db_client",
+ "readonly_pool",
  "recursion",
  "rootcause",
  "schemars",
@@ -9763,6 +9801,7 @@ dependencies = [
  "model",
  "models_email",
  "models_opensearch",
+ "s3_key",
  "serde",
  "serde_json",
  "strum",
@@ -9817,6 +9856,7 @@ dependencies = [
  "macro_middleware",
  "model",
  "models_sfs",
+ "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
@@ -10049,7 +10089,9 @@ dependencies = [
  "non_empty",
  "notification",
  "roles_and_permissions",
+ "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
@@ -10782,6 +10824,7 @@ dependencies = [
  "macro_entrypoint",
  "models_bulk_upload",
  "openssl",
+ "s3_key",
  "serde",
  "serde_json",
  "sqs_client",

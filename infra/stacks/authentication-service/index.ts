@@ -2,6 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   config,
+  getLinkManagerQueue,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -161,6 +162,11 @@ const META_PIXEL_ID = config.require('meta_pixel_id');
 //   .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
 //   .apply((secret) => secret.secretString);
 
+const POSTHOG_HOST = config.require('posthog_host');
+const POSTHOG_API_KEY: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('posthog_api_key') })
+  .apply((secret) => secret.secretString);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${fusionauthApiKeySecretKeyArn}`,
@@ -192,6 +198,8 @@ const { notificationIngressQueueName, notificationIngressQueueArn } =
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
+const { linkManagerQueueName, linkManagerQueueArn } = getLinkManagerQueue();
+
 const service = new AuthenticationService('authentication-service', {
   secretKeyArns,
   clusterName: fusionAuthClusterName,
@@ -205,7 +213,11 @@ const service = new AuthenticationService('authentication-service', {
   isPrivate: false,
   healthCheckPath: '/health',
   tags,
-  queueArns: [notificationIngressQueueArn, searchEventQueueArn],
+  queueArns: [
+    notificationIngressQueueArn,
+    searchEventQueueArn,
+    linkManagerQueueArn,
+  ],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },
     {
@@ -290,6 +302,10 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${searchEventQueueName}`,
     },
     {
+      name: 'LINK_MANAGER_QUEUE',
+      value: pulumi.interpolate`${linkManagerQueueName}`,
+    },
+    {
       name: 'MACRO_API_TOKEN_ISSUER',
       value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
     },
@@ -356,6 +372,14 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'META_PIXEL_ID',
       value: META_PIXEL_ID,
+    },
+    {
+      name: 'POSTHOG_HOST',
+      value: POSTHOG_HOST,
+    },
+    {
+      name: 'POSTHOG_API_KEY',
+      value: pulumi.interpolate`${POSTHOG_API_KEY}`,
     },
   ],
 });

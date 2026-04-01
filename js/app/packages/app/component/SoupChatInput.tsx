@@ -1,5 +1,5 @@
-import { useSoup } from '@app/component/next-soup/soup-context';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -8,13 +8,15 @@ import {
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
+import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
-import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -71,6 +73,10 @@ function SoupChatInputInner() {
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({});
     if (isErr(response)) {
+      if (isPaymentError(response)) {
+        const { showPaywall } = usePaywallState();
+        showPaywall(PaywallKey.CHAT_LIMIT);
+      }
       return;
     }
     const [, { id: chatId }] = response;
@@ -161,10 +167,6 @@ function SoupChatInputInner() {
     </Show>
   );
 }
-
-document.addEventListener('focusin', (f) => console.log('focus changed', f));
-document.addEventListener('focusout', (f) => console.log('focus changed', f));
-document.addEventListener('focus', (f) => console.log('focus changed', f));
 
 export function SoupChatInput() {
   return (

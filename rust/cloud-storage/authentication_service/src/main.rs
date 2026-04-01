@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
-use analytics_client::{AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig};
+use analytics_client::{
+    AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
+};
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -186,7 +188,8 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .search_event_queue(&config.search_event_queue);
+    .search_event_queue(&config.search_event_queue)
+    .email_link_manager_queue(&config.link_manager_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
@@ -214,6 +217,16 @@ async fn main() -> anyhow::Result<()> {
                     test_event_code: config.meta_test_event_code.clone(),
                 }
             }),
+        posthog: config.posthog_api_key.as_ref().map(|api_key| {
+            tracing::info!("configuring PostHog");
+            PostHogConfig {
+                api_key: api_key.clone(),
+                host: config
+                    .posthog_host
+                    .clone()
+                    .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
+            }
+        }),
     });
     tracing::trace!("initialized analytics client");
 
@@ -227,7 +240,11 @@ async fn main() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        &config.stripe_price_ids.stripe_price_id_haiku,
+        teams::outbound::customer_repo::StripePriceIds {
+            haiku: config.stripe_price_ids.stripe_price_id_haiku.to_string(),
+            sonnet: config.stripe_price_ids.stripe_price_id_sonnet.to_string(),
+            opus: config.stripe_price_ids.stripe_price_id_opus.to_string(),
+        },
     );
     let team_channels_repo_impl = TeamChannelsRepositoryImpl::new(db.clone());
 

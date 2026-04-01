@@ -1,6 +1,7 @@
 import { fileSelector } from '@core/directive/fileSelector';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
@@ -24,6 +25,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
@@ -79,6 +81,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onCleanup,
   onMount,
   type Setter,
@@ -122,7 +125,6 @@ import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { stickyGate } from '@core/util/debounce';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import ChevronDown from '@icon/regular/caret-down.svg';
 
@@ -549,13 +551,16 @@ export function BaseInput(props: {
         'Email sent',
         undefined,
         draftId
-          ? {
-              text: 'Undo',
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                void undoSend(draftId);
+          ? [
+              {
+                label: 'Undo',
+                icon: ArrowCounterClockwise,
+                onClick: () => {
+                  if (toastId != null) toast.dismiss(toastId);
+                  void undoSend(draftId);
+                },
               },
-            }
+            ]
           : undefined,
         10_000
       );
@@ -626,7 +631,7 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
-  const DRAFT_DEBOUNCE_MS = 1000;
+  const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
@@ -641,7 +646,10 @@ export function BaseInput(props: {
       !hasDraftContent(
         prepared.bodyText,
         form().subject(),
-        form().attachments.list().length
+        form().attachments.list().length,
+        form().recipients().to.length +
+          form().recipients().cc.length +
+          form().recipients().bcc.length
       )
     ) {
       return null;
@@ -1019,18 +1027,17 @@ export function BaseInput(props: {
 
     // If not already in To or CC, add user to CC
     if (!isInTo && !isInCc) {
-      // Find the user in recipient options
-      const userOption = ctx.recipientOptions().find((recipient) => {
-        const email = recipient.data.email;
-        if (!email) return false;
-        return email === mentionEmail;
-      });
+      // Find the user in recipient options, or construct from mention data
+      const userOption =
+        ctx.recipientOptions().find((recipient) => {
+          const email = recipient.data.email;
+          if (!email) return false;
+          return email === mentionEmail;
+        }) ?? convertContactInfoToEmailRecipient({ email: mentionEmail });
 
-      if (userOption) {
-        // Add to CC recipients
-        form().setRecipients('cc', [...form().recipients().cc, userOption]);
-        toast.success(`${mentionEmail} added to CC`);
-      }
+      // Add to CC recipients
+      form().setRecipients('cc', [...form().recipients().cc, userOption]);
+      toast.success(`${mentionEmail} added to CC`);
     }
   };
 
@@ -1221,8 +1228,22 @@ export function BaseInput(props: {
     }
   };
 
-  const isDraftSaving = () => saveDraftMutation.isPending;
-  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
+  // Unschedule when all recipients are removed
+  const totalRecipientCount = () => {
+    const r = form().recipients();
+    return r.to.length + r.cc.length + r.bcc.length;
+  };
+  createEffect(
+    on(
+      totalRecipientCount,
+      (count) => {
+        if (count === 0 && form().sendTime()) {
+          handleSendTimeChange(null);
+        }
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <div
@@ -1625,10 +1646,15 @@ export function BaseInput(props: {
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
                 onSendTimeChange={handleSendTimeChange}
+                disabled={
+                  form().recipients().to.length === 0 &&
+                  form().recipients().cc.length === 0 &&
+                  form().recipients().bcc.length === 0
+                }
                 disablePortal={isMobile()}
               />
             </Show>
-            <Show when={savedDraftId() && !laggedIsDraftSaving()}>
+            <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}
                 tooltip="Delete draft"
@@ -1636,11 +1662,6 @@ export function BaseInput(props: {
               >
                 <Trash class="h-5" />
               </Button>
-            </Show>
-            <Show when={laggedIsDraftSaving()}>
-              <div class="aspect-square p-1 flex items-center justify-center">
-                <Spinner class="size-5 animate-spin text-ink-muted" />
-              </div>
             </Show>
           </div>
 

@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::{
     Json,
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
@@ -30,7 +30,7 @@ pub enum GithubLinkError {
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
         Json(ErrorResponse {
-            message: &self.to_string(),
+            message: self.to_string().into(),
         })
         .into_response()
     }
@@ -102,6 +102,12 @@ pub(in crate::api::oauth2) async fn handler(
     if let Some(link_id) = state.link_id.as_ref() {
         link_user(ctx, link_id, code).await?;
 
+        if let Some(original_url) = state.original_url.as_ref() {
+            return Ok(GithubOAuthSuccess::Login(
+                Redirect::temporary(original_url).into_response(),
+            ));
+        }
+
         // Return HTML that notifies the opener window and closes the popup
         let html = Html(
             r#"
@@ -128,6 +134,7 @@ pub(in crate::api::oauth2) async fn handler(
             </html>
         "#,
         );
+
         return Ok(GithubOAuthSuccess::Html(html));
     }
 

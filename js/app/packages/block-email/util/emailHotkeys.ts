@@ -1,30 +1,18 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ApiThread } from '@service-email/generated/schemas';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import type { Accessor } from 'solid-js';
 
 export interface EmailHotkeyHandlers {
-  archiveThread: () => boolean;
   blockSender: () => boolean;
+  markSenderSignal: () => boolean;
+  markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
   navigateToNextMessage: () => boolean;
 }
 
 export function registerEmailHotkeys(
   scopeId: string,
-  threadData: Accessor<ApiThread | undefined>,
   handlers: EmailHotkeyHandlers
 ) {
-  registerHotkey({
-    hotkey: 'e',
-    scopeId: scopeId,
-    description: threadData()?.inbox_visible
-      ? 'Unarchive thread'
-      : 'Archive thread',
-    keyDownHandler: handlers.archiveThread,
-    hotkeyToken: TOKENS.email.archive,
-    displayPriority: 10,
-  });
   registerHotkey({
     hotkey: 'opt+r',
     scopeId: scopeId,
@@ -65,6 +53,20 @@ export function registerEmailHotkeys(
     description: 'Block sender',
     keyDownHandler: handlers.blockSender,
     hotkeyToken: TOKENS.email.blockSender,
+    displayPriority: 5,
+  });
+  registerHotkey({
+    scopeId: scopeId,
+    description: 'Mark sender as Signal',
+    keyDownHandler: handlers.markSenderSignal,
+    hotkeyToken: TOKENS.email.markSenderSignal,
+    displayPriority: 5,
+  });
+  registerHotkey({
+    scopeId: scopeId,
+    description: 'Mark sender as Noise',
+    keyDownHandler: handlers.markSenderNoise,
+    hotkeyToken: TOKENS.email.markSenderNoise,
     displayPriority: 5,
   });
   registerHotkey({

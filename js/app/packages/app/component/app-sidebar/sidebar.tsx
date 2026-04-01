@@ -1,3 +1,4 @@
+import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -32,7 +33,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { debounce, type Scheduled } from '@solid-primitives/scheduled';
+import { debounce } from '@solid-primitives/scheduled';
 import { Hotkey } from '@core/component/Hotkey';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
@@ -41,6 +42,11 @@ import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
+import {
+  InviteModal,
+  setInviteModalOpen,
+} from '@app/component/app-sidebar/invite-modal';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 
 interface SidebarItem {
   id: ListView;
@@ -124,7 +130,6 @@ type SidebarHotkeyDeps = {
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
-  debounceResetHotkeysState: Scheduled<[]>;
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
   openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
@@ -137,15 +142,19 @@ export const registerSidebarHotkeys = ({
   hotkeyVisible,
   setHotkeyVisible,
   resetHotkeysState,
-  debounceResetHotkeysState,
 }: SidebarHotkeyDeps) => {
+  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
+  const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
+
   // Register 'g' as a leader key that activates the global GO_TO command scope
   registerHotkey({
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
     description: 'Go to page',
     keyDownHandler: () => {
-      setHotkeyVisible(true);
+      // We debounce the time till the hot keys are visible to allow other commands
+      // like g+g to fire
+      debounceSetHotkeyVisible();
       debounceResetHotkeysState();
       return true;
     },
@@ -163,7 +172,15 @@ export const registerSidebarHotkeys = ({
   // not part of the sidebar hotkeys, won't fire the command
   // for the key
   useHotkeyInterceptor((context) => {
-    if (context.eventType !== 'keydown' || !hotkeyVisible()) return false;
+    // If a hotkey is going to be fired, but the hotkeys are not
+    // visible, then it's not a sidebar nav hotkey and we can
+    // ignore it and reset our visible state
+    if (!hotkeyVisible()) {
+      debounceSetHotkeyVisible.clear();
+      return false;
+    }
+
+    if (context.eventType !== 'keydown') return false;
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
@@ -176,6 +193,17 @@ export const registerSidebarHotkeys = ({
     debounceResetHotkeysState.clear();
 
     return true;
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.inviteTeam,
+    description: 'Invite team',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      setInviteModalOpen(true);
+      return true;
+    },
   });
 
   registerHotkey({
@@ -193,29 +221,32 @@ export const registerSidebarHotkeys = ({
 
   // Register navigation shortcuts in the global GO_TO command scope
   for (const link of SIDEBAR_LINKS) {
+    const openSidebarView = (e?: KeyboardEvent) => {
+      e?.preventDefault();
+      if (hotkeyVisible()) {
+        resetHotkeysState();
+        debounceResetHotkeysState.clear();
+      }
+      openWithSplit(
+        {
+          type: 'component',
+          id: link.id,
+        },
+        {
+          preferNewSplit: e?.shiftKey,
+          mergeHistory: false,
+          allowDuplicate: true,
+        }
+      );
+      return true;
+    };
+
     registerHotkey({
       hotkey: link.hotkey,
       scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
       description: `Go to ${link.label}`,
-      keyDownHandler: (e) => {
-        e?.preventDefault();
-        if (hotkeyVisible()) {
-          resetHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
-        openWithSplit(
-          {
-            type: 'component',
-            id: link.id,
-          },
-          {
-            preferNewSplit: e?.shiftKey,
-            mergeHistory: false,
-            allowDuplicate: true,
-          }
-        );
-        return true;
-      },
+      keyDownHandler: openSidebarView,
+      icon: link.icon,
     });
   }
 };
@@ -226,7 +257,7 @@ export const registerSidebarHotkeys = ({
 
 type SidebarActionButtonProps = {
   label: string;
-  hotkeyToken: HotkeyToken;
+  hotkeyToken?: HotkeyToken;
   /** Whether the sidebar is currently in slim (icon-only) mode. */
   isSlim: () => boolean;
   onClick: () => void;
@@ -273,9 +304,13 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
         {props.label}
       </span>
-      <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
-        <Hotkey token={props.hotkeyToken} class="flex gap-1" />
-      </div>
+      <Show when={props.hotkeyToken}>
+        {(token) => (
+          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+            <Hotkey token={token()} class="flex gap-1" />
+          </div>
+        )}
+      </Show>
     </Button>
   );
 };
@@ -295,8 +330,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     clearPressedKeys();
     activateClosestDOMScope();
   };
-
-  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
 
   const handleCommandPaletteClick = () => {
     if (!CommandState.isOpen()) {
@@ -340,7 +373,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
-    debounceResetHotkeysState,
     isSlim,
     onOpenChange: props.onOpenChange,
     openWithSplit: layout.openWithSplit,
@@ -433,6 +465,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class=" w-full px-2 flex flex-col">
+        <Show when={DEV_MODE_ENV}>
+          <SidebarActionButton
+            label="Invite Team"
+            isSlim={isSlim}
+            onClick={() => setInviteModalOpen(true)}
+            icon={AnimatedUsersIcon}
+          />
+        </Show>
+
         <SidebarActionButton
           label="New Split"
           hotkeyToken={TOKENS.global.createNewSplit}
@@ -458,6 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           icon={AnimatedGearIcon}
         />
       </div>
+      <InviteModal />
     </div>
   );
 };
@@ -601,7 +643,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           <Show when={props.hotkeyVisible}>
             <div
               class={cn(
-                'text-xs size-4 outline outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
+                'text-xs size-4 outline-1 outline-accent/50 rounded-xs bg-page text-ink flex items-center justify-center overflow-hidden',
                 props.sidebarState === 'slim' && 'absolute -bottom-1 -right-1',
                 props.sidebarState !== 'slim' && 'relative p-1 ml-auto'
               )}

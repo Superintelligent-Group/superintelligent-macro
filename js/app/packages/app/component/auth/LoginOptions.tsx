@@ -10,10 +10,15 @@ import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useLocation } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { type JSX, Show } from 'solid-js';
 import { Stage } from './Shared';
+import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
+import { useAnalytics } from '@app/component/analytics-context';
+import type { AnalyticsProvider } from '@app/lib/analytics';
+import { useEmailLinks } from '@core/email-link';
 
 function LoginOption(props: {
   icon: JSX.Element;
@@ -43,10 +48,20 @@ function LoginOption(props: {
   );
 }
 
-export function LoginOptions(props: { setStage: (next: Stage) => void }) {
+export function LoginOptions(props: {
+  setStage: (next: Stage) => void;
+  signupMode?: boolean;
+}) {
+  const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
+  const { initEmailLink } = useEmailLinks();
 
   const startSsoLogin = async (idp_name: string) => {
+    const analyticsEvent = props.signupMode ? 'sign_up' : 'login';
+    const analyticsProviders: AnalyticsProvider[] = props.signupMode
+      ? ['ga', 'meta-pixel', 'posthog']
+      : ['posthog'];
+
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
 
@@ -91,8 +106,24 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
       });
 
       if (isOk(res)) {
-        invalidateAllAfterLogin();
+        await invalidateAllAfterLogin();
+        await initEmailLink().match(
+          () => {},
+          (err) => {
+            if (err.tag !== 'AlreadyInitialized') {
+              console.error('Failed to init email link on login', err);
+            }
+          }
+        );
       }
+
+      analytics.track(
+        analyticsEvent,
+        {
+          method: idp_name,
+        },
+        analyticsProviders
+      );
 
       return;
     }
@@ -107,6 +138,15 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
     } else {
       authUrl.searchParams.set('original_url', window.location.href);
     }
+
+    analytics.track(
+      analyticsEvent,
+      {
+        method: idp_name,
+      },
+      analyticsProviders
+    );
+
     window.location.href = authUrl.toString();
   };
 
@@ -122,11 +162,13 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
 
       <LoginOption
         icon={<IconGoogle />}
-        label="Continue with Google"
-        onClick={() => startSsoLogin('google')}
+        label={
+          props.signupMode ? 'Sign up with Google' : 'Continue with Google'
+        }
+        onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       />
 
-      <Show when={!isNativeMobilePlatform()}>
+      <Show when={!props.signupMode && !isNativeMobilePlatform()}>
         <LoginOption
           icon={<IconApple />}
           label="Continue with Apple"
@@ -134,11 +176,24 @@ export function LoginOptions(props: { setStage: (next: Stage) => void }) {
         />
       </Show>
 
-      <LoginOption
-        icon={<IconMail />}
-        label="Continue with Email"
-        onClick={() => props.setStage(Stage.Email)}
-      />
+      <Show when={!props.signupMode}>
+        <LoginOption
+          icon={<IconMail />}
+          label="Continue with Email"
+          onClick={() => props.setStage(Stage.Email)}
+        />
+      </Show>
+
+      <Show when={props.signupMode}>
+        <div class="p-4 text-center text-xs text-ink/50">
+          <a
+            class="underline hover:text-ink/70"
+            href={`${ROUTER_BASE_CONCAT}login`}
+          >
+            Existing user? Log in
+          </a>
+        </div>
+      </Show>
 
       <div class="p-4 text-center text-xs text-ink/50">
         By signing up, you agree to our

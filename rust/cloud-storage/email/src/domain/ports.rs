@@ -1,9 +1,10 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest,
-    Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage,
-    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertedContacts, UserProvider,
+    CreatedDraft, EmailErr, EmailFilter, EmailThreadPreview, EnrichedEmailThreadPreview,
+    GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
+    ParsedAddresses, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
+    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UpsertedContacts, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -227,6 +228,59 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Upsert an email filter (by address or domain) for a link.
+    fn upsert_email_filter(
+        &self,
+        link_id: Uuid,
+        input: UpsertEmailFilterInput,
+    ) -> impl Future<Output = Result<EmailFilter, Self::Err>> + Send;
+
+    /// Delete an email filter by its ID, scoped to a link.
+    fn delete_email_filter(
+        &self,
+        filter_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// List all email filters for a link.
+    fn list_email_filters(
+        &self,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<EmailFilter>, Self::Err>> + Send;
+}
+
+/// Read-only trait for fetching email thread previews.
+/// Used by soup to restrict access to only read email operations as it uses the read replica database.
+pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
+    fn get_email_thread_previews(
+        &self,
+        req: GetEmailsRequest,
+    ) -> impl Future<
+        Output = Result<
+            PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+            EmailErr,
+        >,
+    > + Send;
+}
+
+/// Newtype adapter that restricts a full `EmailService` to read-only preview access.
+/// Wrapping is explicit so readonly wiring is intentional — a bare `EmailServiceImpl`
+/// will *not* silently satisfy `EmailPreviewServiceReadOnly`.
+pub struct ReadonlyEmailPreviewAdapter<T>(pub T);
+
+impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapter<T> {
+    fn get_email_thread_previews(
+        &self,
+        req: GetEmailsRequest,
+    ) -> impl Future<
+        Output = Result<
+            PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+            EmailErr,
+        >,
+    > + Send {
+        EmailService::get_email_thread_previews(&self.0, req)
+    }
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -308,6 +362,26 @@ pub trait EmailService: Send + Sync + 'static {
         thread_receipt: EntityAccessReceipt<EditAccessLevel>,
         project_receipt: Option<EntityAccessReceipt<EditAccessLevel>>,
     ) -> impl Future<Output = Result<Option<String>, EmailErr>> + Send;
+
+    /// Upsert an email filter for the given link.
+    fn upsert_email_filter(
+        &self,
+        link: &Link,
+        input: UpsertEmailFilterInput,
+    ) -> impl Future<Output = Result<EmailFilter, EmailErr>> + Send;
+
+    /// Delete an email filter by its ID for the given link.
+    fn delete_email_filter(
+        &self,
+        link: &Link,
+        filter_id: Uuid,
+    ) -> impl Future<Output = Result<bool, EmailErr>> + Send;
+
+    /// List all email filters for the given link.
+    fn list_email_filters(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<Vec<EmailFilter>, EmailErr>> + Send;
 }
 
 /// Port for modifying Gmail message labels via the provider API.

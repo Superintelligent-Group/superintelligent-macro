@@ -8,6 +8,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { Thread } from './Thread';
 import type { ThreadProps } from './types';
 import type { ApiThreadReply } from '@service-comms/client';
+import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
@@ -26,7 +27,11 @@ export function ChannelThread(props: ThreadProps) {
   const [displayName] = useDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const fetchRepliesEnabled = deferredGate(hasReplies, 300);
+  const debouncedFetchRepliesEnabled = deferredGate(hasReplies, 300);
+  // Targeted reply navigation needs the full reply list immediately so the
+  // thread can resolve the reply index and complete the scroll.
+  const fetchRepliesEnabled = () =>
+    !!props.targetReplyId || debouncedFetchRepliesEnabled();
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
 
@@ -120,10 +125,18 @@ export function ChannelThread(props: ThreadProps) {
         () => props.targetReplyId,
         canScrollToTargetReply,
         loadedReplies,
+        displayReplies,
         props.isExpanded,
         replyListHandle,
       ],
-      ([targetReplyId, canScroll, replies, isExpanded, handle]) => {
+      ([
+        targetReplyId,
+        canScroll,
+        replies,
+        renderedReplies,
+        isExpanded,
+        handle,
+      ]) => {
         if (!targetReplyId) return;
         if (!canScroll) return;
 
@@ -132,8 +145,17 @@ export function ChannelThread(props: ThreadProps) {
         );
         if (targetReplyIndex === -1) return;
 
-        if (!isExpanded && targetReplyIndex >= DEFAULT_VISIBLE_REPLY_COUNT) {
-          props.setIsExpanded(true);
+        if (!isExpanded) {
+          const renderedTargetReplyIndex = renderedReplies.findIndex(
+            (reply) => reply.id === targetReplyId
+          );
+          if (renderedTargetReplyIndex === -1) {
+            props.setIsExpanded(true);
+            return;
+          }
+
+          if (!handle?.scrollToIndex(renderedTargetReplyIndex)) return;
+          props.onTargetReplyScrolled?.(targetReplyId);
           return;
         }
 
@@ -240,6 +262,12 @@ export function ChannelThread(props: ThreadProps) {
                 </Thread.RepliesContainer>
               </DebugSuspense>
             </div>
+          </Show>
+          <Show when={props.isNewestThread}>
+            <ThreadTypingIndicator
+              channelId={props.channelId()}
+              threadId={null}
+            />
           </Show>
         </div>
       </Thread.Row>
