@@ -187,7 +187,8 @@ pub fn run() {
             .plugin(tauri_plugin_safe_area_insets::init())
             .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
-            .plugin(tauri_plugin_auth::init());
+            .plugin(tauri_plugin_auth::init())
+            .plugin(tauri_plugin_mobile_sharetarget::init());
     }
 
     builder
@@ -211,6 +212,20 @@ pub fn run() {
             #[cfg(target_os = "ios")]
             {
                 let _ = GLOBAL_APP_HANDLE.set(app.handle().clone());
+
+                // Handle the case where the app was cold-launched by tapping a share extension.
+                // The share URL is already in the deep-link queue at startup.
+                use tauri_plugin_mobile_sharetarget::{IOS_DEEP_LINK_SCHEME, push_new_intent};
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    if let Some(url) = urls.first() {
+                        if url.scheme().eq(IOS_DEEP_LINK_SCHEME.wait())
+                            && url.host_str() == Some("share")
+                        {
+                            tracing::info!("cold-launch share intent: {url}");
+                            push_new_intent(url.to_string());
+                        }
+                    }
+                }
             }
 
             Ok(())
@@ -262,6 +277,19 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
             .into_iter()
             .next()
             .ok_or_else(|| report!("expected at least 1 url"))?;
+
+        // iOS: intercept share extension deep links before navigation routing.
+        // The ShareExtension builds URLs of the form: macro://share?url=<encoded_url>
+        #[cfg(target_os = "ios")]
+        {
+            use tauri_plugin_mobile_sharetarget::{IOS_DEEP_LINK_SCHEME, push_new_intent};
+            if url.scheme().eq(IOS_DEEP_LINK_SCHEME.wait()) && url.host_str() == Some("share") {
+                tracing::info!("intercepted share intent: {url}");
+                push_new_intent(url.to_string());
+                let _ = handle.emit("new-intent", ());
+                return Ok(());
+            }
+        }
 
         // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
         let macro_scheme = match url.scheme() {

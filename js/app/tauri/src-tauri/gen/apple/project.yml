@@ -72,6 +72,8 @@ targets:
     dependencies:
       - target: NotificationServiceExtension
         embed: true
+      - target: ShareExtension
+        embed: true
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
@@ -88,6 +90,22 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleShortVersionString: 2.0.2
+        CFBundleVersion: "142"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macro.dev.ShareExtension
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
   NotificationServiceExtension:
     type: app-extension
     platform: iOS
