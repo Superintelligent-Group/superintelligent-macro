@@ -155,7 +155,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
       propertyEditorModal() !== null ||
       datePickerModal() !== null ||
       createPropertyModal() !== null;
-    
+
     let handleKeyDown: (e: KeyboardEvent) => void;
 
     if (isAnyModalOpen) {
