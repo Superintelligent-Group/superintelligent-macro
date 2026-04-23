@@ -903,32 +903,54 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               </div>
                             </Show>
                             <Show when={row.group}>
-                              {(group) => (
-                                <button
-                                  type="button"
-                                  class="w-full px-3 py-2.5 flex items-center gap-2 text-xs font-medium text-text-muted bg-hover hover:bg-edge-muted"
-                                  onClick={() => group().toggle()}
-                                >
-                                  <ChevronRightIcon
-                                    class={cn('size-3 transition-transform', {
-                                      'rotate-90': group().isExpanded(),
-                                    })}
-                                  />
-                                  <Show
-                                    when={group().renderHeader}
-                                    fallback={<span>{group().label}</span>}
+                              {(group) => {
+                                const isFocused = () =>
+                                  panel.isPanelActive() && row.isFocused();
+                                return (
+                                  <button
+                                    type="button"
+                                    data-row-id={row.id}
+                                    class={cn(
+                                      'relative w-full px-3 py-3 flex items-center gap-2 text-sm font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5',
+                                      {
+                                        'bg-accent/5 outline outline-1 outline-accent/20 outline-offset-[-1px]':
+                                          isFocused(),
+                                      }
+                                    )}
+                                    onClick={() => group().toggle()}
+                                    onMouseMove={() => {
+                                      if (isKeypressActive()) return;
+                                      if (soup.previewEntity()) return;
+                                      soup.focus.set(row.id);
+                                    }}
                                   >
-                                    {group().renderHeader!({
-                                      value: group().value,
-                                      label: group().label,
-                                      count: group().count,
-                                    })}
-                                  </Show>
-                                  <span class="text-text-faint">
-                                    ({group().count})
-                                  </span>
-                                </button>
-                              )}
+                                    <div
+                                      class={cn(
+                                        'absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0',
+                                        { 'opacity-100': isFocused() }
+                                      )}
+                                    />
+                                    <ChevronRightIcon
+                                      class={cn('size-3', {
+                                        'rotate-90': group().isExpanded(),
+                                      })}
+                                    />
+                                    <Show
+                                      when={group().renderHeader}
+                                      fallback={<span>{group().label}</span>}
+                                    >
+                                      {group().renderHeader!({
+                                        value: group().value,
+                                        label: group().label,
+                                        count: group().count,
+                                      })}
+                                    </Show>
+                                    <span class="text-text-faint">
+                                      ({group().count})
+                                    </span>
+                                  </button>
+                                );
+                              }}
                             </Show>
                             <Show when={!row.group || row.group.isExpanded()}>
                               <SoupEntityContextMenu entity={row.original}>
@@ -936,12 +958,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   entity={row.original}
                                   timestamp={timestamp()}
                                   highlighted={
-                                    panel.isPanelActive() && row.isFocused()
+                                    panel.isPanelActive() &&
+                                    row.isFocused() &&
+                                    !row.group
                                   }
                                   onMouseMove={() => {
                                     if (isKeypressActive()) return;
                                     if (soup.previewEntity()) return;
-                                    soup.focus.set(row.original.id);
+                                    soup.focus.set(row.id);
                                   }}
                                   showUnrollNotifications={
                                     soup.filters.isActive('signal') &&

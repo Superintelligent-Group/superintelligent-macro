@@ -145,7 +145,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     onNavigate?: (entity: EntityData) => void
   ) => {
     const currentIndex = soup.focus.index();
-    const nextEntity =
+    const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
 
     if (soup.collapseEntity.shouldCollapse()) {
@@ -159,9 +159,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     soup.selection.clear();
 
-    if (nextEntity) {
-      soup.focus.set(nextEntity.id);
-      onNavigate?.(nextEntity);
+    if (nextRow) {
+      soup.focus.set(nextRow.id);
+      onNavigate?.(nextRow.original);
     }
   };
 

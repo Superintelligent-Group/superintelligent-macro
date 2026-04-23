@@ -135,7 +135,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     );
   };
 
-  // enter - Open entity in split
+  // enter - Open entity in split or toggle group
   registerHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
@@ -143,6 +143,15 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: () => {
+      const focusedRow = soup.focus.row();
+      if (!focusedRow) return false;
+
+      // If focused on a group header, toggle expand/collapse
+      if (focusedRow.group) {
+        focusedRow.group.toggle();
+        return true;
+      }
+
       if (tryOpenChannelNotification(false)) return true;
 
       const entity = soup.focus.item();

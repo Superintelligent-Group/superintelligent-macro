@@ -2,6 +2,9 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   createSoupState,
   type SoupState,
+  type SoupRow,
+  type SoupEntity,
+  type GroupMeta,
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
@@ -28,7 +31,6 @@ import {
   createRenderEffect,
   createSignal,
   type FlowComponent,
-  type JSX,
   on,
   type Setter,
   Suspense,
@@ -44,36 +46,7 @@ import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
 
-type GroupMeta = {
-  id: string;
-  value: unknown;
-  label: string;
-  count: number;
-  isExpanded: () => boolean;
-  toggle: () => void;
-  renderHeader?: (props: {
-    value: unknown;
-    label: string;
-    count: number;
-  }) => JSX.Element;
-};
-
-type Row<T> = {
-  original: T;
-  id: string;
-  depth: number;
-  group?: GroupMeta;
-  parentGroupId: string | null;
-  isSelected: () => boolean;
-  isExpanded: () => boolean;
-  isGrouped: () => boolean;
-  isFocused: () => boolean;
-  toggleExpanded: (expanded?: boolean) => void;
-};
-
-export type SoupRow = Row<SoupEntity>;
-
-export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
+export type { SoupRow, SoupEntity, GroupMeta };
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -207,8 +180,8 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const attachMethods = (
-    entity: WithNotification<EntityData>,
+  const buildRow = (
+    entity: SoupEntity,
     options: {
       depth?: number;
       group?: GroupMeta;
@@ -216,14 +189,15 @@ export const SoupViewContextProvider: FlowComponent<
     } = {}
   ): SoupRow => {
     const { depth = 0, group, parentGroupId = null } = options;
+    const rowId = group ? group.id : entity.id;
     return {
       original: entity,
-      id: entity.id,
+      id: rowId,
       depth,
       group,
       parentGroupId,
       isFocused() {
-        return soup.focus.id() === entity.id;
+        return soup.focus.id() === rowId;
       },
       isSelected() {
         return soup.selection.isSelected(entity.id);
@@ -387,7 +361,7 @@ export const SoupViewContextProvider: FlowComponent<
     const groupId = soup.grouping.activeGroupId();
 
     if (!groupId || !(groupId in GROUP_CONFIGS)) {
-      return allEntities.map((e) => attachMethods(e));
+      return allEntities.map((e) => buildRow(e));
     }
 
     const config = GROUP_CONFIGS[groupId as GroupOptionId];
@@ -424,7 +398,7 @@ export const SoupViewContextProvider: FlowComponent<
 
       const firstEntity = groupEntities[0];
       result.push(
-        attachMethods(firstEntity, {
+        buildRow(firstEntity, {
           group: groupMeta,
           parentGroupId: groupIdStr,
         })
@@ -433,7 +407,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (soup.grouping.isExpanded(groupIdStr)) {
         for (let i = 1; i < groupEntities.length; i++) {
           result.push(
-            attachMethods(groupEntities[i], {
+            buildRow(groupEntities[i], {
               parentGroupId: groupIdStr,
             })
           );
@@ -491,7 +465,7 @@ export const SoupViewContextProvider: FlowComponent<
     <SoupViewContext.Provider value={context}>
       {props.children}
       <Suspense>
-        <SyncWithSoup soup={soup} entities={entities()} />
+        <SyncWithSoup soup={soup} rows={rows()} />
       </Suspense>
     </SoupViewContext.Provider>
   );
@@ -499,11 +473,11 @@ export const SoupViewContextProvider: FlowComponent<
 
 interface SyncWithSoupProps {
   soup: SoupState;
-  entities: SoupEntity[];
+  rows: SoupRow[];
 }
 
 const SyncWithSoup = (props: SyncWithSoupProps) => {
-  createRenderEffect(on(() => props.entities, props.soup.setData));
+  createRenderEffect(on(() => props.rows, props.soup.setRows));
 
   return null;
 };
