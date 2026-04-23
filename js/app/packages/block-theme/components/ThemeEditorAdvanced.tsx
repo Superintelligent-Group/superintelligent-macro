@@ -44,7 +44,6 @@ export function ThemeEditorAdvanced(){
 
       <div
         style="
-        background-color: var(--b1);
         font-family: var(--font-sans);
         scrollbar-width: none;
         position: relative;
@@ -66,7 +65,6 @@ export function ThemeEditorAdvanced(){
         >
           <div
             style="
-            background-color: var(--color-edge-muted);
             box-sizing: border-box;
             overflow-x: hidden;
             display: grid;
@@ -76,7 +74,6 @@ export function ThemeEditorAdvanced(){
             <div
               style="
               border-bottom: 1px solid var(--color-edge-muted);
-              background-color: var(--b1);
               align-items: center;
               position: absolute;
               padding: 0 20px;
@@ -119,10 +116,9 @@ export function ThemeEditorAdvanced(){
                 });
 
                 return (
-                  <div style="background-color: var(--b1);">
+                  <div>
                     <div
                       style="
-                      background-color: var(--color-edge-muted);
                       grid-template-columns: 140px 1fr 80px;
                       align-items: center;
                       display: grid;
@@ -132,14 +128,13 @@ export function ThemeEditorAdvanced(){
                     >
                       <div
                         style="
-                        background-color: var(--b1);
-                        box-sizing: border-box;
-                        align-items: center;
-                        padding: 0 20px;
-                        display: grid;
-                        height: 100%;
-                        width: 100%;
-                      "
+                          box-sizing: border-box;
+                          align-items: center;
+                          padding: 0 20px;
+                          display: grid;
+                          height: 100%;
+                          width: 100%;
+                        "
                       >
                         <ColorSwatch
                           color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
@@ -149,7 +144,6 @@ export function ThemeEditorAdvanced(){
 
                       <div
                         style="
-                        background-color: var(--b1);
                         box-sizing: border-box;
                         align-items: center;
                         white-space: nowrap;
@@ -181,7 +175,6 @@ export function ThemeEditorAdvanced(){
 
                       <div
                         style="
-                        background-color: var(--b1);
                         box-sizing: border-box;
                         white-space: nowrap;
                         align-items: center;

@@ -57,7 +57,6 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-sans);
-          background-color: var(--b1);
           scrollbar-width: none;
           position: relative;
           overflow: hidden;
@@ -78,17 +77,13 @@ export function ThemeList() {
         >
           <div
             style="
-              background-color: var(--color-edge-muted);
               box-sizing: border-box;
               overflow-x: hidden;
               display: grid;
-              gap: 1px;
             "
           >
             <div
               style="
-                border-bottom: 1px solid var(--color-edge-muted);
-                background-color: var(--b1);
                 align-items: center;
                 position: absolute;
                 padding: 0 20px;
@@ -96,11 +91,12 @@ export function ThemeList() {
                 height: 42px;
                 width: 100%;
                 z-index: 1;
+                border-bottom: 1px solid oklch(from var(--color-edge-muted) l c h / 0.5);
               "
             >
               <div style="font-size: var(--text-xs);">Theme List</div>
             </div>
-            <div style="height: 41px;" />
+            <div style="height: 40px;" />
           <For each={themes()}>
             {(theme) => (
               <div
@@ -111,10 +107,9 @@ export function ThemeList() {
                 }}
                 style="
                   grid-template-columns: min-content 1fr min-content;
-                  background-color: var(--b1);
+                  cursor: var(--cursor-pointer);
                   align-items: center;
                   padding: 10px 20px;
-                  cursor: var(--cursor-pointer);
                   display: grid;
                   gap: 20px;
                 "
