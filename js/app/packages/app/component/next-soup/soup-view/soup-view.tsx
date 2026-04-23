@@ -906,7 +906,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               {(group) => (
                                 <button
                                   type="button"
-                                  class="w-full px-3 py-2.5 flex items-center gap-2 text-xs font-medium text-text-muted bg-fill-muted hover:bg-fill-muted-hover transition-colors"
+                                  class="w-full px-3 py-2.5 flex items-center gap-2 text-xs font-medium text-text-muted bg-hover hover:bg-edge-muted"
                                   onClick={() => group().toggle()}
                                 >
                                   <ChevronRightIcon
