@@ -14,7 +14,7 @@ import { useUserContext } from '@core/context/user';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, type JSX } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
 
@@ -22,7 +22,14 @@ export type NavigationResult<T> = { item: T; index: number } | undefined;
 
 export type GroupConfig<T> = {
   id: string;
+  label: string;
   getValue: (item: T) => unknown;
+  getLabel?: (value: unknown) => string;
+  renderHeader?: (props: {
+    value: unknown;
+    label: string;
+    count: number;
+  }) => JSX.Element;
 };
 
 export type SortConfig<T> = {
@@ -69,7 +76,24 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
-  const [groups, setGroups] = createSignal<GroupConfig<SoupEntity>[]>([]);
+  const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
+  const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(
+    new Set()
+  );
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const isGroupExpanded = (groupId: string) => expandedGroups().has(groupId);
 
   const [data, setDataInternal] = createSignal<SoupEntity[]>(initialData ?? []);
 
@@ -161,8 +185,15 @@ export const createSoupState = <TId extends string = FilterID>(
     filters,
     selection,
     sort,
-    groups,
-    setGroups,
+    grouping: {
+      activeGroupId,
+      setActiveGroupId,
+      expandedGroups,
+      isExpanded: isGroupExpanded,
+      toggle: toggleGroup,
+      collapseAll: () => setExpandedGroups(new Set()),
+      expandAll: (ids: string[]) => setExpandedGroups(new Set(ids)),
+    },
 
     focus: {
       item: focused,

@@ -1,4 +1,5 @@
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
+import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -125,6 +126,7 @@ export const SoupFiltersBar = () => {
                 <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
               </Button>
             </Tooltip>
+            <SoupViewContextGroup />
             <SoupViewContextSort />
           </div>
         </Show>

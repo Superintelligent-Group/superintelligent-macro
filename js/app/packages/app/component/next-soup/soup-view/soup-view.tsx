@@ -1,5 +1,6 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
 import Spinner from '@icon/regular/spinner.svg';
+import ChevronRightIcon from '@icon/regular/caret-right.svg';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -171,9 +172,11 @@ type PersistedSoupViewState = {
   sort: SystemSortOption[];
   previewEntity: string | undefined;
   assigneeFilter: string[];
+  groupBy: string | undefined;
+  expandedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 3;
+const PERSISTED_STATE_VERSION = 4;
 
 const listStateCache = new Map<
   string,
@@ -720,6 +723,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
       batch(() => {
         soup.sort.setAll(initialPersistedState.sort ?? []);
         setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
+        soup.grouping.setActiveGroupId(initialPersistedState.groupBy);
+        soup.grouping.expandAll(initialPersistedState.expandedGroups ?? []);
       });
     } else {
       if (props.initialClientFilters) {
@@ -742,6 +747,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
           sort: soup.sort.active().map((s) => s.id),
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
+          groupBy: soup.grouping.activeGroupId(),
+          expandedGroups: [...soup.grouping.expandedGroups()],
         }) satisfies PersistedSoupViewState,
       (state) => {
         if (!persistenceDisabled) setPersistedState(state);
@@ -895,6 +902,28 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 More Results
                               </div>
                             </Show>
+                            <Show when={row.group}>
+                              {(group) => (
+                                <button
+                                  type="button"
+                                  class="w-full px-3 py-2 flex items-center gap-2 text-xs font-medium text-text-muted hover:bg-fill-muted"
+                                  onClick={() => group().toggle()}
+                                >
+                                  <ChevronRightIcon
+                                    class={cn('size-3 transition-transform', {
+                                      'rotate-90': group().isExpanded(),
+                                    })}
+                                  />
+                                  <span>{group().label}</span>
+                                  <span class="text-text-faint">
+                                    ({group().count})
+                                  </span>
+                                </button>
+                              )}
+                            </Show>
+                            <Show
+                              when={!row.group || row.group.isExpanded()}
+                            >
                             <SoupEntityContextMenu entity={row.original}>
                               <ListEntity
                                 entity={row.original}
@@ -956,6 +985,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 }}
                               />
                             </SoupEntityContextMenu>
+                            </Show>
                             <Show
                               when={
                                 i() === rows().length - 1 &&

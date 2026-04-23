@@ -28,21 +28,42 @@ import {
   createRenderEffect,
   createSignal,
   type FlowComponent,
+  type JSX,
   on,
   type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
 import { matchesTaskSubFilters } from './task-sub-filter-matcher';
+import {
+  GROUP_CONFIGS,
+  type GroupOptionId,
+} from '@app/component/next-soup/soup-view/group-options';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type { SoupPage } from '@service-storage/generated/schemas';
 
+type GroupMeta = {
+  id: string;
+  value: unknown;
+  label: string;
+  count: number;
+  isExpanded: () => boolean;
+  toggle: () => void;
+  renderHeader?: (props: {
+    value: unknown;
+    label: string;
+    count: number;
+  }) => JSX.Element;
+};
+
 type Row<T> = {
   original: T;
   id: string;
   depth: number;
+  group?: GroupMeta;
+  parentGroupId: string | null;
   isSelected: () => boolean;
   isExpanded: () => boolean;
   isGrouped: () => boolean;
@@ -188,12 +209,19 @@ export const SoupViewContextProvider: FlowComponent<
 
   const attachMethods = (
     entity: WithNotification<EntityData>,
-    depth = 0
+    options: {
+      depth?: number;
+      group?: GroupMeta;
+      parentGroupId?: string | null;
+    } = {}
   ): SoupRow => {
+    const { depth = 0, group, parentGroupId = null } = options;
     return {
       original: entity,
       id: entity.id,
       depth,
+      group,
+      parentGroupId,
       isFocused() {
         return soup.focus.id() === entity.id;
       },
@@ -201,7 +229,7 @@ export const SoupViewContextProvider: FlowComponent<
         return soup.selection.isSelected(entity.id);
       },
       isGrouped() {
-        return false;
+        return parentGroupId !== null;
       },
       isExpanded() {
         return soup.selection.isSelected(entity.id);
@@ -355,7 +383,65 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const rows = createMemo(() => {
-    return entities().map((e) => attachMethods(e));
+    const allEntities = entities();
+    const groupId = soup.grouping.activeGroupId();
+
+    if (!groupId || !(groupId in GROUP_CONFIGS)) {
+      return allEntities.map((e) => attachMethods(e));
+    }
+
+    const config = GROUP_CONFIGS[groupId as GroupOptionId];
+    const groupMap = new Map<unknown, SoupEntity[]>();
+    const groupOrder: unknown[] = [];
+
+    for (const entity of allEntities) {
+      const value = config.getValue(entity);
+      if (!groupMap.has(value)) {
+        groupMap.set(value, []);
+        groupOrder.push(value);
+      }
+      groupMap.get(value)!.push(entity);
+    }
+
+    const result: SoupRow[] = [];
+
+    for (const groupValue of groupOrder) {
+      const groupEntities = groupMap.get(groupValue)!;
+      const groupIdStr = `group-${config.id}-${String(groupValue)}`;
+      const label = config.getLabel
+        ? config.getLabel(groupValue)
+        : String(groupValue);
+
+      const groupMeta: GroupMeta = {
+        id: groupIdStr,
+        value: groupValue,
+        label,
+        count: groupEntities.length,
+        isExpanded: () => soup.grouping.isExpanded(groupIdStr),
+        toggle: () => soup.grouping.toggle(groupIdStr),
+        renderHeader: config.renderHeader,
+      };
+
+      const firstEntity = groupEntities[0];
+      result.push(
+        attachMethods(firstEntity, {
+          group: groupMeta,
+          parentGroupId: groupIdStr,
+        })
+      );
+
+      if (soup.grouping.isExpanded(groupIdStr)) {
+        for (let i = 1; i < groupEntities.length; i++) {
+          result.push(
+            attachMethods(groupEntities[i], {
+              parentGroupId: groupIdStr,
+            })
+          );
+        }
+      }
+    }
+
+    return result;
   });
 
   const { searchQuery } = search;
