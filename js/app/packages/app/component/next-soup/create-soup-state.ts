@@ -77,12 +77,12 @@ export const createSoupState = <TId extends string = FilterID>(
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
-  const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(
+  const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(
     new Set()
   );
 
   const toggleGroup = (groupId: string) => {
-    setExpandedGroups((prev) => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupId)) {
         next.delete(groupId);
@@ -93,7 +93,7 @@ export const createSoupState = <TId extends string = FilterID>(
     });
   };
 
-  const isGroupExpanded = (groupId: string) => expandedGroups().has(groupId);
+  const isGroupExpanded = (groupId: string) => !collapsedGroups().has(groupId);
 
   const [data, setDataInternal] = createSignal<SoupEntity[]>(initialData ?? []);
 
@@ -188,11 +188,11 @@ export const createSoupState = <TId extends string = FilterID>(
     grouping: {
       activeGroupId,
       setActiveGroupId,
-      expandedGroups,
+      collapsedGroups,
       isExpanded: isGroupExpanded,
       toggle: toggleGroup,
-      collapseAll: () => setExpandedGroups(new Set()),
-      expandAll: (ids: string[]) => setExpandedGroups(new Set(ids)),
+      collapseAll: (ids: string[]) => setCollapsedGroups(new Set(ids)),
+      expandAll: () => setCollapsedGroups(new Set()),
     },
 
     focus: {

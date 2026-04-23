@@ -173,10 +173,10 @@ type PersistedSoupViewState = {
   previewEntity: string | undefined;
   assigneeFilter: string[];
   groupBy: string | undefined;
-  expandedGroups: string[];
+  collapsedGroups: string[];
 };
 
-const PERSISTED_STATE_VERSION = 4;
+const PERSISTED_STATE_VERSION = 5;
 
 const listStateCache = new Map<
   string,
@@ -724,7 +724,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         soup.sort.setAll(initialPersistedState.sort ?? []);
         setAssigneeFilter(initialPersistedState.assigneeFilter ?? []);
         soup.grouping.setActiveGroupId(initialPersistedState.groupBy);
-        soup.grouping.expandAll(initialPersistedState.expandedGroups ?? []);
+        soup.grouping.collapseAll(initialPersistedState.collapsedGroups ?? []);
       });
     } else {
       if (props.initialClientFilters) {
@@ -748,7 +748,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           previewEntity: soup.previewEntity(),
           assigneeFilter: assigneeFilter(),
           groupBy: soup.grouping.activeGroupId(),
-          expandedGroups: [...soup.grouping.expandedGroups()],
+          collapsedGroups: [...soup.grouping.collapsedGroups()],
         }) satisfies PersistedSoupViewState,
       (state) => {
         if (!persistenceDisabled) setPersistedState(state);
@@ -906,7 +906,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               {(group) => (
                                 <button
                                   type="button"
-                                  class="w-full px-3 py-3 flex items-center gap-2 text-xs font-medium text-text-muted bg-ink/[0.02] hover:bg-ink/5 transition-colors"
+                                  class="w-full px-3 py-2.5 flex items-center gap-2 text-xs font-medium text-text-muted bg-fill-muted hover:bg-fill-muted-hover transition-colors"
                                   onClick={() => group().toggle()}
                                 >
                                   <ChevronRightIcon
