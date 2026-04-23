@@ -293,13 +293,15 @@ export function ThemeEditorBasic(){
           style="
             border: 1px solid var(--color-edge-muted);
             position: relative;
-            height: 250px;
+            border-radius: 2px;
+            height: 180px;
             width: 100%;
           "
         >
           <canvas
             ref={canvasRef}
             style="
+              border-radius: 1px;
               touch-action: none;
               user-select: none;
               display: block;

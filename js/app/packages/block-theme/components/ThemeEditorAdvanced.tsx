@@ -162,7 +162,7 @@ export function ThemeEditorAdvanced(){
                               setIsSetByInput
                             );
                           }}
-                          class="theme-editor-advanced-input"
+                          class="theme-editor-advanced-input font-mono text-xs text-ink-extra-muted"
                           value={inputValue()}
                           type="text"
                           style="
@@ -174,6 +174,7 @@ export function ThemeEditorAdvanced(){
                       </div>
 
                       <div
+                        class="font-mono text-xs text-ink-extra-muted"
                         style="
                         box-sizing: border-box;
                         white-space: nowrap;

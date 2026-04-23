@@ -100,7 +100,7 @@ export function ThemeList() {
           <For each={themes()}>
             {(theme) => (
               <div
-                class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
+                class={`theme-list-item font-mono text-xs text-ink-extra-muted ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
                 onClick={() => {
                   analytics.track('theme_changed', {themeId: theme.id})
                   applyTheme(theme.id)
