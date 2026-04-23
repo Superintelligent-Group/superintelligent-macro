@@ -69,9 +69,7 @@ export const SoupViewContextGroup = () => {
   );
 };
 
-const useGroupDropdown = (
-  options: GroupOption[] = DEFAULT_GROUP_OPTIONS
-) => {
+const useGroupDropdown = (options: GroupOption[] = DEFAULT_GROUP_OPTIONS) => {
   const { soup } = useSoupView();
 
   const value = createMemo(
