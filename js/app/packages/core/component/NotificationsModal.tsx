@@ -48,7 +48,7 @@ export function NotificationsButton(props: {
       </Button>
       <Suspense fallback={null}>
         <Show when={unreadCount() > 0}>
-          <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-[4px] pointer-events-none">
+          <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-1 pointer-events-none">
             {unreadCount()}
           </div>
         </Show>

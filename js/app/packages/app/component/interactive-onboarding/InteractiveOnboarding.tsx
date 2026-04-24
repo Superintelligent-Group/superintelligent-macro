@@ -480,7 +480,7 @@ function InteractiveOnboardingInner() {
       </div>
 
       {/* Centered card */}
-      <div class="size-full max-w-[1600px] max-h-[900px]">
+      <div class="size-full max-w-400 max-h-225">
         <RoundPanel>
           <div class="size-full flex">
             <Show

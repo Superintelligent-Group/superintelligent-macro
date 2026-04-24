@@ -114,7 +114,7 @@ export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
       <div
         class={cn(
           'flex flex-col divide-y divide-edge transition-all duration-150 ease-in-out overflow-clip',
-          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-[1920px]'
+          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-480'
         )}
       >
         <For each={props.links}>

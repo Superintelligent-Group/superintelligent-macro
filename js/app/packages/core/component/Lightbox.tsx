@@ -360,7 +360,7 @@ export function Lightbox(props: LightboxProps) {
           <Show
             when={props.src()}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
+              <div class="flex flex-col items-center justify-center gap-2 w-15 h-15 border border-edge rounded-md bg-menu">
                 <Spinner class="w-4 h-4 animate-spin" />
               </div>
             }
@@ -378,7 +378,7 @@ export function Lightbox(props: LightboxProps) {
               style={{ cursor: cursor() }}
             >
               <img
-                class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
+                class="w-full h-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}
                 alt="preview"

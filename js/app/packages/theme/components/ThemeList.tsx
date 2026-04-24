@@ -121,9 +121,9 @@ export function ThemeList() {
               >
                 <div
                   style="
-                  grid-template-columns: repeat(3, min-content);
-                  display: grid;
-                  gap: 5px;
+                    grid-template-columns: repeat(3, min-content);
+                    display: grid;
+                    gap: 5px;
                 "
                 >
                   <ColorSwatch

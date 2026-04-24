@@ -128,9 +128,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       <div class={props.wrapperClass ?? 'flex flex-row flex-wrap gap-2'}>
         <For each={props.images}>
           {(image, index) => (
-            <div
-              class={props.variant === 'dynamic' ? 'max-w-[200px] w-fit' : ''}
-            >
+            <div class={props.variant === 'dynamic' ? 'max-w-50 w-fit' : ''}>
               <div class="flex group relative">
                 <Show when={props.variant !== 'small'}>
                   <div class="group-hover:visible invisible absolute top-2 right-2 bg-button rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">

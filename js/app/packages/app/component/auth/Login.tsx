@@ -177,7 +177,7 @@ export function Login() {
           />
         </div>
 
-        <div class="w-full max-w-[420px] login-card">
+        <div class="w-full max-w-105 login-card">
           <RoundPanel>
             <div class="login-stagger">
               <div

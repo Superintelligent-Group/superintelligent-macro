@@ -80,7 +80,7 @@ export function Signup() {
           />
         </div>
 
-        <div class="w-full max-w-[420px] login-card">
+        <div class="w-full max-w-105 login-card">
           <RoundPanel>
             <div class="login-stagger">
               <div class="flex items-center justify-center py-10">
