@@ -342,7 +342,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       </span>
       <Show when={props.hotkeyToken}>
         {(token) => (
-          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -499,7 +499,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <nav>
@@ -519,7 +519,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-edge-muted my-[8px]" />
+        <hr class="border-edge-muted my-2" />
       </div>
 
       <div class="block max-h-[clamp(10%,60%,20rem)]">
@@ -527,7 +527,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2 mt-auto w-full">
-        <hr class="border-edge-muted mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <div class=" w-full px-2 flex flex-col">
