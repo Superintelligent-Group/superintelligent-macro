@@ -351,7 +351,7 @@ const SearchableFilterSubmenu = (props: {
   return (
     <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
       <DropdownMenu.SubTrigger
-        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
         onPointerEnter={(e) => {
           // Kobalte's "grace polygon" keeps an open sub alive when the
           // pointer crosses toward its content. For sibling In/From triggers,
@@ -579,7 +579,7 @@ export const UnifiedFilterDropdown = () => {
                   <For each={categories()}>
                     {(category) => (
                       <DropdownMenu.Sub gutter={4}>
-                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
                           <span class="text-ink">{category.label}</span>
                           <CaretRightIcon class="size-3 text-ink-muted" />
                         </DropdownMenu.SubTrigger>
@@ -591,7 +591,7 @@ export const UnifiedFilterDropdown = () => {
                                 const active = () => isOptionActive(option.id);
                                 return (
                                   <DropdownMenu.Item
-                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
@@ -659,7 +659,7 @@ export const UnifiedFilterDropdown = () => {
                             when={hasSub}
                             fallback={
                               <DropdownMenu.Item
-                                class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+                                class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                 onSelect={() => handleIndexChange(option.value)}
                                 closeOnSelect
                               >
@@ -684,7 +684,7 @@ export const UnifiedFilterDropdown = () => {
                           >
                             <DropdownMenu.Sub gutter={4}>
                               <DropdownMenu.SubTrigger
-                                class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+                                class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                 onPointerDown={() =>
                                   handleIndexChange(option.value)
                                 }
@@ -743,7 +743,7 @@ export const UnifiedFilterDropdown = () => {
                                   </Show>
                                   <Show when={option.value === 'email'}>
                                     <DropdownMenu.Sub gutter={4}>
-                                      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+                                      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
                                         <span class="text-ink">Importance</span>
                                         <CaretRightIcon class="size-3 text-ink-muted" />
                                       </DropdownMenu.SubTrigger>
@@ -777,7 +777,7 @@ export const UnifiedFilterDropdown = () => {
                                                 importanceOption.value;
                                               return (
                                                 <DropdownMenu.Item
-                                                  class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+                                                  class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                                                   onSelect={() =>
                                                     setImportance(
                                                       importanceOption.value
@@ -816,7 +816,7 @@ export const UnifiedFilterDropdown = () => {
 
                     {/* All row */}
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover"
+                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
@@ -840,7 +840,7 @@ export const UnifiedFilterDropdown = () => {
                   const active = () => isOptionActive(option.id);
                   return (
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >

@@ -165,7 +165,7 @@ function CommandKDemo(props: LessonContentProps) {
               style={{ width: '800px' }}
             >
               <RoundPanel active>
-                <div class="[&>*]:max-h-[75vh]" ref={setCommandMenuRef}>
+                <div class="*:max-h-[75vh]" ref={setCommandMenuRef}>
                   <CommandMenuInner
                     commandMenuRef={commandMenuRef}
                     items={filteredItems}

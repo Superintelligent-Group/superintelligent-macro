@@ -764,7 +764,7 @@ export function PopupPreview(props: {
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
 
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name || accessibleItem().name}
                   </div>
 
@@ -799,7 +799,7 @@ export function PopupPreview(props: {
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                            <div class="line-clamp-3 break-words">
+                            <div class="line-clamp-3 wrap-break-word">
                               <StaticMarkdown
                                 markdown={context().content}
                                 theme={channelTheme}

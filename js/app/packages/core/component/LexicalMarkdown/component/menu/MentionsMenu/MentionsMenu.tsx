@@ -541,7 +541,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       {(bucket, idx) => (
                         <>
                           <Show when={idx() > 0}>
-                            <div class="w-full mt-4 border-b-1 border-edge-muted mb-2" />
+                            <div class="w-full mt-4 border-b border-edge-muted mb-2" />
                           </Show>
                           <ItemBin
                             label={bucket.config.label}

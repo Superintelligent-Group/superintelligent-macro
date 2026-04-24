@@ -164,7 +164,7 @@ function SoupChatInputInner() {
                     }}
                   >
                     <div
-                      class="flex border text-[0.625rem] rounded-xs items-center px-1 py-0.5"
+                      class="flex border text-xxs rounded-xs items-center px-1 py-0.5"
                       classList={{
                         'border-accent text-accent': metaHeld(),
                         'border-edge-muted': !metaHeld(),

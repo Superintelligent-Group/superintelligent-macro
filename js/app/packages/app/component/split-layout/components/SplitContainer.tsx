@@ -70,12 +70,12 @@ export function SplitContainer(
           class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
           onClick={() => panel.handle.toggleSpotlight(false)}
         />
-        <div class="fixed inset-[4rem] bg-panel shadow-xl" />
+        <div class="fixed inset-16 bg-panel shadow-xl" />
       </Show>
 
       <div
         classList={{
-          'fixed inset-[4rem] z-modal-overlay isolate opacity-50':
+          'fixed inset-16 z-modal-overlay isolate opacity-50':
             panel.handle.isSpotLight(),
           'opacity-100': panel.isPanelActive() || panel.handle.isSpotLight(),
           'size-full': !panel.handle.isSpotLight(),

@@ -297,7 +297,7 @@ function ToastContent(props: {
     <Toast
       toastId={props.toastId}
       class={`relative overflow-visible pointer-events-auto shadow-md rounded
-        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
+        data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
       persistent={true}
       onMouseEnter={() => setIsHovered(true)}
@@ -314,7 +314,7 @@ function ToastContent(props: {
             {(embed) => (
               <>
                 <Dynamic component={embed()} />
-                <Toast.CloseButton class="absolute top-2 right-2 z-1">
+                <Toast.CloseButton class="absolute top-2 right-2 z-user-highlight">
                   <Button variant="ghost" size="icon-sm" class="rounded-xs">
                     <XIcon />
                   </Button>

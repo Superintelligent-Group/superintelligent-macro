@@ -756,7 +756,7 @@ function Document(props: {
 }): JSX.Element {
   return (
     <div
-      class={cn('markdown-content', props.theme.root, 'break-words max-w-full')}
+      class={cn('markdown-content', props.theme.root, 'wrap-break-word max-w-full')}
       ref={props.rootRef}
     >
       <MapRender children={props.rootNode.getChildren()} theme={props.theme} />

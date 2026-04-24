@@ -36,7 +36,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
         >
           <RoundPanel active>
             <div
-              class={cn('[&>*]:max-h-[75vh]', props.class)}
+              class={cn('*:max-h-[75vh]', props.class)}
               ref={props.contentRef}
             >
               {props.children}

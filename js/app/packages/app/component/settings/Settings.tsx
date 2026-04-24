@@ -170,7 +170,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         defaultValue="Appearance"
         onChange={handleTabChange}
         indicatorPosition="top"
-        class="[&_[data-indicator]]:h-[3px]"
+        class="**:data-indicator:h-[3px]"
       />
     </div>
     );

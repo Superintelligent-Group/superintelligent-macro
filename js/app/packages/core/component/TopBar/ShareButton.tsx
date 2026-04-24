@@ -187,7 +187,7 @@ function DmRecipientIcon(props: { channelId: string }) {
   return (
     <Show
       when={dmPartnerId()}
-      fallback={<UserCircle class="flex-shrink-0 w-4 h-4" />}
+      fallback={<UserCircle class="shrink-0 w-4 h-4" />}
     >
       {(id) => (
         <UserIcon id={id()} size="xs" isDeleted={false} showTooltip={false} />
@@ -637,7 +637,7 @@ export function ShareModal(props: ShareModalProps) {
         <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div class="z-modal fixed inset-0">
           <Dialog.Content
-            class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 [&>*]:max-h-[75vh]"
+            class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope flex flex-col gap-2 *:max-h-[75vh]"
             style={{ width: '800px' }}
           >
             {/* Card 1: Share form — gradient border */}
@@ -729,7 +729,7 @@ export function ShareModal(props: ShareModalProps) {
                               >
                                 <Switch
                                   fallback={
-                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                    <WideUsers class="shrink-0 w-4 h-4" />
                                   }
                                 >
                                   <Match
@@ -747,7 +747,7 @@ export function ShareModal(props: ShareModalProps) {
                                       recipient.channel_id
                                     )}
                                   >
-                                    <WideUsers class="flex-shrink-0 w-4 h-4" />
+                                    <WideUsers class="shrink-0 w-4 h-4" />
                                   </Match>
                                 </Switch>
                                 <div class="font-medium truncate">
@@ -817,7 +817,7 @@ export function ShareModal(props: ShareModalProps) {
                     <div class="flex items-center gap-2">
                       Public link
                       <div
-                        class="px-2 rounded-xl border-1 py-0.5 flex justify-center items-center"
+                        class="px-2 rounded-xl border py-0.5 flex justify-center items-center"
                         classList={{
                           'border-accent/30 bg-accent/10':
                             publicAccessLevel() != null,
@@ -945,7 +945,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <div class="border-1 border-edge-muted flex ml-1 items-stretch rounded-xs">
+    <div class="border border-edge-muted flex ml-1 items-stretch rounded-xs">
       <Tooltip
         tooltip={
           <div>
@@ -982,7 +982,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
         </button>
       </Tooltip>
 
-      <div class="w-[1px] bg-edge-muted" />
+      <div class="w-px bg-edge-muted" />
 
       <Button
         tooltip="Copy Share Link"
