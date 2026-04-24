@@ -78,15 +78,11 @@ const colors: Record<DebugNodeType, string> = {
   heading2: 'text-accent-90 bg-accent-90/15 border border-accent-90/30',
   heading3: 'text-accent-120 bg-accent-120/15 border border-accent-120/30',
   paragraph: 'text-accent-150 bg-accent-150/15 border border-accent-150/30',
-  'list-bullet':
-    'text-accent-180 bg-accent-180/15 border border-accent-180/30',
-  'list-check':
-    'text-accent-210 bg-accent-210/15 border border-accent-210/30',
-  'list-number':
-    'text-accent-240 bg-accent-240/15 border border-accent-240/30',
+  'list-bullet': 'text-accent-180 bg-accent-180/15 border border-accent-180/30',
+  'list-check': 'text-accent-210 bg-accent-210/15 border border-accent-210/30',
+  'list-number': 'text-accent-240 bg-accent-240/15 border border-accent-240/30',
   code: 'text-accent-270 bg-accent-270/15 border border-accent-270/30',
-  'custom-code':
-    'text-accent-300 bg-accent-300/15 border border-accent-300/30',
+  'custom-code': 'text-accent-300 bg-accent-300/15 border border-accent-300/30',
   quote: 'text-accent-330 bg-accent-330/15 border border-accent-330/30',
   listitem: 'text-accent-30 bg-accent-30/15 border border-accent-30/30',
   link: 'text-accent-90 bg-accent-90/15 border border-accent-90/30',
