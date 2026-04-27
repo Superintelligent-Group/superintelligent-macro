@@ -34,7 +34,7 @@ export function DialogWrapper(props: DialogWrapperProps) {
           )}
           style={{ width: width }}
         >
-          <Panel active>
+          <Panel active layer={2}>
             <div
               class={cn('*:max-h-[75vh]', props.class)}
               ref={props.contentRef}
