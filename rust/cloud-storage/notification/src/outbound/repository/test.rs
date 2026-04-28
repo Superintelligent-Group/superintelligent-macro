@@ -309,6 +309,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
             MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
             10,
             Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
         )
         .await
         .unwrap();
@@ -331,6 +332,63 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    pool.mark_notifications_seen(&user, &[notification_id])
+        .await
+        .unwrap();
+    pool.mark_notifications_done(&user, &[notification_id], true)
+        .await
+        .unwrap();
+
+    let active: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
+        )
+        .await
+        .unwrap();
+    assert!(active.is_empty());
+
+    let done_and_seen: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(true),
+                seen: Some(true),
+                important_emails_only: false,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(done_and_seen.len(), 1);
+
+    let unseen: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user,
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: None,
+                seen: Some(false),
+                important_emails_only: false,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(unseen.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications_with_invalid"))
 )]
 async fn test_get_user_notifications_skips_invalid_entity_type(pool: Pool<Postgres>) {
@@ -339,6 +397,7 @@ async fn test_get_user_notifications_skips_invalid_entity_type(pool: Pool<Postgr
             MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
             10,
             Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
         )
         .await
         .unwrap();
@@ -372,6 +431,7 @@ async fn test_get_user_notifications_by_event_item_ids_skips_invalid(pool: Pool<
             &[valid_item, invalid_entity_item, invalid_metadata_item],
             10,
             Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
         )
         .await
         .unwrap();
@@ -393,6 +453,7 @@ async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
             MacroUserIdStr::parse_from_str("macro|nobody@test.com").unwrap(),
             10,
             Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
         )
         .await
         .unwrap();
@@ -500,7 +561,12 @@ async fn test_create_notification_stores_bare_metadata(pool: Pool<Postgres>) {
 
     // Verify round-trip: get_user_notifications deserializes the bare metadata back into T
     let rows: Vec<UserNotificationRow<TestNotification>> = pool
-        .get_user_notifications(recipient, 10, Query::Sort(CreatedAt, ()))
+        .get_user_notifications(
+            recipient,
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters::active(),
+        )
         .await
         .unwrap();
 

@@ -566,6 +566,45 @@ export const ListEntitiesResponse = z.object({
   summary: z.string(),
 });
 
+export const ListNotifications = z
+  .object({
+    done: z.union([z.boolean(), z.null()]).default(null),
+    importantEmailsOnly: z.boolean().default(false),
+    limit: z.union([z.number().int().gte(0), z.null()]).default(null),
+    seen: z.union([z.boolean(), z.null()]).default(null),
+  })
+  .strict();
+
+export const ListNotificationsResponse = z.object({
+  hasMore: z.boolean(),
+  notifications: z.array(
+    z.object({
+      createdAt: z.string(),
+      done: z.boolean(),
+      entityId: z.string(),
+      entityType: z.string(),
+      eventType: z.string(),
+      id: z.string().uuid(),
+      metadata: z.any(),
+      seen: z.boolean(),
+      senderId: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+});
+
+export const MarkNotificationsDone = z
+  .object({ done: z.boolean(), notificationIds: z.array(z.string().uuid()) })
+  .strict();
+
+export const MarkNotificationsResponse = z.object({
+  count: z.number().int().gte(0),
+  success: z.boolean(),
+});
+
+export const MarkNotificationsSeen = z
+  .object({ notificationIds: z.array(z.string().uuid()) })
+  .strict();
+
 export const NameSearch = z
   .object({
     entityTypes: z

@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use ai_tools::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpScheduleContext, NoOpTaskProperties, ToolServiceContext,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
+    ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -28,6 +29,8 @@ use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
     outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
 };
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::repository::DbNotificationRepository;
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
@@ -274,6 +277,18 @@ async fn build_tool_context(
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(db.clone()),
+        ToolNotificationQueue::NoOp,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -303,6 +318,7 @@ async fn build_tool_context(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        notification_tool_context,
         schedule_tool_context: NoOpScheduleContext,
     };
 

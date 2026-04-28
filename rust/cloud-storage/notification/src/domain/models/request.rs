@@ -262,6 +262,29 @@ pub struct UpdateNotificationsRequest<'a> {
     pub status: NotificationStatus,
 }
 
+/// Optional filters for listing user notifications.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NotificationListFilters {
+    /// Filter by done status. `None` means include both done and not-done notifications.
+    pub done: Option<bool>,
+    /// Filter by seen status. `None` means include both seen and unseen notifications.
+    pub seen: Option<bool>,
+    /// If true, omit `new_email` notifications whose email thread is not marked important.
+    /// Non-email notifications are still included.
+    pub important_emails_only: bool,
+}
+
+impl NotificationListFilters {
+    /// Default product behavior: list active notifications, which excludes done notifications.
+    pub fn active() -> Self {
+        Self {
+            done: Some(false),
+            seen: None,
+            important_emails_only: false,
+        }
+    }
+}
+
 /// Request to get a user's notifications filtered by event item IDs.
 #[derive(Debug)]
 pub struct GetNotificationsByEventItemIdsRequest<'a> {
@@ -273,4 +296,6 @@ pub struct GetNotificationsByEventItemIdsRequest<'a> {
     pub limit: Option<u32>,
     /// Cursor for pagination.
     pub cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    /// Filters to apply to the notification status fields.
+    pub filters: NotificationListFilters,
 }

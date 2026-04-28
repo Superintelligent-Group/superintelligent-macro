@@ -27,7 +27,8 @@ use crate::domain::{
     models::{
         UserNotificationRow,
         request::{
-            GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
+            GetNotificationsByEventItemIdsRequest, NotificationListFilters, NotificationStatus,
+            UpdateNotificationsRequest,
         },
     },
     service::NotificationReader,
@@ -125,6 +126,12 @@ pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 's
 pub struct Params {
     /// the limit on the number of items to return in a page
     pub limit: Option<u32>,
+    /// Filter by done status. Defaults to false to preserve active-notification behavior.
+    pub done: Option<bool>,
+    /// Filter by seen status. Omitted means include both seen and unseen notifications.
+    pub seen: Option<bool>,
+    /// If true, omit new-email notifications for email threads that are not marked Important.
+    pub important_emails_only: Option<bool>,
 }
 
 /// the response from listing the users notifications
@@ -143,13 +150,27 @@ pub async fn list_user_notifications<
 >(
     service: &NotificationRouterState<S>,
     decoded_jwt: DecodedJwt,
-    Query(Params { limit }): Query<Params>,
+    Query(Params {
+        limit,
+        done,
+        seen,
+        important_emails_only,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let query = cursor.into_query(CreatedAt, ());
     let result = service
         .inner
-        .get_user_notifications::<T>(decoded_jwt.macro_user_id, limit, query)
+        .get_user_notifications::<T>(
+            decoded_jwt.macro_user_id,
+            limit,
+            query,
+            NotificationListFilters {
+                done: done.or(Some(false)),
+                seen,
+                important_emails_only: important_emails_only.unwrap_or(false),
+            },
+        )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to get user notifications");
@@ -182,6 +203,9 @@ pub struct BulkGetByEventItemIdsRequest {
     path = "/v2/user_notifications/item/bulk",
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
+        ("done" = Option<bool>, Query, description = "Filter by done status. Defaults to false."),
+        ("seen" = Option<bool>, Query, description = "Filter by seen status."),
+        ("important_emails_only" = Option<bool>, Query, description = "If true, omit new-email notifications for email threads that are not marked Important."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     request_body = BulkGetByEventItemIdsRequest,
@@ -198,7 +222,12 @@ pub async fn bulk_get_by_event_item_ids<
 >(
     State(service): State<NotificationRouterState<S>>,
     decoded_jwt: DecodedJwt,
-    Query(Params { limit }): Query<Params>,
+    Query(Params {
+        limit,
+        done,
+        seen,
+        important_emails_only,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
@@ -209,6 +238,11 @@ pub async fn bulk_get_by_event_item_ids<
             event_item_ids: &req.event_item_ids,
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
+            filters: NotificationListFilters {
+                done: done.or(Some(false)),
+                seen,
+                important_emails_only: important_emails_only.unwrap_or(false),
+            },
         })
         .await
         .map_err(|e| {
@@ -339,6 +373,9 @@ async fn bulk_update<S: NotificationReader>(
     params(
         ("event_item_id" = Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
+        ("done" = Option<bool>, Query, description = "Filter by done status. Defaults to false."),
+        ("seen" = Option<bool>, Query, description = "Filter by seen status."),
+        ("important_emails_only" = Option<bool>, Query, description = "If true, omit new-email notifications for email threads that are not marked Important."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     responses(
@@ -352,7 +389,12 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
     State(service): State<NotificationRouterState<S>>,
     decoded_jwt: DecodedJwt,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
-    Query(Params { limit }): Query<Params>,
+    Query(Params {
+        limit,
+        done,
+        seen,
+        important_emails_only,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
@@ -362,6 +404,11 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
             event_item_ids: &[event_item_id],
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
+            filters: NotificationListFilters {
+                done: done.or(Some(false)),
+                seen,
+                important_emails_only: important_emails_only.unwrap_or(false),
+            },
         })
         .await
         .map_err(|e| {

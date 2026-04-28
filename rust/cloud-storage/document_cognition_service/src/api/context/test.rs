@@ -121,8 +121,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
-    use notification::domain::service::SqsNotificationIngress;
+    use notification::domain::service::{
+        NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+    };
     use notification::outbound::queue::SqsQueue;
+    use notification::outbound::repository::DbNotificationRepository;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -208,12 +211,28 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     ));
 
     let ingress_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         "test-notification-ingress-queue".to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
+
+    let notification_reader_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::from_conf(sqs_config),
+        "test-notification-queue".to_string(),
+    );
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        ai_tools::NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()
@@ -312,6 +331,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        notification_tool_context: notification_tool_context.clone(),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();

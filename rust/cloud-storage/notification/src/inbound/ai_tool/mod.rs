@@ -6,7 +6,7 @@ mod test;
 use crate::domain::{
     models::{
         UserNotificationRow,
-        request::{NotificationStatus, UpdateNotificationsRequest},
+        request::{NotificationListFilters, NotificationStatus, UpdateNotificationsRequest},
     },
     service::NotificationReader,
 };
@@ -62,12 +62,34 @@ where
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListNotifications",
-    description = "List the current user's active (not deleted, not done) notifications. Returns notifications ordered by most recent first. Use this to show the user their unread or pending notifications."
+    description = "List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications."
 )]
 pub struct ListNotifications {
     /// Maximum number of notifications to return. Defaults to 20, max 50.
     #[schemars(description = "Maximum number of notifications to return. Defaults to 20, max 50.")]
+    #[serde(default)]
     pub limit: Option<u32>,
+
+    /// Filter by done status. If omitted, only not-done notifications are returned.
+    #[schemars(
+        description = "Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications."
+    )]
+    #[serde(default)]
+    pub done: Option<bool>,
+
+    /// Filter by seen status. If omitted, both seen and unseen notifications are returned.
+    #[schemars(
+        description = "Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications."
+    )]
+    #[serde(default)]
+    pub seen: Option<bool>,
+
+    /// If true, omit new-email notifications for email threads that are not marked Important.
+    #[schemars(
+        description = "If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to false."
+    )]
+    #[serde(default)]
+    pub important_emails_only: bool,
 }
 
 /// A single notification item in the list response.
@@ -143,6 +165,11 @@ where
                 MacroUserIdStr((*request_context.user_id).copied()),
                 Some(limit),
                 models_pagination::Query::Sort(CreatedAt, ()),
+                NotificationListFilters {
+                    done: self.done.or(Some(false)),
+                    seen: self.seen,
+                    important_emails_only: self.important_emails_only,
+                },
             )
             .await
             .map_err(|e| ToolCallError {

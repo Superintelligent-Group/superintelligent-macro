@@ -1,5 +1,7 @@
 use ai_tools::{
-    NoOpConnectionService, NoOpNotificationService, NoOpTaskProperties, ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
+    ToolServiceContext,
 };
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
@@ -18,6 +20,8 @@ use entity_access::outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::repository::DbNotificationRepository;
 use scribe::ScribeClient;
 use scribe::document::DocumentClient;
 use search_service_client::SearchServiceClient;
@@ -183,6 +187,36 @@ pub async fn build_tool_service_context(
         ))),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        (*entity_access_service).clone(),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        ToolNotificationQueue::NoOp,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -192,5 +226,8 @@ pub async fn build_tool_service_context(
         document_tool_context,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
+        notification_tool_context,
+        schedule_tool_context: NoOpScheduleContext,
     })
 }

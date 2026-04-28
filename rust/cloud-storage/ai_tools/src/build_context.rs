@@ -6,7 +6,7 @@
 
 use crate::tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpTaskProperties, ToolServiceContext,
+    NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -28,6 +28,9 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification::outbound::queue::SqsQueue;
+use notification::outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
 use scribe::ScribeClient;
 use scribe::document::DocumentClient;
@@ -60,6 +63,7 @@ maybe_env_var! {
     struct ToolContextMaybeEnvVars {
         InternalApiSecretKey,
         LexicalServiceUrl,
+        NotificationQueue,
     }
 }
 
@@ -82,6 +86,7 @@ maybe_env_var! {
 /// Optional env vars (with fallbacks for local dev):
 /// - `INTERNAL_API_SECRET_KEY` (defaults to `"local"`)
 /// - `LEXICAL_SERVICE_URL` (defaults to `http://localhost:8096`)
+/// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -101,8 +106,16 @@ pub async fn build_tool_service_context_from_env(
         .context("expected LEXICAL_SERVICE_URL")?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+    let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
+    let sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
         .email_scheduled_queue(&env.email_scheduled_queue);
+    let notification_queue = maybe_env
+        .notification_queue
+        .as_ref()
+        .map(|queue_url| {
+            ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, queue_url.to_string()))
+        })
+        .unwrap_or(ToolNotificationQueue::NoOp);
 
     let secretsmanager_client =
         SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
@@ -269,6 +282,18 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let notification_reader_service = NotificationReaderService::new(
+        DbNotificationRepository::new(pool.clone()),
+        notification_queue,
+        NoOpSnsEndpointManager,
+        PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+        },
+    );
+    let notification_tool_context =
+        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -279,6 +304,7 @@ pub async fn build_tool_service_context_from_env(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        notification_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
     })
 }

@@ -26,11 +26,17 @@ fn test_list_notifications_deserialization() {
     let json = r#"{}"#;
     let tool: ListNotifications = serde_json::from_str(json).unwrap();
     assert_eq!(tool.limit, None);
+    assert_eq!(tool.done, None);
+    assert_eq!(tool.seen, None);
+    assert!(!tool.important_emails_only);
 
-    // With explicit limit
-    let json = r#"{"limit": 10}"#;
+    // With explicit filters
+    let json = r#"{"limit": 10, "done": true, "seen": false, "importantEmailsOnly": true}"#;
     let tool: ListNotifications = serde_json::from_str(json).unwrap();
     assert_eq!(tool.limit, Some(10));
+    assert_eq!(tool.done, Some(true));
+    assert_eq!(tool.seen, Some(false));
+    assert!(tool.important_emails_only);
 }
 
 // run `cargo test -p notification --features ai_tool inbound::ai_tool::test::print_list_notifications_input_schema -- --nocapture --include-ignored`
