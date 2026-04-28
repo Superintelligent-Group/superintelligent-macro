@@ -1,1 +1,6 @@
-export { MaybeTauriProvider, useTauri } from './TauriProvider';
+export {
+  MaybeTauriProvider,
+  useTauri,
+  useExpectTauri,
+  TauriRouteListener,
+} from './TauriProvider';

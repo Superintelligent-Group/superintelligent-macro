@@ -64,4 +64,8 @@ tauri-plugin-auth = { git = "https://github.com/macro-inc/tauri-plugins", rev = 
 tauri-plugin-mobile-sharetarget = "2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
+base64 = "0.22.1"
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
+# Used to call NSFileManager from Rust to get the App Group container path.
+# This version is already in the dependency tree via wry/tao.
+objc2 = "0.5"

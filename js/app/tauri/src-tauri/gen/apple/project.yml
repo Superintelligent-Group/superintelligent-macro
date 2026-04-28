@@ -12,6 +12,9 @@ settingGroups:
     base:
       PRODUCT_NAME: macro
       PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod
+      DEVELOPMENT_TEAM: TY74Q77JBD
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
 targetTemplates:
   app:
     type: application
@@ -73,6 +76,8 @@ targets:
           - applinks:staging.macro.com
         com.apple.developer.usernotifications.communication: true
         com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.security.application-groups:
+          - group.com.macro.app.prod
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
@@ -119,17 +124,26 @@ targets:
         CFBundleDisplayName: Share to Macro
         CFBundleShortVersionString: 2.0.2
         CFBundleVersion: "142"
+        LSApplicationQueriesSchemes:
+          - macro
         NSExtension:
           NSExtensionAttributes:
             NSExtensionActivationRule:
-              NSExtensionActivationSupportsWebURLWithMaxCount: 1
-              NSExtensionActivationSupportsWebPageWithMaxCount: 1
-              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 5
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.macro.app.prod
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod.ShareExtension
+        DEVELOPMENT_TEAM: TY74Q77JBD
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         ARCHS: [arm64]
         VALID_ARCHS: arm64
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
@@ -150,6 +164,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macro.app.prod.NotificationServiceExtension
+        DEVELOPMENT_TEAM: TY74Q77JBD
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
         ARCHS: [arm64]
         VALID_ARCHS: arm64
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64

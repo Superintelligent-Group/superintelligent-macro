@@ -20,18 +20,20 @@
 	<string>2.0.2</string>
 	<key>CFBundleVersion</key>
 	<string>142</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>macro</string>
+	</array>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
 			<dict>
-				<key>NSExtensionActivationSupportsText</key>
-				<true/>
-				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-				<integer>1</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>5</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

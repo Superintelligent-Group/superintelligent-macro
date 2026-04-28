@@ -1,167 +1,194 @@
 import UIKit
 import UniformTypeIdentifiers
-import Foundation
 
 class ShareViewController: UIViewController {
 
+    private let appGroupId = "group.com.macro.app.prod"
+    private let appURLScheme = "macro"
+    private let pendingShareManifestFilename = "pending_share_manifest.json"
+
+    // MARK: - Lifecycle
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        self.view.backgroundColor = .clear
-        let spinner = UIActivityIndicatorView(style: .large)
-        spinner.center = self.view.center
-        spinner.startAnimating()
-        self.view.addSubview(spinner)
-    }
+        // A fully transparent view can cause the system to dismiss the extension
+        // before it has a chance to do anything. Use a near-transparent scrim instead.
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        print("🟢 Share Extension: View Did Appear")
-
-        extractSharedURL { [weak self] sharedURL in
-            guard let self = self else { return }
-
-            guard let url = sharedURL else {
-                print("🔴 Share Extension: No URL found in shared content.")
-                self.closeExtension()
-                return
-            }
-
-            let originalString = url.absoluteString
-
-            var components = URLComponents()
-            components.scheme = "macro"
-            components.host = "share"
-            components.queryItems = [
-                URLQueryItem(name: "url", value: originalString)
-            ]
-
-            guard let deepLink = components.url else {
-                print("🔴 Share Extension: Could not construct deep link.")
-                self.closeExtension()
-                return
-            }
-
-            print("🟢 Share Extension: Attempting to open -> \(deepLink)")
-
-            let success = self.openURL(deepLink)
-
-            if success {
-                print("🟢 Share Extension: Open command sent successfully.")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.closeExtension()
-                }
-            } else {
-                print("🔴 Share Extension: Trampoline failed. Responder not found.")
-                self.showErrorAndClose()
-            }
+        // Safety valve: if loading hangs for any reason, bail out after 15 s.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            self?.complete()
         }
+
+        processSharedItems()
     }
 
-    // MARK: - Helper Methods
+    // MARK: - Main flow
 
-    private func closeExtension() {
-        self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
-    }
-
-    private func showErrorAndClose() {
-        let alert = UIAlertController(
-            title: "Error",
-            message: "Could not open Macro.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
-            self.closeExtension()
-        }))
-        self.present(alert, animated: true)
-    }
-
-    // MARK: - Data Extraction
-
-    private func extractSharedURL(completion: @escaping (URL?) -> Void) {
-        guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
-              let attachments = extensionItem.attachments else {
-            completion(nil)
+    private func processSharedItems() {
+        guard
+            let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
+            let attachments = extensionItem.attachments,
+            !attachments.isEmpty
+        else {
+            complete()
             return
         }
 
-        let urlType = UTType.url.identifier
-        let textTypes: [String] = {
-            if #available(iOS 16.0, *) {
-                return [UTType.text.identifier, UTType.plainText.identifier]
+        let group = DispatchGroup()
+        var savedFilenames: [String] = []
+        let lock = NSLock()
+
+        for provider in attachments {
+            let imageType = UTType.image.identifier
+            let movieType = UTType.movie.identifier
+
+            if provider.hasItemConformingToTypeIdentifier(imageType) {
+                group.enter()
+                loadData(from: provider, typeIdentifier: imageType, defaultExt: "jpg") { [weak self] data, ext in
+                    defer { group.leave() }
+                    if let data, let name = self?.saveToAppGroup(data: data, ext: ext) {
+                        lock.withLock { savedFilenames.append(name) }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(movieType) {
+                group.enter()
+                loadData(from: provider, typeIdentifier: movieType, defaultExt: "mp4") { [weak self] data, ext in
+                    defer { group.leave() }
+                    if let data, let name = self?.saveToAppGroup(data: data, ext: ext) {
+                        lock.withLock { savedFilenames.append(name) }
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            guard let self else { return }
+            if savedFilenames.isEmpty {
+                self.complete()
             } else {
-                return [UTType.text.identifier]
-            }
-        }()
-
-        func urlFromString(_ string: String) -> URL? {
-            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-            let range = NSRange(location: 0, length: (string as NSString).length)
-            let match = detector?.firstMatch(in: string, options: [], range: range)
-            if let match = match, match.resultType == .link, let foundURL = match.url {
-                return foundURL
-            }
-            return URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-
-        // 1) Prefer a real URL item provider
-        for provider in attachments {
-            if provider.hasItemConformingToTypeIdentifier(urlType) {
-                provider.loadItem(forTypeIdentifier: urlType, options: nil) { (item, error) in
-                    DispatchQueue.main.async {
-                        if let error = error { print("🔴 Load Error (URL): \(error.localizedDescription)") }
-                        if let url = item as? URL {
-                            completion(url)
-                        } else if let url = item as? NSURL {
-                            completion(url as URL)
-                        } else if let string = item as? String, let url = urlFromString(string) {
-                            completion(url)
-                        } else {
-                            completion(nil)
-                        }
-                    }
-                }
-                return
+                self.openMainApp(filenames: savedFilenames)
             }
         }
-
-        // 2) Fall back to text providers that may contain a URL
-        for provider in attachments {
-            for type in textTypes {
-                if provider.hasItemConformingToTypeIdentifier(type) {
-                    provider.loadItem(forTypeIdentifier: type, options: nil) { (item, error) in
-                        DispatchQueue.main.async {
-                            if let error = error { print("🔴 Load Error (Text): \(error.localizedDescription)") }
-                            if let string = item as? String, let url = urlFromString(string) {
-                                completion(url)
-                            } else if let data = item as? Data,
-                                      let string = String(data: data, encoding: .utf8),
-                                      let url = urlFromString(string) {
-                                completion(url)
-                            } else {
-                                completion(nil)
-                            }
-                        }
-                    }
-                    return
-                }
-            }
-        }
-
-        completion(nil)
     }
 
-    // MARK: - The Trampoline
+    // MARK: - Data loading
 
-    @discardableResult
-    @objc func openURL(_ url: URL) -> Bool {
-        var responder: UIResponder? = self
-        while responder != nil {
-            if let application = responder as? UIApplication {
-                application.open(url)
-                return true
+    /// Load raw data from an NSItemProvider.
+    /// Uses loadDataRepresentation (designed for Share Extensions) and falls back
+    /// to loadItem if that fails.
+    private func loadData(
+        from provider: NSItemProvider,
+        typeIdentifier: String,
+        defaultExt: String,
+        completion: @escaping (Data?, String) -> Void
+    ) {
+        // loadDataRepresentation is the recommended API for Share Extensions —
+        // it handles UTType conformance correctly and always fires the callback.
+        provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, _ in
+            if let data {
+                completion(data, defaultExt)
+                return
             }
-            responder = responder?.next
+
+            // Fallback: loadItem covers UIImage / NSURL paths
+            provider.loadItem(forTypeIdentifier: typeIdentifier, options: nil) { item, _ in
+                if let url = item as? URL, url.isFileURL {
+                    let ext = url.pathExtension.isEmpty ? defaultExt : url.pathExtension
+                    completion(try? Data(contentsOf: url), ext)
+                } else if let image = item as? UIImage {
+                    completion(image.jpegData(compressionQuality: 0.9), "jpg")
+                } else if let rawData = item as? Data {
+                    completion(rawData, defaultExt)
+                } else {
+                    completion(nil, defaultExt)
+                }
+            }
         }
-        return false
+    }
+
+    // MARK: - App Group storage
+
+    private func saveToAppGroup(data: Data, ext: String) -> String? {
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) else {
+            return nil
+        }
+
+        let filename = "share_\(UUID().uuidString).\(ext)"
+        let fileURL = container.appendingPathComponent(filename)
+        do {
+            try data.write(to: fileURL)
+            return filename
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Opening the main app
+
+    private func openMainApp(filenames: [String]) {
+        savePendingShareManifest(filenames: filenames)
+
+        var components = URLComponents()
+        components.scheme = appURLScheme
+        components.host = "share"
+        components.queryItems = [
+            URLQueryItem(name: "files", value: filenames.joined(separator: ","))
+        ]
+
+        guard let url = components.url else {
+            complete()
+            return
+        }
+
+        // Walk up the responder chain looking for the UIApplication instance.
+        // Casting to UIApplication is more reliable on modern iOS than the
+        // old responds(to: NSSelectorFromString("openURL:")) + perform approach.
+        var foundViaChain = false
+        var responder: UIResponder? = self
+        while let r = responder {
+            if let app = r as? UIApplication {
+                app.open(url, options: [:], completionHandler: nil)
+                foundViaChain = true
+                break
+            }
+            responder = r.next
+        }
+
+        // Fallback: use extensionContext to open the URL.
+        // UIApplication.shared is unavailable in extensions; extensionContext?.open
+        // is the supported API for launching the host app from any extension type.
+        if !foundViaChain {
+            extensionContext?.open(url, completionHandler: nil)
+        }
+
+        complete()
+    }
+
+    private func savePendingShareManifest(filenames: [String]) {
+        guard
+            let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: appGroupId
+            )
+        else {
+            return
+        }
+
+        let manifestURL = container.appendingPathComponent(pendingShareManifestFilename)
+
+        do {
+            let data = try JSONEncoder().encode(filenames)
+            try data.write(to: manifestURL, options: .atomic)
+        } catch {
+            // Keep trying to open the main app; warm-launch deep-link delivery can still succeed.
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func complete() {
+        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 }
