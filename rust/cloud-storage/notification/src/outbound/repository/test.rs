@@ -365,6 +365,8 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
                 done: Some(true),
                 seen: Some(true),
                 important_emails_only: false,
+                include_types: Vec::new(),
+                entities: Vec::new(),
             },
         )
         .await
@@ -380,11 +382,95 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
                 done: None,
                 seen: Some(false),
                 important_emails_only: false,
+                include_types: Vec::new(),
+                entities: Vec::new(),
             },
         )
         .await
         .unwrap();
     assert!(unseen.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres>) {
+    let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
+
+    let document_results: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                important_emails_only: false,
+                include_types: vec![crate::domain::models::request::NotificationItemType::Document],
+                entities: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(document_results.len(), 1);
+
+    let email_results: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                important_emails_only: false,
+                include_types: vec![crate::domain::models::request::NotificationItemType::Email],
+                entities: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(email_results.is_empty());
+
+    let entity_results: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                important_emails_only: false,
+                include_types: Vec::new(),
+                entities: vec![crate::domain::models::request::NotificationEntityRef {
+                    entity_type: crate::domain::models::request::NotificationItemType::Document,
+                    id: "item-1".to_string(),
+                }],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entity_results.len(), 1);
+
+    let wrong_entity_results: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications(
+            user,
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                important_emails_only: false,
+                include_types: Vec::new(),
+                entities: vec![crate::domain::models::request::NotificationEntityRef {
+                    entity_type: crate::domain::models::request::NotificationItemType::Email,
+                    id: "item-1".to_string(),
+                }],
+            },
+        )
+        .await
+        .unwrap();
+    assert!(wrong_entity_results.is_empty());
 }
 
 #[sqlx::test(

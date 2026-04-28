@@ -541,6 +541,8 @@ impl NotificationDbOps for PgPool {
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         let query_limit = limit as i64;
         let (cursor_id, cursor_timestamp) = cursor.vals();
+        let include_types = filters.include_type_tokens();
+        let entity_tokens = filters.entity_tokens();
 
         let rows = sqlx::query_as::<_, RawUserNotificationRow>(
             r#"
@@ -582,6 +584,32 @@ impl NotificationDbOps for PgPool {
                       AND important_label.name = 'IMPORTANT'
                 )
             )
+            AND (
+                cardinality($8::text[]) = 0
+                OR ('email' = ANY($8) AND n.event_item_type = 'email_thread')
+                OR ('message' = ANY($8) AND (
+                    n.notification_event_type IN ('channel_mention', 'channel_message_reply', 'channel_message_send')
+                    OR n.metadata ? 'messageId'
+                    OR n.metadata ? 'message_id'
+                ))
+                OR ('channel' = ANY($8) AND n.event_item_type = 'channel')
+                OR ('document' = ANY($8) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') <> 'task')
+                OR ('task' = ANY($8) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task')
+                OR ('project' = ANY($8) AND n.event_item_type = 'project')
+                OR ('chat' = ANY($8) AND n.event_item_type = 'chat')
+                OR ('call' = ANY($8) AND n.event_item_type = 'call')
+            )
+            AND (
+                cardinality($9::text[]) = 0
+                OR (n.event_item_type = 'email_thread' AND 'email:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'channel' AND 'channel:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'document' AND 'document:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task' AND 'task:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'project' AND 'project:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'chat' AND 'chat:' || n.event_item_id = ANY($9))
+                OR (n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY($9))
+                OR ('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY($9))
+            )
             AND (($3::timestamptz IS NULL)
                 OR (un.created_at, un.notification_id) < ($3, $4))
             ORDER BY un.created_at DESC, un.notification_id DESC
@@ -595,6 +623,8 @@ impl NotificationDbOps for PgPool {
         .bind(filters.done)
         .bind(filters.seen)
         .bind(filters.important_emails_only)
+        .bind(&include_types)
+        .bind(&entity_tokens)
         .fetch_all(self)
         .await?;
 
@@ -621,6 +651,8 @@ impl NotificationDbOps for PgPool {
         let query_limit = limit as i64;
         let (cursor_id, cursor_timestamp) = cursor.vals();
         let event_item_ids: Vec<String> = event_item_ids.iter().map(|id| id.to_string()).collect();
+        let include_types = filters.include_type_tokens();
+        let entity_tokens = filters.entity_tokens();
 
         let rows = sqlx::query_as::<_, RawUserNotificationRow>(
             r#"
@@ -663,6 +695,32 @@ impl NotificationDbOps for PgPool {
                       AND important_label.name = 'IMPORTANT'
                 )
             )
+            AND (
+                cardinality($9::text[]) = 0
+                OR ('email' = ANY($9) AND n.event_item_type = 'email_thread')
+                OR ('message' = ANY($9) AND (
+                    n.notification_event_type IN ('channel_mention', 'channel_message_reply', 'channel_message_send')
+                    OR n.metadata ? 'messageId'
+                    OR n.metadata ? 'message_id'
+                ))
+                OR ('channel' = ANY($9) AND n.event_item_type = 'channel')
+                OR ('document' = ANY($9) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') <> 'task')
+                OR ('task' = ANY($9) AND n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task')
+                OR ('project' = ANY($9) AND n.event_item_type = 'project')
+                OR ('chat' = ANY($9) AND n.event_item_type = 'chat')
+                OR ('call' = ANY($9) AND n.event_item_type = 'call')
+            )
+            AND (
+                cardinality($10::text[]) = 0
+                OR (n.event_item_type = 'email_thread' AND 'email:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'channel' AND 'channel:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'document' AND 'document:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'document' AND COALESCE(n.metadata->>'subType', n.metadata->>'sub_type', '') = 'task' AND 'task:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'project' AND 'project:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'chat' AND 'chat:' || n.event_item_id = ANY($10))
+                OR (n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY($10))
+                OR ('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY($10))
+            )
             AND (($4::timestamptz IS NULL)
                 OR (un.created_at, un.notification_id) < ($4, $5))
             ORDER BY un.created_at DESC, un.notification_id DESC
@@ -677,6 +735,8 @@ impl NotificationDbOps for PgPool {
         .bind(filters.done)
         .bind(filters.seen)
         .bind(filters.important_emails_only)
+        .bind(&include_types)
+        .bind(&entity_tokens)
         .fetch_all(self)
         .await?;
 

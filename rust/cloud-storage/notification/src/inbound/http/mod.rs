@@ -169,6 +169,8 @@ pub async fn list_user_notifications<
                 done: done.or(Some(false)),
                 seen,
                 important_emails_only: important_emails_only.unwrap_or(false),
+                include_types: Vec::new(),
+                entities: Vec::new(),
             },
         )
         .await
@@ -242,6 +244,8 @@ pub async fn bulk_get_by_event_item_ids<
                 done: done.or(Some(false)),
                 seen,
                 important_emails_only: important_emails_only.unwrap_or(false),
+                include_types: Vec::new(),
+                entities: Vec::new(),
             },
         })
         .await
@@ -408,6 +412,8 @@ pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + Deserial
                 done: done.or(Some(false)),
                 seen,
                 important_emails_only: important_emails_only.unwrap_or(false),
+                include_types: Vec::new(),
+                entities: Vec::new(),
             },
         })
         .await

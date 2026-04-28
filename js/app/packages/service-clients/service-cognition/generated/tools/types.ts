@@ -1051,9 +1051,47 @@ export interface ListNotifications {
    */
   done: boolean | null;
   /**
+   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
+   */
+  entities:
+    | {
+        /**
+         * Entity type for the provided id.
+         */
+        entityType:
+          | 'email'
+          | 'message'
+          | 'channel'
+          | 'document'
+          | 'project'
+          | 'chat'
+          | 'call'
+          | 'task';
+        /**
+         * Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
+         */
+        id: string;
+      }[]
+    | null;
+  /**
    * If true, omit new-email notifications for email threads that are not marked Important. Non-email notifications are still returned. Defaults to false.
    */
   importantEmailsOnly: boolean;
+  /**
+   * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
+   */
+  includeTypes:
+    | (
+        | 'email'
+        | 'message'
+        | 'channel'
+        | 'document'
+        | 'project'
+        | 'chat'
+        | 'call'
+        | 'task'
+      )[]
+    | null;
   /**
    * Maximum number of notifications to return. Defaults to 20, max 50.
    */

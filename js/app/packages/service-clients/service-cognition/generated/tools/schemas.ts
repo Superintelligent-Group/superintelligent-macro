@@ -569,7 +569,46 @@ export const ListEntitiesResponse = z.object({
 export const ListNotifications = z
   .object({
     done: z.union([z.boolean(), z.null()]).default(null),
+    entities: z
+      .union([
+        z.array(
+          z
+            .object({
+              entityType: z.enum([
+                'email',
+                'message',
+                'channel',
+                'document',
+                'project',
+                'chat',
+                'call',
+                'task',
+              ]),
+              id: z.string(),
+            })
+            .strict()
+        ),
+        z.null(),
+      ])
+      .default(null),
     importantEmailsOnly: z.boolean().default(false),
+    includeTypes: z
+      .union([
+        z.array(
+          z.enum([
+            'email',
+            'message',
+            'channel',
+            'document',
+            'project',
+            'chat',
+            'call',
+            'task',
+          ])
+        ),
+        z.null(),
+      ])
+      .default(null),
     limit: z.union([z.number().int().gte(0), z.null()]).default(null),
     seen: z.union([z.boolean(), z.null()]).default(null),
   })

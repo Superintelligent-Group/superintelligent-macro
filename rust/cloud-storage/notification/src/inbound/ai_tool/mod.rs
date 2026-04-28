@@ -6,7 +6,10 @@ mod test;
 use crate::domain::{
     models::{
         UserNotificationRow,
-        request::{NotificationListFilters, NotificationStatus, UpdateNotificationsRequest},
+        request::{
+            NotificationEntityRef, NotificationItemType, NotificationListFilters,
+            NotificationStatus, UpdateNotificationsRequest,
+        },
     },
     service::NotificationReader,
 };
@@ -90,6 +93,20 @@ pub struct ListNotifications {
     )]
     #[serde(default)]
     pub important_emails_only: bool,
+
+    /// Filter to specific notification item types. If omitted, returns all types.
+    #[schemars(
+        description = "Filter to specific notification item types. If omitted, returns all types. Example: [\"email\", \"message\"] returns only email and message notifications."
+    )]
+    #[serde(default)]
+    pub include_types: Option<Vec<NotificationItemType>>,
+
+    /// Filter to notifications for specific entities. If omitted, returns notifications for all entities.
+    #[schemars(
+        description = "Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{\"entityType\":\"email\",\"id\":\"...\"}] returns notifications for one email thread."
+    )]
+    #[serde(default)]
+    pub entities: Option<Vec<NotificationEntityRef>>,
 }
 
 /// A single notification item in the list response.
@@ -169,6 +186,8 @@ where
                     done: self.done.or(Some(false)),
                     seen: self.seen,
                     important_emails_only: self.important_emails_only,
+                    include_types: self.include_types.clone().unwrap_or_default(),
+                    entities: self.entities.clone().unwrap_or_default(),
                 },
             )
             .await

@@ -15,6 +15,54 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// User-facing notification categories used for list filtering.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum NotificationItemType {
+    Email,
+    Message,
+    Channel,
+    Document,
+    Project,
+    Chat,
+    Call,
+    Task,
+}
+
+impl NotificationItemType {
+    pub(crate) fn filter_token(self) -> &'static str {
+        match self {
+            Self::Email => "email",
+            Self::Message => "message",
+            Self::Channel => "channel",
+            Self::Document => "document",
+            Self::Project => "project",
+            Self::Chat => "chat",
+            Self::Call => "call",
+            Self::Task => "task",
+        }
+    }
+}
+
+/// User-facing reference to one specific entity to filter notifications by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationEntityRef {
+    /// Entity type for the provided id.
+    pub entity_type: NotificationItemType,
+    /// Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
+    pub id: String,
+}
+
+impl NotificationEntityRef {
+    pub(crate) fn filter_token(&self) -> String {
+        format!("{}:{}", self.entity_type.filter_token(), self.id)
+    }
+}
+
 /// Request to send a notification.
 ///
 /// Generic over the notification payload type `T`, which must implement
@@ -263,7 +311,7 @@ pub struct UpdateNotificationsRequest<'a> {
 }
 
 /// Optional filters for listing user notifications.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct NotificationListFilters {
     /// Filter by done status. `None` means include both done and not-done notifications.
     pub done: Option<bool>,
@@ -272,6 +320,10 @@ pub struct NotificationListFilters {
     /// If true, omit `new_email` notifications whose email thread is not marked important.
     /// Non-email notifications are still included.
     pub important_emails_only: bool,
+    /// Optional user-facing notification categories to include. Empty means include all types.
+    pub include_types: Vec<NotificationItemType>,
+    /// Optional specific entities to include. Empty means include all entities.
+    pub entities: Vec<NotificationEntityRef>,
 }
 
 impl NotificationListFilters {
@@ -281,7 +333,23 @@ impl NotificationListFilters {
             done: Some(false),
             seen: None,
             important_emails_only: false,
+            include_types: Vec::new(),
+            entities: Vec::new(),
         }
+    }
+
+    pub(crate) fn include_type_tokens(&self) -> Vec<String> {
+        self.include_types
+            .iter()
+            .map(|item_type| item_type.filter_token().to_string())
+            .collect()
+    }
+
+    pub(crate) fn entity_tokens(&self) -> Vec<String> {
+        self.entities
+            .iter()
+            .map(NotificationEntityRef::filter_token)
+            .collect()
     }
 }
 
