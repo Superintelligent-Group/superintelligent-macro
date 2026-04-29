@@ -329,7 +329,7 @@ function IosShareSheetComposer(props: {
         />
       </div>
 
-      <div class="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div class="min-h-0 flex-1 overflow-y-auto">
         <ErrorBoundary
           fallback={(error) => <ShareSheetComposerError error={error} />}
         >
