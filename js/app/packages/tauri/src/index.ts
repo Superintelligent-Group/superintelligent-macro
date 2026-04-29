@@ -9,5 +9,4 @@ export type {
   PendingShareFile,
   UploadPendingShareFileArgs,
 } from './ShareTargetProvider';
-export { MaybeTauriProvider, useTauri } from './TauriProvider';
 export type { BundleUpdateStatus } from './TauriProvider';
