@@ -26,7 +26,7 @@ import {
   iconTypeFromFilename,
 } from '@channel/Input/utils/file-helpers';
 import type { PendingShareFile } from '@macro/tauri';
-import { useTauri } from '@macro/tauri';
+import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient } from '@service-comms/client';
 import { staticFileClient } from '@service-static-files/client';
@@ -41,7 +41,7 @@ import {
   Suspense,
 } from 'solid-js';
 
-// Treat the current staged file tokens as the share-session identity.
+// Use the current staged file tokens as the share-session identity.
 function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
   return files.map((file) => file.token).join('|');
 }
@@ -203,7 +203,7 @@ function IosShareSheetComposer(props: {
   batchKey: string;
   handleCancel: () => void;
 }) {
-  const tauri = useTauri();
+  const shareTarget = useShareTarget();
   const userId = useUserId();
   const { all: destinationOptions } = useCombinedRecipients();
   const attachmentTracker = createInputAttachmentTracker();
@@ -217,7 +217,7 @@ function IosShareSheetComposer(props: {
     on(
       () => props.batchKey,
       () => {
-        const files = tauri?.pendingShareFiles() ?? [];
+        const files = shareTarget?.pendingShareFiles() ?? [];
         if (files.length === 0) return;
 
         let active = true;
@@ -231,7 +231,7 @@ function IosShareSheetComposer(props: {
               uploadPendingShareAttachment({
                 file,
                 tracker: attachmentTracker,
-                uploadPendingShareFile: tauri?.uploadPendingShareFile,
+                uploadPendingShareFile: shareTarget?.uploadPendingShareFile,
                 isActive: () => active,
               })
             )
@@ -300,7 +300,7 @@ function IosShareSheetComposer(props: {
     invalidateListChannels();
     invalidateContacts();
 
-    void tauri?.clearPendingShareFiles();
+    void shareTarget?.clearPendingShareFiles();
   };
 
   return (
@@ -354,8 +354,9 @@ function IosShareSheetComposer(props: {
 
 export function IosShareSheet() {
   const tauri = useTauri();
+  const shareTarget = useShareTarget();
 
-  const pendingFiles = () => tauri?.pendingShareFiles() ?? [];
+  const pendingFiles = () => shareTarget?.pendingShareFiles() ?? [];
   const shareBatchKey = () => pendingShareBatchKey(pendingFiles());
   const isOpen = () => pendingFiles().length > 0 && tauri?.os === 'ios';
   const [awaitingFirstInteraction, setAwaitingFirstInteraction] =
@@ -388,7 +389,7 @@ export function IosShareSheet() {
   );
 
   const handleCancel = () => {
-    void tauri?.clearPendingShareFiles();
+    void shareTarget?.clearPendingShareFiles();
   };
 
   return (
