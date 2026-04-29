@@ -54,53 +54,73 @@ function MediaAttachmentItem(props: {
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
   const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
+  const isPending = () => !!props.attachment.pending;
+  const imageSrc = () => {
+    if (props.attachment.kind !== 'image') return undefined;
+    return isPending() && props.attachment.previewSrc ? props.attachment.previewSrc : mediaSrc();
+  };
+  const videoSrc = () => {
+    if (props.attachment.kind !== 'video') return undefined;
+    return isPending() && props.attachment.previewSrc ? props.attachment.previewSrc : mediaSrc();
+  };
+  const removeButton = () => (
+    <RemoveButton
+      attachment={props.attachment}
+      onRemove={props.onRemove}
+      class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+    />
+  );
+
+  const pendingOverlay = () => (
+    <Show when={isPending()}>
+      <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/20">
+        <SpinnerIcon class="w-4 h-4 animate-spin text-white" />
+      </div>
+    </Show>
+  );
 
   return (
     <div class="ph-no-capture relative group">
-      <Show
-        when={!props.attachment.pending && props.attachment.kind === 'image'}
+      <Switch
         fallback={
-          <Show
-            when={
-              !props.attachment.pending && props.attachment.kind === 'video'
-            }
-            fallback={
-              <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-                <SpinnerIcon class="w-4 h-4 animate-spin" />
-              </div>
-            }
-          >
-            <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
-              <MediaVideo.Preview
-                src={mediaSrc()}
-                class="size-full object-cover"
-              />
-              <MediaVideo.PlayOverlay />
-            </MediaVideo.Root>
-            <RemoveButton
-              attachment={props.attachment}
-              onRemove={props.onRemove}
-              class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-            />
-          </Show>
+          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
+            <SpinnerIcon class="w-4 h-4 animate-spin" />
+          </div>
         }
       >
-        <MediaImage.Root>
-          <MediaImage.Image
-            src={mediaSrc()}
-            class="size-23 select-none rounded-2xl border border-edge object-cover"
-            width={92}
-            height={92}
-            loading="lazy"
-            fallback={<MediaImage.Fallback square />}
-          />
-          <RemoveButton
-            attachment={props.attachment}
-            onRemove={props.onRemove}
-            class="absolute -top-2 -right-2 z-[10] rounded-full bg-menu border border-edge-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-          />
-        </MediaImage.Root>
-      </Show>
+        <Match when={imageSrc()}>
+          {(src) => (
+            <MediaImage.Root>
+              <MediaImage.Image
+                src={src()}
+                class="size-23 select-none rounded-2xl border border-edge object-cover"
+                width={92}
+                height={92}
+                loading="lazy"
+                fallback={<MediaImage.Fallback square />}
+              />
+              {pendingOverlay()}
+              {removeButton()}
+            </MediaImage.Root>
+          )}
+        </Match>
+
+        <Match when={videoSrc()}>
+          {(src) => (
+            <>
+              <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+                <MediaVideo.Preview
+                  src={src()}
+                  class="size-full object-cover"
+                />
+                <MediaVideo.PlayOverlay />
+                {pendingOverlay()}
+              </MediaVideo.Root>
+              {removeButton()}
+            </>
+          )}
+        </Match>
+      </Switch>
     </div>
   );
 }

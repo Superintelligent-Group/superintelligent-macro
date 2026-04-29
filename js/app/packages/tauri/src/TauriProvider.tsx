@@ -1,7 +1,7 @@
 import { isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
@@ -20,10 +20,26 @@ import { MaybePushNotificationRegistration } from './PushNotification';
 
 type NotAndroid = 'not-android';
 
-interface SharedFileData {
+interface StagedSharedFileData {
+  token: string;
   name: string;
-  data: string; // base64
   mime_type: string;
+  size: number;
+  preview_path?: string | null;
+}
+
+export interface PendingShareFile {
+  token: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  previewSrc?: string;
+}
+
+export interface UploadPendingShareFileArgs {
+  token: string;
+  uploadUrl: string;
+  mimeType: string;
 }
 
 interface ShareFilesReadyPayload {
@@ -44,28 +60,43 @@ async function getPendingShareFilenames(): Promise<string[]> {
   return invoke<string[]>('get_pending_share_filenames');
 }
 
-async function popSharedFiles(filenames: string[]): Promise<File[]> {
-  const results = await invoke<SharedFileData[]>('pop_shared_files', {
+async function popSharedFiles(filenames: string[]): Promise<PendingShareFile[]> {
+  const results = await invoke<StagedSharedFileData[]>('pop_shared_files', {
     filenames,
   });
-  return results.map(({ name, data, mime_type }) => {
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new File([bytes], name, { type: mime_type });
-  });
+  return results.map(({ token, name, mime_type, size, preview_path }) => ({
+    token,
+    name,
+    mimeType: mime_type,
+    size,
+    previewSrc: preview_path ? convertFileSrc(preview_path) : undefined,
+  }));
 }
 
-async function clearSharedFiles(filenames: string[]): Promise<void> {
-  await invoke('clear_shared_files', { filenames });
+async function clearSharedFiles(tokens: string[]): Promise<void> {
+  await invoke('clear_shared_files', { tokens });
+}
+
+async function uploadPendingShareFile(
+  args: UploadPendingShareFileArgs
+): Promise<void> {
+  await invoke('upload_shared_file_to_presigned_url', {
+    token: args.token,
+    uploadUrl: args.uploadUrl,
+    mimeType: args.mimeType,
+  });
 }
 
 interface TauriContextValue {
   os: OsType;
   runtimeInsets: Accessor<Insets | NotAndroid>;
   /** Files shared into Macro via the iOS Share Extension, waiting to be attached. */
-  pendingShareFiles: Accessor<File[]>;
-  /** Call this after the files have been handed to a message composer. */
+  pendingShareFiles: Accessor<PendingShareFile[]>;
+  /** Call this to upload a staged iOS shared file without loading it into JS memory. */
+  uploadPendingShareFile: (
+    args: UploadPendingShareFileArgs
+  ) => Promise<void>;
+  /** Call this after the files have been handled by the share sheet. */
   clearPendingShareFiles: () => Promise<void>;
 }
 
@@ -79,22 +110,25 @@ function TauriProvider(props: { children: JSX.Element }) {
     'not-android' as const
   );
 
-  const [pendingShareFiles, setPendingShareFiles] = createSignal<File[]>([]);
+  const [pendingShareFiles, setPendingShareFiles] = createSignal<
+    PendingShareFile[]
+  >([]);
   const [pendingShareFileNames, setPendingShareFileNames] = createSignal<
     string[]
   >([]);
 
   const clearPendingShareFiles = async () => {
-    const filenames = pendingShareFileNames();
-    if (filenames.length === 0) {
-      setPendingShareFiles([]);
-      setPendingShareFileNames([]);
+    const files = pendingShareFiles();
+    setPendingShareFiles([]);
+    setPendingShareFileNames([]);
+
+    if (files.length === 0) {
       return;
     }
 
-    await clearSharedFiles(filenames);
-
-    if (shareFileNamesMatch(pendingShareFileNames(), filenames)) {
+    try {
+      await clearSharedFiles(files.map((file) => file.token));
+    } catch {
       setPendingShareFiles([]);
       setPendingShareFileNames([]);
     }
@@ -104,6 +138,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     runtimeInsets: insets,
     os: osType(),
     pendingShareFiles,
+    uploadPendingShareFile,
     clearPendingShareFiles,
   };
 
@@ -143,6 +178,7 @@ function TauriProvider(props: { children: JSX.Element }) {
         if (filenames.length === 0) return;
 
         const previousFilenames = pendingShareFileNames();
+        const previousFiles = pendingShareFiles();
         const isSamePendingShare = shareFileNamesMatch(
           previousFilenames,
           filenames
@@ -160,8 +196,10 @@ function TauriProvider(props: { children: JSX.Element }) {
 
           setPendingShareFiles(files);
           setPendingShareFileNames(filenames);
-          if (previousFilenames.length > 0 && !isSamePendingShare) {
-            void clearSharedFiles(previousFilenames).catch(() => {});
+          if (previousFiles.length > 0 && !isSamePendingShare) {
+            void clearSharedFiles(previousFiles.map((file) => file.token)).catch(
+              () => {}
+            );
           }
         } catch {}
       };

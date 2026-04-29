@@ -4,3 +4,4 @@ export {
   useExpectTauri,
   TauriRouteListener,
 } from './TauriProvider';
+export type { PendingShareFile, UploadPendingShareFileArgs } from './TauriProvider';

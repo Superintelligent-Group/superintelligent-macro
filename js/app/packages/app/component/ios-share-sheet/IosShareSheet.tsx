@@ -6,22 +6,30 @@ import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
-import { isErr } from '@core/util/maybeResult';
+import { isErr, throwOnErr } from '@core/util/maybeResult';
 import { Button } from '@ui/components/Button';
 import {
   ChannelInput,
   Input,
   createInputAttachmentTracker,
-  type InputHandle,
+  type InputAttachmentData,
+  type InputAttachmentKind,
+  type InputAttachmentTracker,
   type InputSnapshot,
   useInput,
   useInputCommands,
 } from '@channel/Input';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
+import {
+  getAttachmentKindFromFile,
+  iconTypeFromFilename,
+} from '@channel/Input/utils/file-helpers';
+import type { PendingShareFile } from '@macro/tauri';
 import { useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient } from '@service-comms/client';
+import { staticFileClient } from '@service-static-files/client';
 import {
   ErrorBoundary,
   createEffect,
@@ -33,12 +41,109 @@ import {
   Suspense,
 } from 'solid-js';
 
-function pendingShareBatchKey(files: readonly File[]): string {
-  return files
-    .map(
-      (file, index) => `${index}:${file.name}:${file.size}:${file.type ?? ''}`
-    )
-    .join('|');
+// Treat the current staged file tokens as the share-session identity.
+function pendingShareBatchKey(files: readonly PendingShareFile[]): string {
+  return files.map((file) => file.token).join('|');
+}
+
+function getPendingShareAttachmentKind(
+  file: Pick<PendingShareFile, 'name' | 'mimeType'>
+): InputAttachmentKind {
+  return getAttachmentKindFromFile({
+    name: file.name,
+    type: file.mimeType,
+  });
+}
+
+function buildPendingAttachment(
+  file: PendingShareFile,
+  pendingId: string,
+  kind: InputAttachmentKind
+): InputAttachmentData {
+  return {
+    id: pendingId,
+    name: file.name,
+    kind,
+    iconType: kind === 'document' ? iconTypeFromFilename(file.name) : undefined,
+    pending: true,
+    previewSrc: kind === 'image' ? file.previewSrc : undefined,
+  };
+}
+
+function buildUploadedAttachment(
+  file: PendingShareFile,
+  staticFileId: string,
+  kind: InputAttachmentKind
+): InputAttachmentData {
+  if (kind === 'document') {
+    return {
+      id: staticFileId,
+      name: file.name,
+      kind,
+      iconType: iconTypeFromFilename(file.name),
+    };
+  }
+
+  return {
+    id: staticFileId,
+    name: file.name,
+    kind,
+  };
+}
+
+async function uploadPendingShareAttachment(options: {
+  file: PendingShareFile;
+  tracker: InputAttachmentTracker;
+  uploadPendingShareFile:
+    | ((args: { token: string; uploadUrl: string; mimeType: string }) => Promise<void>)
+    | undefined;
+  isActive: () => boolean;
+}) {
+  const kind = getPendingShareAttachmentKind(options.file);
+  const pendingId = `pending-share:${options.file.token}`;
+
+  options.tracker.addAttachment(
+    buildPendingAttachment(options.file, pendingId, kind)
+  );
+
+  try {
+    if (kind === 'document') {
+      throw new Error('Unsupported iOS share attachment type');
+    }
+
+    const result = await throwOnErr(() =>
+      staticFileClient.makePresignedUrl({
+        file_name: options.file.name,
+        content_type: options.file.mimeType,
+      })
+    );
+
+    if (!options.uploadPendingShareFile) {
+      throw new Error('Missing native shared file uploader');
+    }
+
+    await options.uploadPendingShareFile({
+      token: options.file.token,
+      uploadUrl: result.upload_url,
+      mimeType: options.file.mimeType,
+    });
+
+    if (!options.isActive()) return;
+
+    options.tracker.removeAttachment(pendingId);
+    options.tracker.addAttachment(
+      buildUploadedAttachment(options.file, result.id, kind)
+    );
+  } catch (error) {
+    if (!options.isActive()) return;
+
+    options.tracker.removeAttachment(pendingId);
+    console.error('failed to upload iOS shared file', {
+      file: options.file,
+      error,
+    });
+    toast.failure(`Failed to upload ${options.file.name}`);
+  }
 }
 
 function ShareSheetInputActions(props: {
@@ -107,27 +212,34 @@ function IosShareSheetComposer(props: {
   const [selectedOptions, setSelectedOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
   >([]);
-  const [inputHandle, setInputHandle] = createSignal<InputHandle>();
-  const [attachedBatchKey, setAttachedBatchKey] = createSignal<
-    string | undefined
-  >();
 
-  createEffect(() => {
-    const files = tauri?.pendingShareFiles() ?? [];
-    const handle = inputHandle();
+  createEffect(
+    on(
+      () => props.batchKey,
+      () => {
+        const files = tauri?.pendingShareFiles() ?? [];
+        if (files.length === 0) return;
 
-    if (!handle || files.length === 0) return;
-    if (attachedBatchKey() === props.batchKey) return;
+        let active = true;
+        onCleanup(() => {
+          active = false;
+        });
 
-    setAttachedBatchKey(props.batchKey);
-
-    void handle
-      .attachFiles(files)
-      .catch(() => {
-        setAttachedBatchKey(undefined);
-        toast.failure('Failed to load shared files');
-      });
-  });
+        void (async () => {
+          await Promise.allSettled(
+            files.map((file) =>
+              uploadPendingShareAttachment({
+                file,
+                tracker: attachmentTracker,
+                uploadPendingShareFile: tauri?.uploadPendingShareFile,
+                isActive: () => active,
+              })
+            )
+          );
+        })();
+      }
+    )
+  );
 
   const resolveDestinationChannelId = async () => {
     const options = selectedOptions();
@@ -227,7 +339,6 @@ function IosShareSheetComposer(props: {
               }}
               attachmentTracker={attachmentTracker}
               markdownNamespace={`ios-share-input-${composerId}`}
-              onReady={(handle) => setInputHandle(handle)}
               onSend={handleSend}
             >
               <ShareSheetInputActions

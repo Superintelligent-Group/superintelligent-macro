@@ -5,7 +5,6 @@ class ShareViewController: UIViewController {
 
     private let appGroupId = "group.com.macro.app.prod"
     private let appURLScheme = "macro"
-    private let pendingShareManifestFilename = "pending_share_manifest.json"
 
     // MARK: - Lifecycle
 
@@ -129,8 +128,6 @@ class ShareViewController: UIViewController {
     // MARK: - Opening the main app
 
     private func openMainApp(filenames: [String]) {
-        savePendingShareManifest(filenames: filenames)
-
         var components = URLComponents()
         components.scheme = appURLScheme
         components.host = "share"
@@ -165,25 +162,6 @@ class ShareViewController: UIViewController {
         }
 
         complete()
-    }
-
-    private func savePendingShareManifest(filenames: [String]) {
-        guard
-            let container = FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: appGroupId
-            )
-        else {
-            return
-        }
-
-        let manifestURL = container.appendingPathComponent(pendingShareManifestFilename)
-
-        do {
-            let data = try JSONEncoder().encode(filenames)
-            try data.write(to: manifestURL, options: .atomic)
-        } catch {
-            // Keep trying to open the main app; warm-launch deep-link delivery can still succeed.
-        }
     }
 
     // MARK: - Helpers
