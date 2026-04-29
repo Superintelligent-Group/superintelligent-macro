@@ -11,7 +11,7 @@ export type InputAttachmentData = {
   kind: InputAttachmentKind;
   iconType?: EntityIconSelector;
   pending?: boolean;
-  /** Preview URL used while an attachment is still uploading. */
+  /** Preview URL used while uploading or until the final media source has loaded. */
   previewSrc?: string;
   /** Image/video width in pixels (set after upload). */
   width?: number;

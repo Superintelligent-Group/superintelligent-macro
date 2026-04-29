@@ -88,6 +88,7 @@ function buildUploadedAttachment(
     id: staticFileId,
     name: file.name,
     kind,
+    previewSrc: file.previewSrc,
   };
 }
 
@@ -95,7 +96,11 @@ async function uploadPendingShareAttachment(options: {
   file: PendingShareFile;
   tracker: InputAttachmentTracker;
   uploadPendingShareFile:
-    | ((args: { token: string; uploadUrl: string; mimeType: string }) => Promise<void>)
+    | ((args: {
+        token: string;
+        uploadUrl: string;
+        mimeType: string;
+      }) => Promise<void>)
     | undefined;
   isActive: () => boolean;
 }) {
@@ -146,9 +151,7 @@ async function uploadPendingShareAttachment(options: {
   }
 }
 
-function ShareSheetInputActions(props: {
-  hasRecipients: Accessor<boolean>;
-}) {
+function ShareSheetInputActions(props: { hasRecipients: Accessor<boolean> }) {
   const input = useInput();
   const commands = useInputCommands();
 

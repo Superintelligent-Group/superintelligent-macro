@@ -1,18 +1,18 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
-import { EntityIcon } from '@core/component/EntityIcon';
-import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
-import XIcon from '@icon/regular/x.svg';
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
+import XIcon from '@icon/regular/x.svg';
 import { cn } from '@ui/utils/classname';
 import {
   children,
   For,
+  type JSX,
   Match,
   Show,
-  splitProps,
   Switch,
-  type JSX,
+  splitProps,
 } from 'solid-js';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
@@ -53,16 +53,9 @@ function MediaAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
 }) {
-  const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
   const isPending = () => !!props.attachment.pending;
-  const imageSrc = () => {
-    if (props.attachment.kind !== 'image') return undefined;
-    return isPending() && props.attachment.previewSrc ? props.attachment.previewSrc : mediaSrc();
-  };
-  const videoSrc = () => {
-    if (props.attachment.kind !== 'video') return undefined;
-    return isPending() && props.attachment.previewSrc ? props.attachment.previewSrc : mediaSrc();
-  };
+  const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
+
   const removeButton = () => (
     <RemoveButton
       attachment={props.attachment}
@@ -88,37 +81,39 @@ function MediaAttachmentItem(props: {
           </div>
         }
       >
-        <Match when={imageSrc()}>
-          {(src) => (
-            <MediaImage.Root>
-              <MediaImage.Image
-                src={src()}
-                class="size-23 select-none rounded-2xl border border-edge object-cover"
-                width={92}
-                height={92}
-                loading="lazy"
-                fallback={<MediaImage.Fallback square />}
-              />
-              {pendingOverlay()}
-              {removeButton()}
-            </MediaImage.Root>
-          )}
+        <Match
+          when={
+            props.attachment.kind === 'image' &&
+            (!isPending() || props.attachment.previewSrc)
+          }
+        >
+          <MediaImage.Root>
+            <MediaImage.Image
+              src={mediaSrc()}
+              previewSrc={props.attachment.previewSrc}
+              class="size-23 select-none rounded-2xl border border-edge object-cover"
+              width={92}
+              height={92}
+              loading="lazy"
+              fallback={<MediaImage.Fallback square />}
+            />
+            {pendingOverlay()}
+            {removeButton()}
+          </MediaImage.Root>
         </Match>
 
-        <Match when={videoSrc()}>
-          {(src) => (
-            <>
-              <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
-                <MediaVideo.Preview
-                  src={src()}
-                  class="size-full object-cover"
-                />
-                <MediaVideo.PlayOverlay />
-                {pendingOverlay()}
-              </MediaVideo.Root>
-              {removeButton()}
-            </>
-          )}
+        <Match
+          when={props.attachment.kind === 'video' && !isPending()}
+        >
+          <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+            <MediaVideo.Preview
+              src={mediaSrc()}
+              class="size-full object-cover"
+            />
+            <MediaVideo.PlayOverlay />
+            {pendingOverlay()}
+          </MediaVideo.Root>
+          {removeButton()}
         </Match>
       </Switch>
     </div>

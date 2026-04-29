@@ -51,7 +51,9 @@ async function getPendingShareFilenames(): Promise<string[]> {
   return invoke<string[]>('get_pending_share_filenames');
 }
 
-async function popSharedFiles(filenames: string[]): Promise<PendingShareFile[]> {
+async function popSharedFiles(
+  filenames: string[]
+): Promise<PendingShareFile[]> {
   const results = await invoke<StagedSharedFileData[]>('pop_shared_files', {
     filenames,
   });
@@ -80,9 +82,7 @@ async function uploadPendingShareFile(
 
 interface ShareTargetContextValue {
   pendingShareFiles: Accessor<PendingShareFile[]>;
-  uploadPendingShareFile: (
-    args: UploadPendingShareFileArgs
-  ) => Promise<void>;
+  uploadPendingShareFile: (args: UploadPendingShareFileArgs) => Promise<void>;
   clearPendingShareFiles: () => Promise<void>;
 }
 
