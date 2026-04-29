@@ -13,6 +13,7 @@ import {
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { CallRecord } from '@service-call/client';
 import type { ItemType } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 
@@ -59,7 +60,7 @@ type RenameOnMutateResult = {
 
 const getEntityRenameData = (
   operation: EntityRenameOperation
-): EntityRenameData => {
+): EntityRenameData | null => {
   const { entity, newName } = operation;
   return {
     id: entity.id,
@@ -71,6 +72,7 @@ const getEntityRenameData = (
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
+  if (!data) return { success: false };
   const success = await renameItem(data);
   return { success };
 };
@@ -86,6 +88,7 @@ const validateEntityRename = (entity: EntityData): void => {
     case 'document':
     case 'chat':
     case 'project':
+    case 'call':
       return;
     default:
       throw new Error(`Unsupported entity type: ${entity.type}`);
@@ -108,7 +111,20 @@ const renameDssSetData = (
           frecency_score: score,
         })
       );
-    } else if (itemType !== 'email' && itemType !== 'channel_message') {
+    } else if (itemType === 'call') {
+      txns.set(
+        id,
+        optimisticUpdateSoupEntity({
+          tag: 'call',
+          data: { callId: id, customName: newName },
+          frecency_score: score,
+        })
+      );
+    } else if (
+      itemType !== 'email' &&
+      itemType !== 'channel_message' &&
+      itemType !== 'automation'
+    ) {
       txns.set(
         id,
         optimisticUpdateSoupEntity({
@@ -141,6 +157,18 @@ const renameChannelSetData = (entities: EntityRenameOptimisticInfo[]): void => {
   );
 };
 
+const renameCallRecordSetData = (
+  entities: EntityRenameOptimisticInfo[]
+): void => {
+  entities.forEach(({ id, newName, itemType }) => {
+    if (itemType !== 'call') return;
+    queryClient.setQueryData<CallRecord>(['call', 'record', id], (prev) => {
+      if (!prev) return prev;
+      return { ...prev, customName: newName };
+    });
+  });
+};
+
 const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName, itemType }) => {
     setPreviewName({
@@ -163,6 +191,7 @@ function performOptimisticRenameUpdates(
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
   renameChannelSetData(entities);
+  renameCallRecordSetData(entities);
   const soupTransactions = renameDssSetData(entities);
 
   return { soupTransactions };
@@ -185,6 +214,7 @@ function rollbackOptimisticRenameUpdates({
   renameHistorySetData(rollbackEntities);
   renamePreviewSetData(rollbackEntities);
   renameChannelSetData(rollbackEntities);
+  renameCallRecordSetData(rollbackEntities);
 }
 
 const bulkRenameMutationFn = async (
@@ -201,7 +231,9 @@ const bulkRenameMutationFn = async (
 const bulkRenameOnMutate = (
   params: BulkRenameDssEntityMutationVariables
 ): RenameOnMutateResult => {
-  const updates = params.map(getEntityRenameData);
+  const updates = params
+    .map(getEntityRenameData)
+    .filter((d): d is EntityRenameData => d !== null);
   const contexts = performOptimisticRenameUpdates(updates);
   return { contexts, updates };
 };
@@ -256,7 +288,7 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** supports channel/document/chat/project rename */
+/** supports channel/document/chat/project/call rename */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -294,7 +326,7 @@ export function createRenameDssEntityMutation(
   }));
 }
 
-/** supports channel/document/chat/project bulk rename */
+/** supports channel/document/chat/project/call bulk rename */
 export function createBulkRenameDssEntityMutation() {
   return useMutation<
     BulkRenameDssEntityMutationData,

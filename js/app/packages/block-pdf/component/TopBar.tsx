@@ -1,4 +1,9 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
@@ -14,6 +19,7 @@ import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
@@ -25,6 +31,7 @@ import {
 } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -37,6 +44,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
+import Info from '@icon/regular/info.svg';
 import Printer from '@icon/regular/printer.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
@@ -69,6 +77,7 @@ export function TopBar() {
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
@@ -162,7 +171,12 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    { op: 'rename' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'rename', divideAbove: true },
     { op: 'copy' },
     { op: 'moveToProject' },
     {
@@ -217,11 +231,33 @@ export function TopBar() {
       ),
     },
     {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: documentId,
+          name: fileName(),
+          fileType,
+        }),
+      divideAbove: true,
+      buttonComponent: () => (
+        <ChatWithAgentButton
+          entity={{
+            type: 'document',
+            id: documentId,
+            name: fileName(),
+            fileType,
+          }}
+        />
+      ),
+    },
+    {
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),
-      divideAbove: true,
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

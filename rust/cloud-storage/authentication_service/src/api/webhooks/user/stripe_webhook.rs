@@ -221,14 +221,18 @@ async fn handle_customer_subscription_event(
         None
     };
 
-    // Extract GA client ID from subscription metadata for analytics tracking
+    // Extract tracking IDs from subscription metadata for analytics
     let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+    let fbp = subscription.metadata.get("fbp").cloned();
+    let fbc = subscription.metadata.get("fbc").cloned();
 
     tracing::info!(
         email=%email.as_ref(),
         subscription_id,
         subscription_status,
         ga_client_id=?ga_client_id,
+        fbp=?fbp,
+        fbc=?fbc,
         "processing stripe subscription"
     );
 
@@ -250,6 +254,8 @@ async fn handle_customer_subscription_event(
             &team_id,
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
+                fbp: fbp.clone(),
+                fbc: fbc.clone(),
                 email: email.as_ref().to_string(),
                 value_cents: subscription_value,
                 currency: subscription_currency,
@@ -360,7 +366,10 @@ async fn handle_customer_subscription_event(
         id if id == ctx.stripe_price_ids.stripe_price_id_haiku.as_ref() => ProductTier::Haiku,
         id if id == ctx.stripe_price_ids.stripe_price_id_sonnet.as_ref() => ProductTier::Sonnet,
         id if id == ctx.stripe_price_ids.stripe_price_id_opus.as_ref() => ProductTier::Opus,
-        _ => anyhow::bail!("unsupported price id: {price_id}"),
+        _ => {
+            tracing::warn!(price_id=?price_id.as_str(), "unsupported price id, defaulting to haiku tier");
+            ProductTier::Haiku
+        }
     };
 
     ctx.user_roles_and_permissions_service
@@ -377,6 +386,8 @@ async fn handle_customer_subscription_event(
         subscription_id,
         SubscriptionTrackingData {
             ga_client_id,
+            fbp,
+            fbc,
             email: email.as_ref().to_string(),
             value_cents: subscription_value,
             currency: subscription_currency,
@@ -477,6 +488,8 @@ struct SubscriptionEvent {
 #[derive(Debug, Clone)]
 struct SubscriptionTrackingData {
     ga_client_id: Option<String>,
+    fbp: Option<String>,
+    fbc: Option<String>,
     email: String,
     value_cents: Option<i64>,
     currency: Option<String>,
@@ -523,7 +536,12 @@ fn track_stripe_subscription(
                 value: value_cents as f64 / 100.0,
                 currency: currency.to_uppercase(),
             };
-            let user_data = MetaUserData::with_email(&data.email);
+            let user_data = MetaUserData {
+                email: Some(data.email.clone()),
+                fbp: data.fbp.clone(),
+                fbc: data.fbc.clone(),
+                ..MetaUserData::default()
+            };
             let event_id = Some(subscription_id.as_str());
 
             tracing::info!(

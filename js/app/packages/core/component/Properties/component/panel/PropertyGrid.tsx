@@ -8,6 +8,8 @@ import { PropertyRow } from './PropertyRow';
 interface PropertiesListProps {
   properties: Property[];
   columns?: number;
+  withDelete?: boolean;
+  withPin?: boolean;
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
@@ -44,12 +46,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
 
     return { metadata, builtinProperties, userProperties };
   });
-
-  const showSeparatorAboveBuiltin = createMemo(
-    () =>
-      propertyGroups().metadata.length > 0 &&
-      propertyGroups().builtinProperties.length > 0
-  );
 
   const showSeparatorAboveUser = createMemo(
     () =>
@@ -92,7 +88,6 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
                 withPin
               />
             )}
@@ -101,17 +96,11 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
 
         {/* Builtin properties (block-specific, non-removable) */}
         <Show when={propertyGroups().builtinProperties.length > 0}>
-          {/* Separator above builtin */}
-          <Show when={showSeparatorAboveBuiltin()}>
-            <div class="col-span-2 border-t border-edge-muted my-4" />
-          </Show>
-
           <For each={propertyGroups().builtinProperties}>
             {(property) => (
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
                 withPin
               />
             )}
@@ -130,8 +119,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
               <PropertyRow
                 property={property}
                 onValueClick={handleValueClick}
-                withDelete
-                withPin
+                withDelete={props.withDelete}
+                withPin={props.withPin}
               />
             )}
           </For>

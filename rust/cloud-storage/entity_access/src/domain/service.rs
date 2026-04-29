@@ -35,8 +35,6 @@ where
     }
 
     /// Get access level for optimized entity types (document, chat, project, thread).
-    ///
-    /// These use the UserItemAccess table for efficient lookups.
     async fn get_optimized_access(
         &self,
         entity_id: &str,
@@ -48,6 +46,7 @@ where
             EntityType::Chat => self.repo.get_chat_access(entity_id, user_id).await,
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
+            EntityType::Call => self.repo.get_call_access(entity_id, user_id).await,
             _ => unreachable!("Only optimized types should call this method"),
         }
     }
@@ -73,6 +72,22 @@ where
         } else {
             Ok(None)
         }
+    }
+
+    /// Resolve a call id string to the channel id that owns it.
+    ///
+    /// Looks up both the active `calls` table and the archived `call_records`
+    /// table. Returns `NotFound` if neither has a matching row, or
+    /// `BadRequest` if the id is not a valid UUID.
+    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Uuid, AccessError> {
+        let call_uuid = Uuid::from_str(call_id)
+            .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
+        let info = self
+            .repo
+            .get_call_channel(&call_uuid)
+            .await?
+            .ok_or(AccessError::NotFound("Call not found"))?;
+        Ok(info.channel_id)
     }
 }
 
@@ -118,12 +133,15 @@ where
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::Call => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
-            // These entity types don't have access checks implemented yet
+            // Static files are always viewable. This is wrong for owners
+            EntityType::StaticFile => Ok(Some(AccessLevel::View)),
+            // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
         }
     }
@@ -174,7 +192,8 @@ where
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::Call => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -210,14 +229,25 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         match entity_type {
-            EntityType::Document => self.repo.get_document_users(entity_id).await,
-            EntityType::Chat => self.repo.get_chat_users(entity_id).await,
-            EntityType::Project => self.repo.get_project_users(entity_id).await,
-            EntityType::EmailThread => self.repo.get_thread_users(entity_id).await,
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread => {
+                let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid entity_id for get_users_by_entity")
+                })?;
+
+                self.repo.get_entity_users(&entity_id, entity_type).await
+            }
             EntityType::Channel => {
                 let channel_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid channel_id for get_users_by_entity")
                 })?;
+                self.repo.get_channel_users(&channel_id).await
+            }
+            EntityType::Call => {
+                // Participants of a call are the members of its channel.
+                let channel_id = self.resolve_call_channel_id(entity_id).await?;
                 self.repo.get_channel_users(&channel_id).await
             }
             _ => Err(AccessError::BadRequest(

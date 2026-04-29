@@ -3,18 +3,18 @@
 
 mod chat;
 mod document;
-mod email;
+mod highlight;
 mod project;
 
 pub use chat::*;
 pub use document::*;
-pub use email::*;
+pub use highlight::*;
 pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
 pub use project::*;
 
 /// Escapes special regex characters in a search term
-pub(crate) fn escape_regex(term: &str) -> String {
+pub fn escape_regex(term: &str) -> String {
     let special_chars = [
         '\\', '.', '+', '*', '?', '(', ')', '[', ']', '{', '}', '^', '$', '|',
     ];

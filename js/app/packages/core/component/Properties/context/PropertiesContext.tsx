@@ -4,6 +4,7 @@ import {
   createContext,
   createEffect,
   createSignal,
+  onCleanup,
   type ParentProps,
   useContext,
 } from 'solid-js';
@@ -26,6 +27,7 @@ export interface DatePickerModalState {
 
 export interface CreatePropertyModalState {
   isOpen: boolean;
+  autoPinOnCreate?: boolean;
 }
 
 export interface PropertySaveHandler {
@@ -39,7 +41,7 @@ export interface PropertiesContextValue {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -65,7 +67,7 @@ export interface PropertiesContextValue {
   ) => void;
   closeDatePicker: () => void;
 
-  openCreateProperty: () => void;
+  openCreateProperty: (autoPinOnCreate?: boolean) => void;
   closeCreateProperty: () => void;
 
   // Convenience function to close all modals
@@ -78,7 +80,7 @@ export interface PropertiesProviderProps extends ParentProps {
   documentName?: string;
   properties: () => Property[];
   onRefresh: () => void;
-  onPropertyAdded: () => void;
+  onPropertyAdded: (addedDefinitionIds?: string[]) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -130,8 +132,8 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   };
 
   // Create Property actions
-  const openCreateProperty = () => {
-    setCreatePropertyModal({ isOpen: true });
+  const openCreateProperty = (autoPinOnCreate?: boolean) => {
+    setCreatePropertyModal({ isOpen: true, autoPinOnCreate });
   };
 
   const closeCreateProperty = () => {
@@ -147,7 +149,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   };
 
   // Handle ESC key to close modals
-  // Use capture phase listener to intercept before hotkey system (like drawer close)
+  // Use capture phase listener to intercept before hotkey system's capture phase handlers
   createEffect(() => {
     const isAnyModalOpen =
       propertySelectorModal() !== null ||
@@ -155,26 +157,24 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
       datePickerModal() !== null ||
       createPropertyModal() !== null;
 
+    let handleKeyDown: (e: KeyboardEvent) => void;
+
     if (isAnyModalOpen) {
-      const handleKeyDown = (e: KeyboardEvent) => {
+      handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
-          e.stopImmediatePropagation();
           closeAllModals();
         }
       };
 
-      // Capture phase = runs before hotkey system's bubble phase handlers
       document.addEventListener('keydown', handleKeyDown, { capture: true });
-
-      // Cleanup when modal closes or component unmounts
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown, {
-          capture: true,
-        });
-      };
     }
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown, {
+        capture: true,
+      });
+    });
   });
 
   const value: PropertiesContextValue = {

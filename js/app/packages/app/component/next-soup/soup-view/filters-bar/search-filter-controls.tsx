@@ -1,269 +1,487 @@
-import XIcon from '@icon/regular/x.svg';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
-import { QUERY_FILTERS } from '@app/component/next-soup/filters/query-filters';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import type { SoupBody } from '@queries/soup/items';
-import { batch, createMemo, Show } from 'solid-js';
-import { FilterCombobox, FilterSelect, type Option } from './filter-primitives';
 import type { FilterID } from '@app/component/next-soup/filters/configs';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import {
+  soupViewCacheKey,
+  activeSoupViewCounts,
+} from '@app/component/next-soup/soup-view/soup-view-cache-key';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import {
+  NIL_UUID,
+  defineQueryFilters,
+  type Query,
+} from '@app/component/next-soup/filters/filter-store';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  type JSX,
+} from 'solid-js';
+import type {
+  ChannelFilters,
+  EmailFilters,
+} from '@service-storage/generated/schemas';
 
-export const INDEX_OPTIONS: (Option & { queryFilters: SoupBody })[] = [
-  {
-    value: 'channels',
-    label: 'Channels',
-    icon: () => <EntityIcon targetType="channel" size="xs" />,
-    queryFilters: QUERY_FILTERS.channels,
-  },
-  {
-    value: 'document',
-    label: 'Documents',
-    icon: () => <EntityIcon targetType="md" size="xs" />,
-    queryFilters: QUERY_FILTERS.documentAndFile,
-  },
-  {
-    value: 'task',
-    label: 'Tasks',
-    icon: () => <EntityIcon targetType="task" size="xs" />,
-    queryFilters: QUERY_FILTERS.task,
-  },
-  {
-    value: 'email',
-    label: 'Email',
-    icon: () => <EntityIcon targetType="email" size="xs" />,
-    queryFilters: QUERY_FILTERS.email,
-  },
-  {
-    value: 'folders',
-    label: 'Folders',
-    icon: () => <EntityIcon targetType="project" size="xs" />,
-    queryFilters: QUERY_FILTERS.folders,
-  },
-  {
-    value: 'agent',
-    label: 'Agents',
-    icon: () => <EntityIcon targetType="chat" size="xs" />,
-    queryFilters: QUERY_FILTERS.agent,
-  },
-];
+export type SearchableOption = {
+  id: string;
+  label: string;
+  icon?: () => JSX.Element;
+};
 
-const INDEX_SELECT_OPTIONS: Option[] = INDEX_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-  icon: o.icon,
-}));
+/**
+ * Picker for the "In" chip (channels + DMs). Used by channel-message and
+ * call-record search.
+ */
+function useChannelPicker() {
+  const { useList } = useQuickAccess();
+  const channels = useList('channel', 'dm');
 
-export const SearchIndexFilter = () => {
-  const { soup, queryFilters, setQueryFilters } = useSoupView();
+  const options = createMemo((): SearchableOption[] =>
+    channels()
+      .filter((ch) => ch.data.name)
+      .map((ch) => ({
+        id: ch.id,
+        label: ch.data.name,
+        icon: () => (
+          <div class="size-4">
+            <EntityIconWithAvatar
+              entity={ch.data}
+              suppressClick
+              showTooltip={false}
+            />
+          </div>
+        ),
+      }))
+  );
 
-  const activeIndex = createMemo((): Option[] => {
-    const found = INDEX_OPTIONS.find((opt) => soup.filters.isActive(opt.value));
-    return found
-      ? [{ value: found.value, label: found.label, icon: found.icon }]
-      : [];
+  const labelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of options()) map.set(opt.id, opt.label);
+    return map;
   });
 
-  const handleChange = (selected: Option[]) => {
+  return { options, labelMap };
+}
+
+/**
+ * Picker for the "From" chip (people). Used by channel-message sender
+ * filter and call-record speaker filter.
+ */
+function usePersonPicker() {
+  const { useList } = useQuickAccess();
+  const currentUserId = useUserId();
+  const people = useList('person');
+
+  const options = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    let me: SearchableOption | undefined;
+    const others: SearchableOption[] = [];
+    for (const s of people()) {
+      const opt: SearchableOption = {
+        id: s.id,
+        label:
+          s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
+        icon: () => (
+          <UserIcon id={s.id} size="xs" suppressClick showTooltip={false} />
+        ),
+      };
+      if (s.id === uid) me = opt;
+      else others.push(opt);
+    }
+    return [...(me ? [me] : []), ...others];
+  });
+
+  const labelMap = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of options()) map.set(opt.id, opt.label);
+    return map;
+  });
+
+  return { options, labelMap };
+}
+
+/**
+ * Shared options + label maps for the In (channel) and From (person)
+ * search-filter chips. Both are reused across channel-message and
+ * call-record search.
+ */
+export function useSearchFilterOptions() {
+  const channel = useChannelPicker();
+  const person = usePersonPicker();
+
+  return {
+    channelOptions: channel.options,
+    channelLabelMap: channel.labelMap,
+    senderOptions: person.options,
+    senderLabelMap: person.labelMap,
+  };
+}
+
+export type ChannelSubFilters = Pick<
+  ChannelFilters,
+  'channel_ids' | 'sender_ids'
+>;
+export type EmailSubFilters = Pick<EmailFilters, 'importance'>;
+export type CallSubFilters = {
+  channel_ids?: string[];
+  speaker_ids?: string[];
+  attended?: boolean | null;
+};
+
+export function getCachedChannelSubFilters(
+  contentId: string
+): ChannelSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'channel-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function cacheChannelSubFilters(
+  contentId: string,
+  filters: ChannelSubFilters
+) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'channel-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort: quota or security errors should not break filter flow
+  }
+}
+
+export function getCachedEmailSubFilters(contentId: string): EmailSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'email-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function cacheEmailSubFilters(
+  contentId: string,
+  filters: EmailSubFilters
+) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'email-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort
+  }
+}
+
+export function getCachedCallSubFilters(contentId: string): CallSubFilters {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return {};
+  try {
+    const raw = localStorage.getItem(
+      soupViewCacheKey(contentId, 'call-sub-filters')
+    );
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function cacheCallSubFilters(
+  contentId: string,
+  filters: CallSubFilters
+) {
+  if ((activeSoupViewCounts.get(contentId) ?? 0) > 1) return;
+  try {
+    localStorage.setItem(
+      soupViewCacheKey(contentId, 'call-sub-filters'),
+      JSON.stringify(filters)
+    );
+  } catch {
+    // best-effort
+  }
+}
+
+type SearchFilterHookOpts = {
+  contentId: string;
+  isSearchView: Accessor<boolean>;
+};
+
+/** Channel-message search filters (in:, from:). */
+export function useChannelSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.predicates.isActive('channels');
+
+  const channelIds = createMemo(
+    () => queryFilters.state.include.channelId ?? []
+  );
+  const senderIds = createMemo(
+    () => queryFilters.state.include?.channelSenderId ?? []
+  );
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    const sub: ChannelSubFilters = {};
+    if (channelIds().length) sub.channel_ids = channelIds();
+    if (senderIds().length) sub.sender_ids = senderIds();
+    cacheChannelSubFilters(opts.contentId, sub);
+  });
+
+  return {
+    isActive,
+    channelIds,
+    setChannelIds: (ids: string[]) => {
+      if (!isActive()) changeIndex('channels');
+      queryFilters.set({
+        include: {
+          channelId: ids,
+        },
+      });
+    },
+    senderIds,
+    setSenderIds: (ids: string[]) => {
+      if (!isActive()) changeIndex('channels');
+
+      queryFilters.set({
+        include: {
+          channelSenderId: ids,
+        },
+      });
+    },
+  };
+}
+
+/** Email search filters (importance). */
+export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.predicates.isActive('email');
+  const importance = createMemo(
+    () => queryFilters.state.include.emailImportance
+  );
+
+  const setImportance = (val: boolean | undefined) =>
+    batch(() => {
+      if (!isActive()) changeIndex('email');
+      queryFilters.set({
+        include: {
+          emailImportance: val,
+        },
+        exclude: {
+          emailImportance: undefined,
+        },
+      });
+    });
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    cacheEmailSubFilters(opts.contentId, { importance: importance() ?? null });
+  });
+
+  return { isActive, importance, setImportance };
+}
+
+type CallFieldMap = {
+  callChannelId: string[] | undefined;
+  callSpeakerId: string[] | undefined;
+  callAttended: boolean | undefined;
+};
+
+/** Call-record search filters (in:, from:, attended). */
+export function useCallSearchFilter(opts: SearchFilterHookOpts) {
+  const { soup, queryFilters } = useSoupView();
+  const { changeIndex } = useSearchIndexController();
+
+  const isActive = () => soup.predicates.isActive('calls');
+  const mutate = <K extends keyof CallFieldMap>(
+    field: K,
+    value: CallFieldMap[K]
+  ) =>
+    batch(() => {
+      if (!isActive()) changeIndex('calls');
+      queryFilters.set({
+        include: {
+          [field]: value,
+        },
+      });
+    });
+
+  const channelIds = createMemo(
+    () => queryFilters.state.include.callChannelId ?? []
+  );
+  const speakerIds = createMemo(
+    () => queryFilters.state.include.callSpeakerId ?? []
+  );
+  const attended = createMemo(() => queryFilters.state.include.callAttended);
+
+  createEffect(() => {
+    if (!opts.isSearchView() || !isActive()) return;
+    const sub: CallSubFilters = {};
+    if (channelIds().length) sub.channel_ids = channelIds();
+    if (speakerIds().length) sub.speaker_ids = speakerIds();
+    if (attended() !== undefined && attended() !== null)
+      sub.attended = attended();
+    cacheCallSubFilters(opts.contentId, sub);
+  });
+
+  return {
+    isActive,
+    channelIds,
+    setChannelIds: (ids: string[]) =>
+      mutate('callChannelId', ids.length ? ids : undefined),
+    speakerIds,
+    setSpeakerIds: (ids: string[]) =>
+      mutate('callSpeakerId', ids.length ? ids : undefined),
+    attended,
+    setAttended: (val: boolean | undefined) => mutate('callAttended', val),
+  };
+}
+
+export function useSearchIndexController() {
+  const { soup, queryFilters } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const contentId = panel.handle.content().id;
+
+  const changeIndex = (newValue: string) => {
     batch(() => {
       for (const opt of INDEX_OPTIONS) {
-        if (soup.filters.isActive(opt.value)) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
+        if (soup.predicates.isActive(opt.value)) {
+          soup.predicates.toggle({ or: [opt.value as FilterID] });
         }
       }
 
-      const prevChannelFilters = queryFilters().channel_filters;
-      const channelSubFilters = {
-        channel_ids: prevChannelFilters?.channel_ids,
-        sender_ids: prevChannelFilters?.sender_ids,
-      };
+      if (newValue === 'all') {
+        cacheChannelSubFilters(contentId, {});
+        queryFilters.replace({ include: { emailImportance: true } });
+        return;
+      }
 
-      if (selected.length > 0) {
-        const opt = INDEX_OPTIONS.find((o) => o.value === selected[0].value);
-        if (opt) {
-          soup.filters.toggle({ or: [opt.value as FilterID] });
-          setQueryFilters({
-            ...opt.queryFilters,
-            channel_filters: {
-              ...opt.queryFilters.channel_filters,
-              ...channelSubFilters,
-            },
-          });
-        }
-      } else {
-        setQueryFilters({
-          ...QUERY_FILTERS.default,
-          channel_filters: {
-            ...channelSubFilters,
+      const opt = INDEX_OPTIONS.find((o) => o.value === newValue);
+      if (!opt) return;
+      soup.predicates.toggle({ or: [opt.value as FilterID] });
+
+      if (opt.value === 'channels') {
+        const cached = getCachedChannelSubFilters(contentId);
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            channelId: cached.channel_ids,
+            channelSenderId: cached.sender_ids,
           },
+          exclude: opt.queryFilters.exclude,
+        });
+      } else if (opt.value === 'email') {
+        const cached = getCachedEmailSubFilters(contentId);
+        const importance =
+          'importance' in cached
+            ? (cached.importance ?? undefined)
+            : opt.queryFilters.include?.emailImportance;
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            emailImportance: importance,
+          },
+          exclude: opt.queryFilters.exclude,
+        });
+      } else if (opt.value === 'calls') {
+        const cached = getCachedCallSubFilters(contentId);
+        const attended =
+          'attended' in cached
+            ? (cached.attended ?? undefined)
+            : opt.queryFilters.include?.callAttended;
+
+        queryFilters.replace({
+          include: {
+            ...opt.queryFilters.include,
+            callChannelId: cached.channel_ids,
+            callSpeakerId: cached.speaker_ids,
+            callAttended: attended,
+          },
+          exclude: opt.queryFilters.exclude,
+        });
+      } else {
+        queryFilters.replace({
+          include: opt.queryFilters.include,
+          exclude: opt.queryFilters.exclude,
         });
       }
     });
   };
 
-  const indexLabel = createMemo(() => {
-    const active = activeIndex();
-    return active.length > 0 ? active[0].label : 'All';
-  });
+  return { changeIndex };
+}
 
-  const isChannelsActive = () =>
-    activeIndex().some((o) => o.value === 'channels');
-
-  return (
-    <div class="flex items-center gap-1.5">
-      <FilterSelect
-        label={indexLabel()}
-        options={INDEX_SELECT_OPTIONS}
-        active={activeIndex()}
-        onChange={handleChange}
-        multiple={false}
-      />
-      <Show when={isChannelsActive()}>
-        <InChannelFilter />
-        <FromSenderFilter />
-      </Show>
-    </div>
-  );
-};
-
-const InChannelFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
-  const { useList } = useQuickAccess();
-  const channels = useList('channel', 'dm');
-
-  const channelOptions = createMemo((): Option[] =>
-    channels()
-      .filter((ch) => ch.data.name)
-      .map((ch) => ({
-        value: ch.id,
-        label: ch.data.name,
-        icon: () => (
-          <EntityIcon targetType={ch.data.channelType || 'channel'} size="xs" />
-        ),
-      }))
-  );
-
-  const activeChannelFilter = createMemo((): Option[] => {
-    const ids = queryFilters().channel_filters?.channel_ids;
-    if (!ids?.length) return [];
-    return channelOptions().filter((opt) => ids.includes(opt.value));
-  });
-
-  const inLabel = createMemo(() => {
-    const active = activeChannelFilter();
-    if (active.length === 0) return 'In';
-    if (active.length === 1) return `In: ${active[0].label}`;
-    return `In: ${active.length} channels`;
-  });
-
-  const handleChange = (selected: Option[]) => {
-    const ids = selected.map((opt) => opt.value);
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        channel_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-  };
-
-  return (
-    <div class="flex items-stretch">
-      <FilterCombobox
-        label={inLabel()}
-        options={channelOptions()}
-        active={activeChannelFilter()}
-        onChange={handleChange}
-        placeholder="Search channels..."
-        virtualized
-      />
-      <Show when={activeChannelFilter().length > 0}>
-        <button
-          type="button"
-          class="flex items-center ml-[-1px] px-1 border border-accent/30 bg-accent/15 text-accent rounded-r-xs hover:bg-accent/25"
-          onClick={() => handleChange([])}
-        >
-          <XIcon class="size-3" />
-        </button>
-      </Show>
-    </div>
-  );
-};
-
-const FromSenderFilter = () => {
-  const { setQueryFilters, queryFilters } = useSoupView();
-  const { useList } = useQuickAccess();
-  const contacts = useList('person');
-  const userId = useUserId();
-
-  const senderOptions = createMemo((): Option[] => {
-    const currentUserId = userId();
-    let me: Option | undefined;
-    const others: Option[] = [];
-    for (const c of contacts()) {
-      const opt: Option = {
-        value: c.id,
-        label:
-          c.id === currentUserId
-            ? `${c.data.name || 'Me'} (me)`
-            : c.data.name || c.id,
-        icon: () => (
-          <UserIcon id={c.id} size="xs" suppressClick showTooltip={false} />
-        ),
-      };
-      if (c.id === currentUserId) {
-        me = opt;
-      } else {
-        others.push(opt);
-      }
-    }
-    return [...(me ? [me] : []), ...others];
-  });
-
-  const activeSenderFilter = createMemo((): Option[] => {
-    const ids = queryFilters().channel_filters?.sender_ids;
-    if (!ids?.length) return [];
-    return senderOptions().filter((opt) => ids.includes(opt.value));
-  });
-
-  const fromLabel = createMemo(() => {
-    const active = activeSenderFilter();
-    if (active.length === 0) return 'From';
-    if (active.length === 1) return `From: ${active[0].label}`;
-    return `From: ${active.length} people`;
-  });
-
-  const handleChange = (selected: Option[]) => {
-    const ids = selected.map((opt) => opt.value);
-    setQueryFilters((prev) => ({
-      ...prev,
-      channel_filters: {
-        ...prev.channel_filters,
-        sender_ids: ids.length > 0 ? ids : undefined,
-      },
-    }));
-  };
-
-  return (
-    <div class="flex items-stretch">
-      <FilterCombobox
-        label={fromLabel()}
-        options={senderOptions()}
-        active={activeSenderFilter()}
-        onChange={handleChange}
-        placeholder="Search senders..."
-        virtualized
-      />
-      <Show when={activeSenderFilter().length > 0}>
-        <button
-          type="button"
-          class="flex items-center ml-[-1px] px-1 border border-accent/30 bg-accent/15 text-accent rounded-r-xs hover:bg-accent/25"
-          onClick={() => handleChange([])}
-        >
-          <XIcon class="size-3" />
-        </button>
-      </Show>
-    </div>
-  );
-};
+export const INDEX_OPTIONS: {
+  label: string;
+  value: string;
+  icon: () => JSX.Element;
+  queryFilters: Query;
+}[] = [
+  {
+    value: 'channels',
+    label: 'Channels',
+    icon: () => (
+      <EntityIcon targetType="channel" size="xs" theme="monochrome" />
+    ),
+    queryFilters: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
+  },
+  {
+    value: 'document-or-file',
+    label: 'Documents',
+    icon: () => <EntityIcon targetType="md" size="xs" theme="monochrome" />,
+    queryFilters: defineQueryFilters({ exclude: { subType: ['task'] } }),
+  },
+  {
+    value: 'task',
+    label: 'Tasks',
+    icon: () => <EntityIcon targetType="task" size="xs" theme="monochrome" />,
+    queryFilters: defineQueryFilters({ include: { subType: ['task'] } }),
+  },
+  {
+    value: 'email',
+    label: 'Email',
+    icon: () => <EntityIcon targetType="email" size="xs" theme="monochrome" />,
+    queryFilters: defineQueryFilters({
+      include: { emailImportance: true },
+    }),
+  },
+  {
+    value: 'calls',
+    label: 'Calls',
+    icon: () => <EntityIcon targetType="call" size="xs" theme="monochrome" />,
+    queryFilters: defineQueryFilters({}, { skipTargets: ['callf'] }),
+  },
+  {
+    value: 'folders',
+    label: 'Folders',
+    icon: () => (
+      <EntityIcon targetType="project" size="xs" theme="monochrome" />
+    ),
+    queryFilters: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
+  },
+  {
+    value: 'agent',
+    label: 'Agents',
+    icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
+    queryFilters: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
+  },
+];

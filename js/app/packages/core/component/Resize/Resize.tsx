@@ -94,6 +94,10 @@ function Zone(props: ParentProps<ZoneProps>) {
     solver.dropPanel(id);
   }
 
+  function update(id: PanelId, config: { minSize?: number; maxSize?: number }) {
+    solver.updatePanel(id, config);
+  }
+
   const layouts = createMemo(() => {
     const solve = solver.solve();
     return solver.order().map((id) => ({
@@ -117,6 +121,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     direction,
     register,
     unregister,
+    update,
     gutterSize: gutterPx,
     size: zoneSize,
     offsetOf,
@@ -178,7 +183,7 @@ function Zone(props: ParentProps<ZoneProps>) {
  * @property hidden - Accessor that returns whether the panel should be hidden (temporarily
  *     removed from layout but still registered). When hidden, other panels flow around it.
  * @property persistent - When true, panel stays registered even when hidden (for singleton panels
- *     like settings/rightbar). When false or undefined, hidden panels unregister (default behavior).
+ *     like settings). When false or undefined, hidden panels unregister (default behavior).
  */
 type PanelProps = {
   id: PanelId;
@@ -231,6 +236,13 @@ function Panel(props: ParentProps<PanelProps>) {
       },
       props.index
     );
+  });
+
+  createEffect(() => {
+    ctx.update(props.id, {
+      minSize: props.minSize,
+      maxSize: props.maxSize ?? Infinity,
+    });
   });
 
   createEffect(() => {

@@ -1,10 +1,10 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, MessagePageDirection, ParticipantRole,
+    ChannelAttachment, ChannelMessage, ChannelMessageFilters, ChannelParticipant,
+    MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
-    ChannelMessagesService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMessagesService,
 };
 use axum::{
     Extension, Router,
@@ -18,6 +18,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use http_body_util::BodyExt;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model_user::UserContext;
@@ -171,6 +172,8 @@ impl ChannelMessagesService for MockService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -187,6 +190,7 @@ impl ChannelMessagesService for MockService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -207,12 +211,15 @@ impl ChannelMessagesService for MockService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_thread_replies(
@@ -233,6 +240,8 @@ impl ChannelMessagesService for ErrorService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -242,6 +251,7 @@ impl ChannelMessagesService for ErrorService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -258,7 +268,7 @@ impl ChannelMessagesService for ErrorService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
 
@@ -280,6 +290,8 @@ impl ChannelMessagesService for ParticipantsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -296,6 +308,7 @@ impl ChannelMessagesService for ParticipantsService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -331,12 +344,15 @@ impl ChannelMessagesService for ParticipantsService {
         _channel_id: Uuid,
         _message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_thread_replies(
@@ -578,6 +594,8 @@ impl ChannelMessagesService for NotFoundService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -594,6 +612,7 @@ impl ChannelMessagesService for NotFoundService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -614,7 +633,7 @@ impl ChannelMessagesService for NotFoundService {
         _channel_id: Uuid,
         message_id: Uuid,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::MessageNotFound(message_id))
     }
 
@@ -627,7 +646,9 @@ impl ChannelMessagesService for NotFoundService {
     }
 }
 
-struct AroundHasItemsService;
+struct AroundHasItemsService {
+    has_more_newer: bool,
+}
 
 impl ChannelMessagesService for AroundHasItemsService {
     async fn get_channel_messages(
@@ -636,6 +657,8 @@ impl ChannelMessagesService for AroundHasItemsService {
         _query: Query<Uuid, CreatedAt, ()>,
         _direction: MessagePageDirection,
         _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Ok(ChannelMessagesQueryResult {
             page: Vec::<ChannelMessage>::new()
@@ -652,6 +675,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
         Ok(Vec::<ChannelAttachment>::new()
             .into_iter()
@@ -672,7 +696,7 @@ impl ChannelMessagesService for AroundHasItemsService {
         channel_id: Uuid,
         _message_id: Uuid,
         limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let now = chrono::Utc::now();
         let message = ChannelMessage {
             id: Uuid::new_v4(),
@@ -692,11 +716,14 @@ impl ChannelMessagesService for AroundHasItemsService {
             attachments: vec![],
         };
 
-        Ok(vec![message]
-            .into_iter()
-            .paginate_on(usize::from(limit), CreatedAt)
-            .filter_on(())
-            .into_page())
+        Ok(ChannelMessagesQueryResult {
+            page: vec![message]
+                .into_iter()
+                .paginate_on(usize::from(limit), CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: self.has_more_newer,
+        })
     }
 
     async fn get_thread_replies(
@@ -730,9 +757,38 @@ async fn messages_around_returns_empty_page() {
 }
 
 #[tokio::test]
-async fn messages_around_returns_previous_cursor_when_items_present() {
+async fn messages_around_omits_previous_cursor_when_no_newer_page() {
     let router = channels_router(ChannelsRouterState::new(
-        AroundHasItemsService,
+        AroundHasItemsService {
+            has_more_newer: false,
+        },
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?load_around_message_id={message_id}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+    assert!(json["previous_cursor"].is_null());
+}
+
+#[tokio::test]
+async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
+    let router = channels_router(ChannelsRouterState::new(
+        AroundHasItemsService {
+            has_more_newer: true,
+        },
         TestAccessService::allow(),
     ))
     .layer(user_extension());
@@ -776,6 +832,246 @@ async fn messages_around_returns_404_when_not_found() {
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["message"], "Message not found");
+}
+
+// --- POST /messages filter tests ---
+
+struct CapturingService {
+    captured: std::sync::Mutex<Option<ChannelMessageFilters>>,
+    captured_notification_user_id: std::sync::Mutex<Option<MacroUserIdStr<'static>>>,
+}
+
+impl CapturingService {
+    fn new() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
+            captured: std::sync::Mutex::new(None),
+            captured_notification_user_id: std::sync::Mutex::new(None),
+        })
+    }
+}
+
+impl ChannelMessagesService for std::sync::Arc<CapturingService> {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        filters: &ChannelMessageFilters,
+        notification_user_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        *self.captured.lock().unwrap() = Some(filters.clone());
+        *self.captured_notification_user_id.lock().unwrap() =
+            notification_user_id.map(CowLike::into_owned);
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<crate::domain::models::ChannelAttachmentType>,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::ThreadReply>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+}
+
+#[tokio::test]
+async fn post_messages_empty_body_uses_default_filters() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert!(captured.message_ids.is_empty());
+    assert!(captured.last_activity.is_none());
+    assert!(captured.notification_filters.is_empty());
+    assert!(svc.captured_notification_user_id.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn post_messages_forwards_message_ids_filter() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let id_a = Uuid::new_v4();
+    let id_b = Uuid::new_v4();
+    let body = serde_json::json!({ "message_ids": [id_a, id_b] }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert_eq!(captured.message_ids, vec![id_a, id_b]);
+}
+
+#[tokio::test]
+async fn post_messages_forwards_last_activity_filter() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let body = serde_json::json!({ "last_activity": "2024-06-01T12:00:00Z" }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert!(captured.last_activity.is_some());
+    let ts = captured.last_activity.unwrap();
+    assert_eq!(
+        ts,
+        chrono::DateTime::parse_from_rfc3339("2024-06-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    );
+}
+
+#[tokio::test]
+async fn post_messages_forwards_notification_filter_for_authenticated_user() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let body = serde_json::json!({
+        "notification_filters": {
+            "done": false,
+            "seen": true
+        }
+    })
+    .to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert_eq!(captured.notification_filters.done, Some(false));
+    assert_eq!(captured.notification_filters.seen, Some(true));
+    let captured_user_id = svc
+        .captured_notification_user_id
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(ToString::to_string);
+    assert_eq!(captured_user_id.as_deref(), Some("macro|test@example.com"));
+}
+
+#[tokio::test]
+async fn post_messages_rejects_oversized_filter_list() {
+    let router = channels_router(ChannelsRouterState::new(
+        MockService,
+        TestAccessService::allow(),
+    ))
+    .layer(user_extension());
+
+    let channel_id = Uuid::new_v4();
+    let ids: Vec<Uuid> = (0..101).map(|_| Uuid::new_v4()).collect();
+    let body = serde_json::json!({ "message_ids": ids }).to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/{channel_id}/messages"))
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["message"], "too many message_ids");
 }
 
 #[tokio::test]

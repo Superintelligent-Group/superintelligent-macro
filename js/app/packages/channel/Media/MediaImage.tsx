@@ -1,5 +1,6 @@
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui/utils/classname';
+import { internalDrag } from '@core/directive/internalDragState';
 import {
   type ParentProps,
   type JSX,
@@ -8,6 +9,7 @@ import {
   createSignal,
   on,
 } from 'solid-js';
+false && internalDrag;
 const ATTACHMENT_TILE_SIZE = 92;
 
 function ImagePlaceholder(props: {
@@ -106,6 +108,7 @@ function Image(props: {
         loading={props.loading}
         onClick={() => props.onOpen?.()}
         onLoad={() => setLoaded(true)}
+        use:internalDrag={true}
       />
     </>
   );

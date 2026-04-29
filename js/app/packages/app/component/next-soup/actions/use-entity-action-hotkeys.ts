@@ -6,6 +6,7 @@ import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,
   makeCopyBranchNameAction,
+  makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -27,10 +28,12 @@ import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { onCleanup } from 'solid-js';
 import { isListViewID } from '@app/constants/list-views';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
+  activeSoupViewTab?: () => string | undefined;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
   /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
@@ -65,6 +68,8 @@ export const useEntityActionHotkeys = (
   const copyLinkAction = makeCopyLinkAction();
 
   const copyBranchNameAction = makeCopyBranchNameAction();
+
+  const copyEntityIdAction = makeCopyEntityIdAction();
 
   const shareAction = makeShareAction();
 
@@ -132,6 +137,17 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
+
+      const contentId = splitHandle?.content().id;
+
+      const soupViewTab = options.activeSoupViewTab?.();
+
+      if (
+        !isListViewID(contentId) ||
+        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
+      )
+        return false;
+
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markDone.canExecute);
     },
@@ -285,6 +301,29 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       return (
         entities.length === 1 && copyBranchNameAction.canExecute(entities[0])
+      );
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Copy entity id (command menu only, no keybinding)
+  registerHotkey({
+    hotkeyToken: TOKENS.entity.action.copyEntityId,
+    scopeId,
+    description: 'Copy ID',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!copyEntityIdAction.canExecute(entities[0])) return false;
+      copyEntityIdAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length === 1 && copyEntityIdAction.canExecute(entities[0])
       );
     },
     displayPriority: 10,

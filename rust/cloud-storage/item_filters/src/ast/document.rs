@@ -1,4 +1,7 @@
-use crate::{DocumentFilters, ast::ExpandErr};
+use crate::{
+    DocumentFilters,
+    ast::{ExpandErr, date::DateLiteral},
+};
 use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
@@ -8,8 +11,10 @@ use model_file_type::{
     Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
 };
 use nom::{
-    IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof, sequence::separated_pair,
+    Finish, IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof,
+    sequence::separated_pair,
 };
+use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
@@ -48,6 +53,12 @@ pub enum DocumentLiteral {
     /// this node value filters by email attachment status
     #[serde(rename = "iea")]
     IsEmailAttachment(bool),
+    /// this node value filters by document createdAt timestamp
+    #[serde(rename = "ca")]
+    CreatedAt(DateLiteral),
+    /// this node value filters by document updatedAt timestamp
+    #[serde(rename = "ua")]
+    UpdatedAt(DateLiteral),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -111,7 +122,7 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
         .parse(s)
 }
 
-fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
+fn parse_to_file_types_inner(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     let (rest, (_, out)) = separated_pair(
         prefix,
         tag(":"),
@@ -126,6 +137,13 @@ fn format(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
     Ok((rest, out))
 }
 
+/// given an input str which is assumed to be a "assoc:SOME_ASSOC" string, return an iter over the file types
+pub fn parse_to_file_types(s: &str) -> Result<(&str, impl Iterator<Item = FileType>), Report> {
+    Ok(parse_to_file_types_inner(s)
+        .finish()
+        .map_err(|e| e.cloned())?)
+}
+
 /// Resolve a file type string to concrete [FileType] variants.
 /// Handles both plain extensions (e.g. `"md"`, `"pdf"`) and `assoc:*` prefixes
 /// (e.g. `"assoc:code"`, `"assoc:other"`). Returns an empty vec if the string
@@ -134,7 +152,7 @@ pub fn resolve_file_types(s: &str) -> Vec<FileType> {
     if let Ok(ft) = FileType::from_str(s) {
         return vec![ft];
     }
-    match format(s) {
+    match parse_to_file_types(s) {
         Ok((_, iter)) => iter.collect(),
         Err(_) => vec![],
     }
@@ -144,7 +162,7 @@ fn create_file_iter(s: &str) -> impl Iterator<Item = Result<FileType, ValueError
     match FileType::from_str(s) {
         Ok(f) => Either::Left(Some(Ok(f)).into_iter()),
         Err(e) => {
-            let Ok((_, file_types)) = format(s) else {
+            let Ok((_, file_types)) = parse_to_file_types(s) else {
                 return Either::Left(Some(Err(e)).into_iter());
             };
             Either::Right(file_types.map(Result::Ok))

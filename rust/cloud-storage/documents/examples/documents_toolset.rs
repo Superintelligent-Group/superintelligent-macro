@@ -48,12 +48,11 @@ impl ConnectionService for NoOpConnectionService {
         Ok(())
     }
 
-    async fn send_channel_message(
+    async fn send_channel_message<'a>(
         &self,
-        _channel_id: &str,
+        _users: &[MacroUserIdStr<'a>],
         _message_type: &str,
         _message: serde_json::Value,
-        _triggered_by: connection::domain::models::EntityAccessAuth,
     ) -> Result<(), connection::domain::models::ConnectionError> {
         Ok(())
     }
@@ -79,6 +78,49 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// No-op entity access management service (not needed for toolset example).
+#[derive(Clone)]
+struct NoOpEntityAccessManagementService;
+
+impl entity_access_management::domain::ports::EntityAccessManagementService
+    for NoOpEntityAccessManagementService
+{
+    async fn add_entity_to_project(
+        &self,
+        _entity_id: &uuid::Uuid,
+        _entity_type: model_entity::EntityType,
+        _project_id: &uuid::Uuid,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        Ok(())
+    }
+
+    async fn remove_entity_from_project(
+        &self,
+        _entity_id: &uuid::Uuid,
+        _entity_type: model_entity::EntityType,
+        _old_project_id: &uuid::Uuid,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        Ok(())
+    }
+
+    async fn move_project(
+        &self,
+        _project_id: &uuid::Uuid,
+        _old_project_id: Option<&uuid::Uuid>,
+        _new_project_id: Option<&uuid::Uuid>,
+    ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
         Ok(())
     }
 }
@@ -146,6 +188,7 @@ async fn main() {
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        NoOpEntityAccessManagementService,
     );
 
     let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url);

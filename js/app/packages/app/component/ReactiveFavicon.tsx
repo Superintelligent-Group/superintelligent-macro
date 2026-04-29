@@ -1,7 +1,7 @@
 import { updateFavicon } from '@app/util/favicon';
 import { createBroadcastChannel } from '@solid-primitives/broadcast-channel';
 import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
-import { useReactiveColorString } from '../../block-theme/signals/themeReactive';
+import { useReactiveColorString } from '../../theme/signals/themeReactive';
 import { useGlobalNotificationSource } from './GlobalAppState';
 
 type BadgeMessage = { hasBadge: boolean };
@@ -13,7 +13,7 @@ export function ReactiveFavicon() {
   const globalNotifications = useGlobalNotificationSource();
 
   const accentColor = useReactiveColorString('a0');
-  const badgeColor = useReactiveColorString('a1');
+  const badgeColor = useReactiveColorString('a0');
 
   // Create broadcast channel for badge state sync across tabs
   const { message: badgeMessage, postMessage: postBadgeMessage } =

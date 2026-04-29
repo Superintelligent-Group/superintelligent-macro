@@ -182,12 +182,40 @@ impl DocumentService for StubDocumentService {
         Ok(())
     }
 
+    async fn copy_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: DocumentBasic,
+        _user_id: MacroUserIdStr<'static>,
+        _document_name: String,
+        _query_version_id: Option<i64>,
+        _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+    ) -> Result<model::document::response::DocumentResponse, DocumentError> {
+        unimplemented!()
+    }
+
     async fn create_task(
         &self,
         _user_id: MacroUserIdStr<'static>,
         _plain_user_id: String,
         _request: documents::domain::models::CreateTaskRequest,
     ) -> Result<documents::domain::models::CreateTaskResponse, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn get_document_comments(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _document_id: &str,
+        _request: &documents::domain::models::CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
         unimplemented!()
     }
 }

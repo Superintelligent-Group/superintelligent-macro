@@ -5,8 +5,12 @@ import {
   type ApiThreadReply,
   type ChannelMessagesPage,
 } from '@service-comms/client';
-import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import { type Accessor, createRenderEffect, createSignal, on } from 'solid-js';
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/solid-query';
+import { type Accessor, createEffect, on } from 'solid-js';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { queryClient } from '../client';
@@ -102,6 +106,31 @@ export function useChannelMessagesQuery(
   );
 }
 
+export function useChannelMessagesByIdsQuery(
+  channelId: Accessor<string>,
+  messageIds: Accessor<string[]>
+) {
+  return useQuery(() => {
+    const resolvedChannelId = channelId();
+    const resolvedMessageIds = messageIds();
+    return {
+      queryKey: channelKeys.messagesByIds(resolvedChannelId, resolvedMessageIds)
+        .queryKey,
+      queryFn: async (): Promise<ApiChannelMessage[]> => {
+        const page = await throwOnErr(() =>
+          commsServiceClient.postChannelMessages({
+            channel_id: resolvedChannelId,
+            filters: { message_ids: resolvedMessageIds },
+          })
+        );
+        return page.items;
+      },
+      enabled: resolvedMessageIds.length > 0,
+      staleTime: Infinity,
+    };
+  });
+}
+
 /** Returns the cache key for one channel message query variant. */
 export function getChannelMessagesQueryKey(
   channelId: string,
@@ -189,6 +218,20 @@ export function insertTopLevelMessageIntoChannelMessages(
   }
 
   const [newestPage, ...olderPages] = data.pages;
+
+  console.debug(
+    '[channel-messages.insertTopLevelMessageIntoChannelMessages]',
+    ` previous_cursor: ${newestPage.previous_cursor}`
+  );
+
+  // Only insert into cache entries that represent the bottom of the
+  // conversation. If the newest page has a previous_cursor, we're viewing
+  // a mid-conversation slice (e.g. load-around) and prepending here would
+  // place the message in the wrong position — and cause duplicates when
+  // fetchPreviousPage later fetches the same message from the server.
+  if (newestPage.previous_cursor) {
+    return data;
+  }
 
   return {
     ...data,
@@ -562,6 +605,93 @@ export function softInvalidateChannelMessages(channelId: string) {
   });
 }
 
+/** Returns the shared prefix for all by-ids message queries in a channel. */
+export function getChannelMessagesByIdsQueryKeyPrefix(channelId: string) {
+  return [...channelKeys.messagesByIds._def, channelId];
+}
+
+/** Applies one updater to every cached by-ids message variant for a channel. */
+export function setChannelMessagesByIdsData(
+  channelId: string,
+  updater: (
+    data: ApiChannelMessage[] | undefined
+  ) => ApiChannelMessage[] | undefined
+) {
+  queryClient.setQueriesData<ApiChannelMessage[]>(
+    { queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId) },
+    updater
+  );
+}
+
+function mapChannelMessagesByIdsItems(
+  data: ApiChannelMessage[],
+  updater: (message: ApiChannelMessage) => ApiChannelMessage
+): ApiChannelMessage[] {
+  let didChange = false;
+  const next = data.map((message) => {
+    const nextMessage = updater(message);
+    if (nextMessage !== message) didChange = true;
+    return nextMessage;
+  });
+  return didChange ? next : data;
+}
+
+export function replaceTopLevelMessageReactionsInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  reactions: ApiCountedReaction[]
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId ? { ...message, reactions } : message
+  );
+}
+
+export function replaceTopLevelMessageAttachmentsInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  attachments: ApiMessageAttachment[]
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId ? { ...message, attachments } : message
+  );
+}
+
+export function replaceTopLevelMessageStateInChannelMessagesByIds(
+  data: ApiChannelMessage[] | undefined,
+  messageId: string,
+  nextState: {
+    content: string;
+    editedAt: string | null | undefined;
+    updatedAt: string;
+    attachments: ApiMessageAttachment[];
+  }
+): ApiChannelMessage[] | undefined {
+  if (!data) return data;
+  return mapChannelMessagesByIdsItems(data, (message) =>
+    message.id === messageId
+      ? {
+          ...message,
+          content: nextState.content,
+          edited_at: nextState.editedAt ?? undefined,
+          updated_at: nextState.updatedAt,
+          attachments: nextState.attachments,
+        }
+      : message
+  );
+}
+
+/**
+ * Marks the by-ids message queries as stale without triggering an immediate refetch.
+ */
+export function softInvalidateChannelMessagesByIds(channelId: string) {
+  queryClient.invalidateQueries({
+    queryKey: getChannelMessagesByIdsQueryKeyPrefix(channelId),
+    refetchType: 'inactive',
+  });
+}
+
 /**
  * Build a single oldest-first message index for display and lookup.
  * Pages arrive newest-first, items within each page are newest-first,
@@ -570,48 +700,36 @@ export function softInvalidateChannelMessages(channelId: string) {
 export function createMessageIndex(
   data: Accessor<ChannelMessagesData | undefined>
 ) {
-  const byId = new Map<string, ApiChannelMessage>();
-  let items: ApiChannelMessage[] = [];
+  const buildIndex = () => {
+    const data_ = data();
 
-  const [listen, notify] = createSignal(undefined, { equals: false });
+    const pages = data_?.pages;
 
-  const [messageIndex, setMessageIndex] = createStore<string[]>([]);
+    const items: ApiChannelMessage[] = [];
+    const keys: string[] = [];
+    const byId = new Map<string, ApiChannelMessage>();
 
-  createRenderEffect(
-    on(data, (data) => {
-      byId.clear();
-      items = [];
+    if (!pages?.length) return { items, keys, byId };
 
-      const pages = data?.pages;
-
-      const keys: string[] = [];
-
-      if (pages?.length) {
-        for (let i = pages.length - 1; i >= 0; i--) {
-          const pageItems = pages[i].items;
-          for (let j = pageItems.length - 1; j >= 0; j--) {
-            const message = pageItems[j];
-            items.push(message);
-            keys.push(message.id);
-            byId.set(message.id, message);
-          }
-        }
+    const seen = new Set<string>();
+    for (let i = pages.length - 1; i >= 0; i--) {
+      const pageItems = pages[i].items;
+      for (let j = pageItems.length - 1; j >= 0; j--) {
+        const message = pageItems[j];
+        if (seen.has(message.id)) continue;
+        seen.add(message.id);
+        items.push(message);
+        keys.push(message.id);
+        byId.set(message.id, message);
       }
+    }
 
-      notify();
-      setMessageIndex(reconcile(keys));
-    })
-  );
-
-  return {
-    keys: () => messageIndex,
-    byId: () => {
-      listen();
-      return byId;
-    },
-    items: () => {
-      listen();
-      return items;
-    },
+    return { items, keys, byId };
   };
+
+  const [messageIndex, setMessageIndex] = createStore(buildIndex());
+
+  createEffect(on(data, () => setMessageIndex(reconcile(buildIndex()))));
+
+  return messageIndex;
 }

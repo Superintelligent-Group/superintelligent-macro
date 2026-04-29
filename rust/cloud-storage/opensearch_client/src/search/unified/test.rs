@@ -407,11 +407,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchEntityType::Documents,
-            SearchEntityType::Emails,
-            SearchEntityType::Projects,
-            SearchEntityType::Channels,
-            SearchEntityType::Chats,
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+            OpenSearchEntityType::Channels,
+            OpenSearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -450,6 +449,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,
@@ -464,12 +464,16 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       },
       "highlight": {
         "fields": {
-          "content": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          }
+          "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "recipients": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "recipient_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "cc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "cc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
         "require_field_match": true
       },
@@ -648,8 +652,17 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       "minimum_should_match": 1,
                       "should": [
                         {
-                          "match_phrase": {
-                            "content": "test"
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                            "query": "(test | test@*)"
+                          }
+                        },
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
+                            "query": "test*"
                           }
                         }
                       ]
@@ -780,11 +793,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchEntityType::Documents,
-            SearchEntityType::Emails,
-            SearchEntityType::Projects,
-            SearchEntityType::Channels,
-            SearchEntityType::Chats,
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+            OpenSearchEntityType::Channels,
+            OpenSearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -823,6 +835,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
         },
+        call_record_search_args: UnifiedCallRecordSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor {
             entity_id,
             updated_at: time,
@@ -839,7 +852,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
-        search_indices: vec![SearchEntityType::Documents].into_iter().collect(),
+        search_indices: vec![OpenSearchEntityType::Documents].into_iter().collect(),
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -863,12 +876,16 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       },
       "highlight": {
         "fields": {
-          "content": {
-            "number_of_fragments": 1,
-            "post_tags": ["</macro_em>"],
-            "pre_tags": ["<macro_em>"],
-            "type": "plain"
-          }
+          "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "recipients": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "recipient_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "cc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "cc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "bcc": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "bcc_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" }
         },
         "require_field_match": true
       },

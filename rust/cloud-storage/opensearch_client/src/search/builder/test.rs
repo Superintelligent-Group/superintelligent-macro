@@ -5,9 +5,9 @@ use opensearch_query_builder::ToOpenSearchJson;
 struct TestSearchConfig;
 
 impl SearchQueryConfig for TestSearchConfig {
-    const USER_ID_KEY: &'static str = "test_user_id";
+    const USER_ID_KEY: Option<&'static str> = Some("test_user_id");
     const TITLE_KEY: &'static str = "test_title";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Documents;
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn test_build_contentquery_empty_ids() -> anyhow::Result<()> {
     let error = builder.build_content_bool_query().err().unwrap();
 
     assert_eq!(
-        OpensearchClientError::EmptyIdsWithIdsOnly(SearchEntityType::Documents),
+        OpensearchClientError::EmptyIdsWithIdsOnly(OpenSearchEntityType::Documents),
         error
     );
 

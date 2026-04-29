@@ -1,11 +1,11 @@
 pub mod date_format;
 pub mod delete;
 pub mod error;
-pub mod name;
 pub mod search;
 pub mod unified;
 pub mod upsert;
 
+pub mod call_record;
 pub mod channel_message;
 pub mod chat;
 pub mod document;

@@ -12,6 +12,7 @@ import {
   useUserId,
   useUserInfo,
 } from '@core/context/user';
+import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -37,6 +38,7 @@ import {
 import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { MutationUndoProvider } from '@queries/undo';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -61,21 +63,21 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
   systemThemeEffect,
-} from '../../block-theme/utils/themeUtils';
+} from '../../theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { Login } from './auth/Login';
 import { Signup } from './auth/Signup';
+import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
-import MacroJump from './MacroJump';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { lazy } from 'solid-js';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
@@ -83,13 +85,13 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 const InteractiveOnboarding = lazy(
   () => import('./interactive-onboarding/InteractiveOnboarding')
 );
-import Visor from './Visor';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { CallProvider } from '@channel/Call/CallContext';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -161,6 +163,10 @@ function BasePathComponent() {
     invalidateUserInfo();
   }
 
+  if (searchParams.subscriptionCancel === 'true') {
+    analytics.track('subscription_cancel', { tier: searchParams.tier });
+  }
+
   if (searchParams.upgrade === 'true') {
     sessionStorage.setItem('showUpgradeModal', 'true');
   }
@@ -189,7 +195,7 @@ function BasePathComponent() {
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
         <Navigate
-          href={`${isNativeMobilePlatform() ? '/login' : '/signup'}${window.location.search}`}
+          href={`${isNativeMobilePlatform() ? '/welcome' : '/welcome'}${window.location.search}`}
         />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
@@ -235,6 +241,10 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/channels',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/calls',
     component: LAYOUT_ROUTE.component,
   },
   {
@@ -295,10 +305,14 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/welcome',
     component: () => (
-      <div class="flex *:flex-1 w-full h-dvh overflow-y-hidden">
+      <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
         <InteractiveOnboarding />
       </div>
     ),
+  },
+  {
+    path: '/team-invite',
+    component: TeamInviteAcceptance,
   },
   {
     // This splat route must be last to catch all unmatched routes
@@ -425,35 +439,38 @@ export function Root() {
             <EntityProvider>
               <UserContextProvider>
                 <BrowserNotificationModal />
+                <IosPushNotificationModal />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>
-                  <ChannelsContextProvider>
-                    <QuickAccessProvider>
-                      <SearchProvider>
-                        <ChatAttachmentsInit />
-                        <ReactiveFavicon />
-                        <Title>{tabTitle()}</Title>
-                        <MacroJump />
-                        <Visor />
-                        <Suspense>
-                          <IsomorphicRouter
-                            transformUrl={transformShortIdInUrlPathname}
-                            root={Layout}
-                            rootPreload={rootPreload}
-                            base={ROUTER_BASE}
-                          >
-                            {{
-                              path: '/',
-                              component: TauriRouteListener,
-                              children: ROUTES,
-                            }}
-                          </IsomorphicRouter>
-                        </Suspense>
-                        <ToastRegion />
-                      </SearchProvider>
-                    </QuickAccessProvider>
-                  </ChannelsContextProvider>
+                  <MutationUndoProvider>
+                    <ChannelsContextProvider>
+                      <CallProvider>
+                        <QuickAccessProvider>
+                          <SearchProvider>
+                            <ChatAttachmentsInit />
+                            <ReactiveFavicon />
+                            <Title>{tabTitle()}</Title>
+                            <Suspense>
+                              <IsomorphicRouter
+                                transformUrl={transformShortIdInUrlPathname}
+                                root={Layout}
+                                rootPreload={rootPreload}
+                                base={ROUTER_BASE}
+                              >
+                                {{
+                                  path: '/',
+                                  component: TauriRouteListener,
+                                  children: ROUTES,
+                                }}
+                              </IsomorphicRouter>
+                            </Suspense>
+                            <ToastRegion />
+                          </SearchProvider>
+                        </QuickAccessProvider>
+                      </CallProvider>
+                    </ChannelsContextProvider>
+                  </MutationUndoProvider>
                 </ConfiguredGlobalAppStateProvider>
               </UserContextProvider>
             </EntityProvider>

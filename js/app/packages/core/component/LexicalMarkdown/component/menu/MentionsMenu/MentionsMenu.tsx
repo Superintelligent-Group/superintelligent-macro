@@ -32,9 +32,9 @@ import type {
   UserMentionRecord,
 } from '../../../utils/mentionsUtils';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { debouncedDependent } from '@core/util/debounce';
-import type { BucketConfig } from './MentionsMenuController';
+import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 import { ItemBin } from './components/ItemBin';
@@ -49,10 +49,29 @@ import {
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { isMobile } from '@core/mobile/isMobile';
 import { useAnalytics } from '@app/component/analytics-context';
+import { createFreshSearch } from '@core/util/freshSort';
+
+const mobileAllSearch = createFreshSearch<MentionItem>({
+  config: {
+    useViewedAt: true,
+    fuzzyWeight: 0.4,
+    timeWeight: 0.6,
+    brevityWeight: 0,
+  },
+  getName: (item) => {
+    if (item.kind === 'date') return item.data.displayText;
+    if (item.kind === 'group') return item.data.groupAlias;
+    return item.searchText;
+  },
+  getTimestamp: (item) => {
+    if (item.kind === 'date' || item.kind === 'group') return {};
+    return item.timestamps;
+  },
+});
 
 const MAX_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
-// Height consumed by ClippedPanel's p-px border (2px) + py-2 padding (16px)
+// Height consumed by Panel's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 
 export type MentionsMenuProps = {
@@ -74,6 +93,8 @@ export type MentionsMenuProps = {
   useSnapshotForDocuments?: boolean;
   /** whether to show open tabs as a bucket in the menu */
   showOpenTabs?: boolean;
+  /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
+  sources?: MentionBucketId[];
 };
 
 export function MentionsMenu(props: MentionsMenuProps) {
@@ -148,6 +169,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       : useEmailSearchMention({
           searchTerm,
+          enabled: () => !props.sources || props.sources.includes('emails'),
         });
 
   const dateOptions = useDateSearch({ query: searchTerm });
@@ -206,14 +228,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  // On mobile, combine all sources into a single flat list
-  const mobileAllItems = createLazyMemo((): MentionItem[] => [
-    ...(usersAndGroups() ?? []),
-    ...(docs() ?? []),
-    ...(channels() ?? []),
-    ...(emails() ?? []),
-    ...(dates() ?? []),
-  ]);
+  // On mobile, combine all sources into a single list interleaved by
+  // freshness instead of grouped by category.
+  const mobileAllItems = createLazyMemo((): MentionItem[] => {
+    const combined: MentionItem[] = [
+      ...(usersAndGroups() ?? []),
+      ...(docs() ?? []),
+      ...(channels() ?? []),
+      ...(emails() ?? []),
+      ...(dates() ?? []),
+    ];
+    return mobileAllSearch(combined, searchTerm()).map(({ item }) => item);
+  });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
     if (isMobile()) {
@@ -269,7 +295,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       });
     }
 
-    return buckets.filter((bucket) => bucket.getFullCount() > 0);
+    const sourcesFilter = props.sources;
+    const filtered = sourcesFilter
+      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id as any))
+      : buckets;
+
+    return filtered.filter((bucket) => bucket.getFullCount() > 0);
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
@@ -278,7 +309,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
-    'start' | 'single' | 'double' | null
+    'start' | 'single' | null
   >('start');
 
   createEffect(() => {
@@ -368,13 +399,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     },
     onSpace: () => {
       switch (escapeSpaceState()) {
-        case 'double':
+        case 'single':
         case 'start':
           closeMenu();
           return true;
-        case 'single':
-          setEscapeSpaceState('double');
-          return false;
         case null:
           setEscapeSpaceState('single');
           return false;
@@ -463,7 +491,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     number | undefined
   >(undefined);
 
-  // Height available for scrollable content after subtracting ClippedPanel decorations.
+  // Height available for scrollable content after subtracting Panel decorations.
   // Capped at 256px (16rem) to preserve desktop behavior, and floored at 0.
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
@@ -500,7 +528,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <Panel active class="py-2">
             <Show
               when={controller.combinedItems().length > 0}
               fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -513,7 +541,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       {(bucket, idx) => (
                         <>
                           <Show when={idx() > 0}>
-                            <div class="w-full mt-4 border-b-1 border-edge-muted mb-2" />
+                            <div class="w-full mt-4 border-b border-edge-muted mb-2" />
                           </Show>
                           <ItemBin
                             label={bucket.config.label}
@@ -584,7 +612,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 />
               </Show>
             </Show>
-          </ClippedPanel>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>

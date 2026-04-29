@@ -1,9 +1,11 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import MacroLogo from '@core/component/MacroLogo';
+import LogoIcon from '@macro-icons/macro-logo.svg';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -18,20 +20,79 @@ import { resetSandbox } from './sandbox/sandbox-store';
 import { commandKOpen, setCommandKOpen } from './lessons/command-k';
 import { createOnboardingState } from './create-onboarding-state';
 import { LESSONS } from './lessons';
-import { ContinueButton, SkipButton } from './components-lib';
+import { ContinueButton } from './components-lib';
 import { OnboardingProgress } from './OnboardingProgress';
-import {
-  clearCompletedLessons,
-  loadCompletedLessons,
-  saveCompletedLesson,
-} from './persistence';
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
+import { useIsAuthenticated } from '@core/auth';
+import { fetchToken } from '@core/util/fetchWithToken';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import MobileWebWelcome from './MobileWebWelcome';
+import MobileWebSignupSent from './MobileWebSignupSent';
+import { useSendMobileWelcomeEmail } from '@queries/auth';
+import { isOk } from '@core/util/maybeResult';
+import { toast } from '@core/component/Toast/Toast';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
 
 export default function InteractiveOnboarding() {
+  const isAuthenticated = useIsAuthenticated();
+  const [mobileWebStep, setMobileWebStep] = createSignal<
+    'welcome' | 'signup-sent'
+  >('welcome');
+  const sendMobileWelcomeEmail = useSendMobileWelcomeEmail();
+
+  // Mobile web users who aren't authenticated get a dedicated welcome screen
+  // with email signup instead of the full lesson flow.
+  const isMobileWeb = isTouchDevice() && !isNativeMobilePlatform();
+
+  const handleMobileSignUp = async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.failure('Invalid email address.');
+      return;
+    }
+
+    const result = await sendMobileWelcomeEmail.mutateAsync(email);
+
+    if (isOk(result)) {
+      if (result[1].sent) {
+        setMobileWebStep('signup-sent');
+      } else {
+        toast.alert('Email already sent.');
+      }
+    } else {
+      const code = result[0]?.[0]?.code;
+      if (code === 'RATE_LIMITED') {
+        toast.failure('Rate limit exceeded.');
+      } else if (code === 'INVALID_EMAIL') {
+        toast.failure('Invalid email address.');
+      } else {
+        toast.failure('Internal error. Please try again.');
+      }
+    }
+  };
+
+  return (
+    <Show
+      when={!isMobileWeb || isAuthenticated() === true}
+      fallback={
+        <Show
+          when={mobileWebStep() === 'welcome'}
+          fallback={<MobileWebSignupSent />}
+        >
+          <MobileWebWelcome onSignUp={handleMobileSignUp} />
+        </Show>
+      }
+    >
+      <InteractiveOnboardingInner />
+    </Show>
+  );
+}
+
+function InteractiveOnboardingInner() {
   const analytics = useAnalytics();
 
   const splitPanel = useSplitPanel();
@@ -42,34 +103,68 @@ export default function InteractiveOnboarding() {
   const isTouch = isTouchDevice();
 
   const hasPaid = useHasPaidAccess();
-  const allLessons = hasPaid()
-    ? LESSONS.filter((l) => l.id !== 'choose-plan')
-    : LESSONS;
-  const lessons = isTouch
-    ? allLessons.filter((l) => l.id === 'welcome' || l.id === 'choose-plan')
-    : allLessons;
+  const isAuthenticated = useIsAuthenticated();
+  const inviteTeamEnabled = useFeatureFlag('enable-teams-onboarding', {
+    enabledOverride: ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE,
+  });
+  const allLessons = createMemo(() =>
+    LESSONS.filter((l) => {
+      if (l.id === 'choose-plan' && (hasPaid() || tutorialCompleted()))
+        return false;
+      if (l.id === 'about-us' && isAuthenticated()) return false;
+      if (l.id === 'invite-team' && !inviteTeamEnabled().enabled) return false;
+      return true;
+    })
+  );
+  const lessons = createMemo(() =>
+    isTouch
+      ? allLessons().filter(
+          (l) =>
+            l.id === 'welcome' ||
+            l.id === 'about-us' ||
+            l.id === 'choose-plan' ||
+            l.id === 'launch'
+        )
+      : allLessons()
+  );
 
   const testMode = new URLSearchParams(location.search).has('test');
-  if (testMode) {
-    clearCompletedLessons();
-  }
 
   const params = new URLSearchParams(location.search);
   const slideParam = params.get('slide');
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
 
-  const sortedLessons = [...lessons].sort(
-    (a, b) => (a.order ?? 0) - (b.order ?? 0)
+  const sortedLessons = createMemo(() =>
+    [...lessons()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   );
   const debugCompleted =
     slideIndex !== null
-      ? new Set(sortedLessons.slice(0, slideIndex).map((l) => l.id))
+      ? new Set(
+          sortedLessons()
+            .slice(0, slideIndex)
+            .map((l) => l.id)
+        )
       : undefined;
+
+  // Detect a return-from-OAuth param synchronously so we can pre-populate
+  // completed lessons before the first render, avoiding a flash of the first slide.
+  // Search the unfiltered LESSONS list — the returning lesson (e.g. about-us) may
+  // have been filtered out now that the user is authenticated.
+  const returningLesson = LESSONS.find(
+    (l) => l.completeOnParam && params.has(l.completeOnParam)
+  );
+  const returnCompleted = returningLesson
+    ? new Set(
+        sortedLessons()
+          .filter((l) => (l.order ?? 0) <= (returningLesson.order ?? 0))
+          .map((l) => l.id)
+      )
+    : undefined;
 
   const state = createOnboardingState({
     definitions: lessons,
-    initialCompleted: debugCompleted ?? loadCompletedLessons(),
+    initialCompleted: debugCompleted ?? returnCompleted ?? new Set(),
   });
 
   const [readyToContinue, setReadyToContinue] = createSignal(false);
@@ -78,72 +173,96 @@ export default function InteractiveOnboarding() {
   );
   const [lessonKey, setLessonKey] = createSignal(0);
 
+  const navigate = useNavigate();
+
   const navigateAway = () => {
-    splitPanel?.handle.replace({
-      next: { type: 'component', id: 'unified-list' },
-    });
+    if (splitPanel) {
+      splitPanel.handle.replace({
+        next: { type: 'component', id: 'unified-list' },
+      });
+    } else {
+      navigate('/', { replace: true });
+    }
   };
 
-  // Redirect away if the backend already marks the tutorial as complete
-  // before the user starts. We set tutorialComplete early (after the invite
-  // step) so we track whether the flow has started to avoid a mid-flow redirect.
-  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
-  const navigate = useNavigate();
+  // Redirect away if the backend already marks the tutorial as complete.
+  // Skip the redirect when returning from OAuth — we just marked it complete
+  // ourselves and still have remaining lessons to show.
   createEffect(() => {
-    if (tutorialCompleted() && !onboardingStarted() && !testMode) {
-      if (splitPanel) {
-        navigateAway();
-      } else {
-        navigate('/', { replace: true });
-      }
+    if (tutorialCompleted() && !returningLesson && !testMode) {
+      navigateAway();
     }
   });
 
   let continueButtonRef: HTMLButtonElement | undefined;
 
-  const handleLessonComplete = (buttonLabel?: string) => {
+  const handleLessonComplete = (
+    buttonLabel?: string,
+    options?: { skipFocus?: boolean }
+  ) => {
     setContinueLabel(buttonLabel);
     setReadyToContinue(true);
-    requestAnimationFrame(() => continueButtonRef?.focus());
+    // Skip auto-focus on touch — Safari scrolls to the focused element,
+    // which jumps the view to the bottom on longer lessons.
+    if (!isTouch && !options?.skipFocus) {
+      requestAnimationFrame(() => continueButtonRef?.focus());
+    }
+  };
+
+  const handleLessonUnready = () => {
+    setReadyToContinue(false);
+  };
+
+  // Programmatic advance for lessons that progress on their own interaction
+  // (e.g. clicking a plan card) rather than the Continue button.
+  const advanceLesson = () => {
+    const current = state.currentLesson();
+    if (!current) return;
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'completed',
+      }
+    );
+    state.completeLesson(current.definition.id);
+    setReadyToContinue(false);
+    setContinueLabel(undefined);
+    setLessonKey((k) => k + 1);
   };
 
   const handleContinue = () => {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
 
-    analytics.track('onboarding_step', {
-      id: current.definition.id,
-      index: current.index,
-      state: 'completed',
-    });
+    analytics.track(
+      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
+      {
+        id: current.definition.id,
+        index: current.index,
+        state: 'completed',
+      }
+    );
 
-    setOnboardingStarted(true);
+    if (current.definition.onContinue) {
+      // On web this redirects (returns void). On native mobile it resolves
+      // with true after inline auth succeeds, so we advance the lesson.
+      const result = current.definition.onContinue();
+      if (result instanceof Promise) {
+        result.then((shouldAdvance) => {
+          if (shouldAdvance) {
+            state.completeLesson(current.definition.id);
+            setReadyToContinue(false);
+            setContinueLabel(undefined);
+            setLessonKey((k) => k + 1);
+          }
+        });
+      }
+      return;
+    }
+
     state.completeLesson(current.definition.id);
-    if (!testMode) {
-      saveCompletedLesson(current.definition.id);
-    }
-    setReadyToContinue(false);
-    setContinueLabel(undefined);
-    setLessonKey((k) => k + 1);
-  };
-
-  const handleSkip = () => {
-    const current = state.currentLesson();
-
-    if (!current) return;
-
-    analytics.track('onboarding_step', {
-      id: current.definition.id,
-      index: current.index,
-      state: 'skipped',
-    });
-
-    setOnboardingStarted(true);
-    state.skipLesson(current.definition.id);
-    if (!testMode) {
-      saveCompletedLesson(current.definition.id);
-    }
-
     setReadyToContinue(false);
     setContinueLabel(undefined);
     setLessonKey((k) => k + 1);
@@ -158,6 +277,27 @@ export default function InteractiveOnboarding() {
       attachHotkeys(shellRef);
       shellRef.focus();
     }
+
+    // When returning from an external auth flow (e.g. Google OAuth), clean the
+    // return param from the URL and run side-effects. The lessons are already
+    // pre-completed synchronously via returnCompleted above.
+    if (returningLesson) {
+      const cleanParams = new URLSearchParams(window.location.search);
+      cleanParams.delete(returningLesson.completeOnParam!);
+      const qs = cleanParams.toString();
+      window.history.replaceState(
+        null,
+        '',
+        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      );
+
+      // Ensure the JWT is refreshed before making authenticated API calls.
+      // On a fresh page load after OAuth redirect, the session cookie is set
+      // but no fetchWithToken call has triggered a token refresh yet.
+      if (returningLesson.onCompleteParam) {
+        fetchToken().then(() => returningLesson.onCompleteParam!());
+      }
+    }
   });
 
   const reg = registerHotkey({
@@ -171,18 +311,6 @@ export default function InteractiveOnboarding() {
         return true;
       }
       return false;
-    },
-  });
-
-  const skipReg = registerHotkey({
-    scopeId,
-    hotkey: 'escape',
-    description: 'Skip',
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      if (!state.currentLesson()?.definition.skippable) return false;
-      handleSkip();
-      return true;
     },
   });
 
@@ -224,7 +352,6 @@ export default function InteractiveOnboarding() {
     CommandState.close = origClose;
   });
   onCleanup(() => reg.dispose());
-  onCleanup(() => skipReg.dispose());
   onCleanup(() => cmdkReg.dispose());
   onCleanup(() => resetSandbox());
 
@@ -238,25 +365,16 @@ export default function InteractiveOnboarding() {
     })
   );
 
-  // Mark tutorial complete on the backend once the email-invite lesson is
-  // completed or skipped — before the paywall step. On touch devices there is
-  // no email-invite step, so we complete after the welcome lesson instead.
+  // Mark tutorial complete on the backend the moment the user lands on the
+  // Launch screen — the semantic end of the onboarding experience. Guarded so
+  // the effect fires the mutation at most once.
+  let tutorialMarkedComplete = false;
   createEffect(() => {
-    if (testMode) return;
-    if (isTouch) {
-      const welcome = state
-        .lessons()
-        .find((l) => l.definition.id === 'welcome');
-      if (welcome && (welcome.completed || welcome.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
-    } else {
-      const invite = state
-        .lessons()
-        .find((l) => l.definition.id === 'email-invite');
-      if (invite && (invite.completed || invite.skipped)) {
-        completeTutorial.mutate(undefined);
-      }
+    if (testMode || tutorialMarkedComplete) return;
+    const current = state.currentLesson();
+    if (current?.definition.id === 'launch') {
+      tutorialMarkedComplete = true;
+      completeTutorial.mutate(undefined);
     }
   });
 
@@ -275,8 +393,31 @@ export default function InteractiveOnboarding() {
   onMount(() => {
     if (state.currentIndex() > 0) return;
 
-    analytics.track('onboarding_start');
+    analytics.track('onboarding_start', {
+      source:
+        params.get('mobile_welcome_email') === 'true'
+          ? 'mobile_welcome_email'
+          : undefined,
+    });
   });
+
+  createEffect(
+    on(
+      () => state.currentLesson(),
+      (lesson) => {
+        if (!lesson) return;
+
+        analytics.track(
+          `onboarding_step_${lesson.definition.id.replaceAll('-', '_')}`,
+          {
+            id: lesson.definition.id,
+            index: lesson.index,
+            state: 'viewed',
+          }
+        );
+      }
+    )
+  );
 
   createEffect(
     on(
@@ -300,7 +441,7 @@ export default function InteractiveOnboarding() {
   return (
     <div
       ref={shellRef}
-      class="flex items-center justify-center h-full w-full p-8 overflow-hidden relative"
+      class="flex items-center justify-center h-full w-full p-6 sm:p-8 overflow-hidden relative"
       tabIndex={-1}
     >
       {/* Scoped keyframes */}
@@ -339,11 +480,8 @@ export default function InteractiveOnboarding() {
       </div>
 
       {/* Centered card */}
-      <div class="size-full max-w-[1600px] max-h-[900px]">
-        <ClippedPanel
-          cornerRadius={'4px'}
-          class="bg-panel size-full shadow-lg shadow-[#1111]"
-        >
+      <div class="size-full max-w-400 max-h-225">
+        <Panel>
           <div class="size-full flex">
             <Show
               when={state.currentLesson()}
@@ -375,11 +513,16 @@ export default function InteractiveOnboarding() {
                     <div class="size-full flex flex-col items-center overflow-y-auto p-6">
                       <div
                         style={bodyStyle()}
-                        class="flex flex-col items-center text-center gap-6 w-full max-w-md my-auto"
+                        class="flex flex-col items-start text-left gap-6 w-full max-w-md mt-4"
                       >
-                        <div class="w-24 opacity-20">
-                          <MacroLogo class="fill-ink" />
-                        </div>
+                        <Show
+                          when={
+                            lesson().definition.id === 'welcome' ||
+                            lesson().definition.id === 'launch'
+                          }
+                        >
+                          <LogoIcon class="size-16 text-accent self-center" />
+                        </Show>
                         <h2 class="text-3xl font-semibold text-ink">
                           {lesson().definition.title}
                         </h2>
@@ -392,17 +535,20 @@ export default function InteractiveOnboarding() {
                           <Dynamic
                             component={lesson().definition.content}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />
                         </div>
-                        {/* Show plan cards inline on touch for choose-plan */}
                         <Show when={lesson().definition.demo}>
                           {(Demo) => (
                             <div class="w-full">
                               <Dynamic
                                 component={Demo()}
                                 onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
+                                advance={advanceLesson}
                                 isActive={true}
                                 scopeId={scopeId}
                               />
@@ -418,7 +564,20 @@ export default function InteractiveOnboarding() {
                               onClick={handleContinue}
                               label={continueLabel()}
                               disabled={!readyToContinue()}
+                              centered={lesson().definition.centeredButton}
                             />
+                            <Show when={lesson().definition.secondaryAction}>
+                              {(Action) => (
+                                <Dynamic
+                                  component={Action()}
+                                  onComplete={handleLessonComplete}
+                                  onUnready={handleLessonUnready}
+                                  advance={advanceLesson}
+                                  isActive={true}
+                                  scopeId={scopeId}
+                                />
+                              )}
+                            </Show>
                           </div>
                         </Show>
                       </div>
@@ -450,6 +609,8 @@ export default function InteractiveOnboarding() {
                         <Dynamic
                           component={lesson().definition.content}
                           onComplete={handleLessonComplete}
+                          onUnready={handleLessonUnready}
+                          advance={advanceLesson}
                           isActive={true}
                           scopeId={scopeId}
                         />
@@ -463,9 +624,19 @@ export default function InteractiveOnboarding() {
                             onClick={handleContinue}
                             label={continueLabel()}
                             disabled={!readyToContinue()}
+                            centered={lesson().definition.centeredButton}
                           />
-                          <Show when={lesson().definition.skippable}>
-                            <SkipButton onClick={handleSkip} />
+                          <Show when={lesson().definition.secondaryAction}>
+                            {(Action) => (
+                              <Dynamic
+                                component={Action()}
+                                onComplete={handleLessonComplete}
+                                onUnready={handleLessonUnready}
+                                advance={advanceLesson}
+                                isActive={true}
+                                scopeId={scopeId}
+                              />
+                            )}
                           </Show>
                         </div>
                       </Show>
@@ -502,6 +673,8 @@ export default function InteractiveOnboarding() {
                           <Dynamic
                             component={Demo()}
                             onComplete={handleLessonComplete}
+                            onUnready={handleLessonUnready}
+                            advance={advanceLesson}
                             isActive={true}
                             scopeId={scopeId}
                           />
@@ -513,7 +686,7 @@ export default function InteractiveOnboarding() {
               )}
             </Show>
           </div>
-        </ClippedPanel>
+        </Panel>
       </div>
     </div>
   );

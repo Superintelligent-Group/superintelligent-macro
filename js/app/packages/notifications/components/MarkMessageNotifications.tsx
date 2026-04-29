@@ -1,30 +1,34 @@
-import { onMount } from 'solid-js';
+import { createEffect } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import type { UnifiedNotification } from '@notifications/types';
+import {
+  isChannelNotification,
+  useNotificationsForEntity,
+} from '@notifications/notification-helpers';
 
-export function MarkMessaageNotifications(props: {
+export function MarkMessageNotifications(props: {
   messageId: string;
   channelId: string;
   children: JSXElement;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const notifications = useNotificationsForEntity(notificationSource, {
+    type: 'channel',
+    id: props.channelId,
+  });
+  const isMessageNotification = (n: UnifiedNotification) =>
+    isChannelNotification(n) &&
+    n.notification_metadata.content.messageId === props.messageId;
 
-  onMount(() => {
-    const toMark = notificationSource.notifications().filter((n) => {
-      if (n.viewed_at || n.done) return false;
-      if (n.entity_id !== props.channelId) return false;
-      const meta = n.notification_metadata;
-      if (
-        meta.tag === 'channel_mention' ||
-        meta.tag === 'channel_message_send' ||
-        meta.tag === 'channel_message_reply'
-      ) {
-        return meta.content.messageId === props.messageId;
-      }
-      return false;
-    });
-    if (toMark.length > 0) {
-      notificationSource.bulkMarkAsRead(toMark);
+  let marked = false;
+
+  createEffect(() => {
+    if (marked) return;
+    const existing = notifications().find(isMessageNotification);
+    if (existing && !existing.viewed_at) {
+      marked = true;
+      notificationSource.markAsRead(existing);
     }
   });
 

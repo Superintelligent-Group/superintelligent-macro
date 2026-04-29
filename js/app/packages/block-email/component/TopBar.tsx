@@ -13,10 +13,16 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -107,10 +113,13 @@ export function TopBar(props: {
   const openTaskCompose = () => {
     const threadId = emailCtx.thread()?.db_id;
     if (!threadId) return;
+    const title =
+      props.title.length > 70 ? `${props.title.slice(0, 70)}...` : props.title;
     popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
+        initialTitle: title,
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: threadId,
@@ -160,18 +169,38 @@ export function TopBar(props: {
       buttonComponent: () => {
         const [hovering, setHovering] = createSignal(false);
         return (
-          <button
-            class="h-7 px-2 flex items-center gap-1 rounded-xs text-xs hover:bg-hover hover-transition-bg"
-            onMouseEnter={() => setHovering(true)}
-            onMouseLeave={() => setHovering(false)}
-            onClick={openTaskCompose}
-          >
-            <div class="size-4 text-task">
-              <AnimatedTaskIcon triggerAnimation={hovering()} />
-            </div>
-            <span class="text-ink">Task</span>
-          </button>
+          <div class="border border-edge-muted flex items-stretch rounded-xs">
+            <button
+              class="h-7 px-2 flex items-center gap-1 text-xs hover:bg-hover hover-transition-bg"
+              onMouseEnter={() => setHovering(true)}
+              onMouseLeave={() => setHovering(false)}
+              onClick={openTaskCompose}
+            >
+              <div class="size-4">
+                <AnimatedTaskIcon triggerAnimation={hovering()} />
+              </div>
+              <span class="text-ink">Task</span>
+            </button>
+          </div>
         );
+      },
+    },
+    {
+      label: 'Chat',
+      icon: ChatWithAgentIcon,
+      action: () => {
+        const threadId = emailCtx.thread()?.db_id;
+        if (!threadId) return;
+        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+      },
+      condition: () => !!emailCtx.thread()?.db_id,
+      buttonComponent: () => {
+        const id = emailCtx.thread()?.db_id;
+        return id ? (
+          <ChatWithAgentButton
+            entity={{ type: 'email', id, name: props.title }}
+          />
+        ) : null;
       },
     },
     {
@@ -180,6 +209,7 @@ export function TopBar(props: {
       action: () => shareCtx.open(),
       condition: () => ENABLE_EMAIL_SHARING,
       buttonComponent: () => <ShareTrigger />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

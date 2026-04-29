@@ -6,24 +6,24 @@ use crate::{
     },
 };
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
 
 pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "name";
-    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
+    const USER_ID_KEY: Option<&'static str> = Some("user_id");
+    const TITLE_KEY: &'static str = "subject";
+    const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Emails;
 }
 
-/// The fields to search across with simple_query_string for email search.
-const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
-    "sender",
-    "reply_to",
-    "recipients",
-    "cc",
-    "bcc",
+/// Keyword-indexed email-address fields. Matched explicitly: a bare word
+/// only matches an address with that exact local-part (`alice` → `alice@*`),
+/// not addresses that merely start with the characters.
+const EMAIL_KEYWORD_FIELDS: &[&str] = &["sender", "reply_to", "recipients", "cc", "bcc"];
+
+/// Text-analyzed fields. Matched as a prefix so `scri` matches `script`.
+const EMAIL_TEXT_FIELDS: &[&str] = &[
     "subject",
     "content",
     "sender_name",
@@ -32,20 +32,52 @@ const EMAIL_SIMPLE_QUERY_FIELDS: &[&str] = &[
     "bcc_names",
 ];
 
-/// Transforms search terms into a simple_query_string query string.
-/// Single-word terms become `(term | term@*)` so they match both text fields
-/// and keyword email-address fields. Multi-word terms (containing spaces) skip
-/// the `@*` pattern since email addresses never contain spaces.
+/// Builds the simple_query_string over the keyword email-address fields.
+/// Single-word terms become `(term | term@*)` — an exact token match OR a
+/// local-part match on the address. This deliberately does NOT use a trailing
+/// `*` on the bare term, so partial local-parts don't leak across addresses
+/// (e.g. `ali` won't match `alice@example.com` via this group).
+/// Email-like terms (containing `@`) are wrapped in quotes to force phrase
+/// matching — otherwise the standard analyzer would tokenize
+/// `alice@example.com` into `[alice, example, com]`.
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
-fn build_simple_query_string(terms: &[String]) -> String {
+fn build_keyword_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains(' ') {
+            if term.contains('@') {
+                format!("\"{}\"", term)
+            } else if term.contains(' ') {
                 format!("({})", term)
             } else {
                 format!("({} | {}@*)", term, term.to_lowercase())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// Minimum prefix length before we emit a `term*` wildcard. Shorter prefixes
+/// expand to too many unique tokens in the index and risk blowing past
+/// `max_clause_count`. Under this threshold we fall back to exact token match.
+const MIN_PREFIX_LEN: usize = 3;
+
+/// Builds the simple_query_string over the text-analyzed fields.
+/// Single-word terms become `term*` so a prefix like `scri` matches the
+/// token `script` in subject/content/display-name fields. Terms shorter than
+/// `MIN_PREFIX_LEN` fall back to exact match to keep term expansion bounded.
+/// Multi-word and `@`-containing terms use grouped / phrase matching.
+fn build_text_query_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if term.contains('@') {
+                format!("\"{}\"", term)
+            } else if term.contains(' ') || term.chars().count() < MIN_PREFIX_LEN {
+                format!("({})", term)
+            } else {
+                format!("{}*", term)
             }
         })
         .collect::<Vec<_>>()
@@ -72,6 +104,8 @@ pub(crate) struct EmailQueryBuilder {
     /// ANDed together. Contradictory combinations (e.g. importance=true with
     /// include_labels=["CATEGORY_PROMOTIONS"]) will return no results.
     importance: Option<bool>,
+    /// When true, only search the subject field (for name-only search mode)
+    subject_only: bool,
 }
 
 impl EmailQueryBuilder {
@@ -86,6 +120,7 @@ impl EmailQueryBuilder {
             include_labels: Vec::new(),
             exclude_labels: Vec::new(),
             importance: None,
+            subject_only: false,
         }
     }
 
@@ -140,19 +175,40 @@ impl EmailQueryBuilder {
         self
     }
 
+    pub fn subject_only(mut self, subject_only: bool) -> Self {
+        self.subject_only = subject_only;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_bool_query = self.inner.build_content_bool_query()?;
 
-        // For multi-term searches, replace the default content-only must clause with a
-        // simple_query_string that searches across all email fields (addresses, names, subject, content)
-        if self.inner.terms.len() > 1 {
-            let query_string = build_simple_query_string(&self.inner.terms);
-            let sqs = SimpleQueryStringQuery::new(
-                query_string,
-                EMAIL_SIMPLE_QUERY_FIELDS.iter().copied(),
+        // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
+        // Otherwise replace with simple_query_string across all email fields.
+        if self.subject_only {
+            let title_query = self.inner.build_title_term_query()?;
+            let mut inner = BoolQueryBuilder::new();
+            inner.minimum_should_match(1);
+            inner.should(title_query);
+            content_bool_query.set_must(inner.build().into());
+        } else {
+            let keyword_sqs = SimpleQueryStringQuery::new(
+                build_keyword_query_string(&self.inner.terms),
+                EMAIL_KEYWORD_FIELDS.iter().copied(),
             )
             .default_operator("AND");
-            content_bool_query.set_must(sqs.into());
+
+            let text_sqs = SimpleQueryStringQuery::new(
+                build_text_query_string(&self.inner.terms),
+                EMAIL_TEXT_FIELDS.iter().copied(),
+            )
+            .default_operator("AND");
+
+            let mut combined = BoolQueryBuilder::new();
+            combined.minimum_should_match(1);
+            combined.should(keyword_sqs.into());
+            combined.should(text_sqs.into());
+            content_bool_query.set_must(combined.build().into());
         }
 
         // CUSTOM ATTRIBUTES SECTION
@@ -298,6 +354,7 @@ pub struct EmailSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
+    pub subject_only: bool,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -318,6 +375,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .importance(args.importance)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .subject_only(args.subject_only)
     }
 }
 

@@ -1,8 +1,9 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::inbound::plugin::{PluginService, apply_completed_update};
+use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
-use navigation_plugin::{MacroNavigationPlugin, Platform};
 use reqwest::cookie::CookieStore;
-use reqwest::header::COOKIE;
+use reqwest::header::{COOKIE, ORIGIN};
 use rootcause::{Report, report};
 use serde::Serialize;
 #[cfg(target_os = "ios")]
@@ -11,12 +12,10 @@ use share_target::{
     PendingShareFilesState, clear_shared_files, get_pending_share_filenames,
     maybe_handle_share_deep_link, pop_shared_files, upload_shared_file_to_presigned_url,
 };
-#[cfg(target_os = "ios")]
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
-use tauri::{AppHandle, Emitter};
-use tauri::{Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
+
+mod tauri_protocol;
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -24,70 +23,9 @@ use url::Url;
 
 mod share_target;
 
-struct HeartbeatState {
-    alive: AtomicBool,
-    /// Incremented on each resume event so stale check threads are ignored
-    generation: AtomicU64,
-}
-
-#[tauri::command]
-fn heartbeat_response(state: tauri::State<'_, HeartbeatState>) {
-    state.alive.store(true, Ordering::SeqCst);
-}
-
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
-
-#[cfg(target_os = "ios")]
-static GLOBAL_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
-
-/// Send a heartbeat ping to the JS layer and check for a response after 1 second.
-/// If no response is received, reload the webview (the content process is likely dead).
-#[cfg(target_os = "ios")]
-fn send_heartbeat(handle: &AppHandle) {
-    tracing::info!("app resumed, sending heartbeat ping");
-
-    let state = handle.state::<HeartbeatState>();
-    let current_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    state.alive.store(false, Ordering::SeqCst);
-
-    let _ = handle.emit("heartbeat_ping", ());
-
-    let handle = handle.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let state = handle.state::<HeartbeatState>();
-
-        if state.generation.load(Ordering::SeqCst) != current_gen {
-            tracing::debug!("heartbeat: stale generation {current_gen}, skipping");
-            return;
-        }
-
-        if !state.alive.load(Ordering::SeqCst) {
-            tracing::warn!(
-                "heartbeat: no response from JS — content process likely dead, reloading webview"
-            );
-            if let Some(webview) = handle.webview_windows().values().next() {
-                let _ = webview.reload();
-            }
-        } else {
-            tracing::info!("heartbeat: JS responded, content process alive");
-        }
-    });
-}
-
-/// Called from native Objective-C when the iOS app resumes from background.
-/// See `main.mm` for the notification observer.
-#[cfg(target_os = "ios")]
-#[unsafe(no_mangle)]
-extern "C" fn on_app_resumed() {
-    let Some(handle) = GLOBAL_APP_HANDLE.get() else {
-        tracing::warn!("on_app_resumed: app handle not yet initialized");
-        return;
-    };
-    send_heartbeat(handle);
-}
 
 /// domains which the tauri webview can render.
 /// This should be as restrictive as possible.
@@ -108,6 +46,10 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://localhost:3008",
     "http://localhost:3009",
 ];
+
+type Type = std::sync::OnceLock<
+    Box<dyn Fn(&str, http::Request<Vec<u8>>, tauri::UriSchemeResponder) + Send + Sync + 'static>,
+>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -169,6 +111,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_device_info::init())
         .plugin(tauri_plugin_http::init())
         .plugin(
             tauri_plugin_websocket::Builder::new()
@@ -176,14 +119,17 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
-            MacroNavigationPlugin::new(
-                ALLOWED_DOMAINS,
-                cfg!(mobile)
-                    .then_some(Platform::Mobile)
-                    .unwrap_or(Platform::Desktop),
-            )
-            .expect("Domains must be valid urls"),
+            macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
+                if cfg!(debug_assertions) {
+                    "https://auth-service-dev.macro.com/"
+                } else {
+                    "https://auth-service.macro.com/"
+                }
+                .parse()
+                .expect("valid url"),
+            ),
         );
 
     #[cfg(mobile)]
@@ -197,20 +143,70 @@ pub fn run() {
             .plugin(tauri_plugin_mobile_sharetarget::init());
     }
 
+    // Window origin differs by platform:
+    // macOS/iOS/Linux: tauri://localhost
+    // Windows/Android: https://tauri.localhost (or http://)
+    let window_origin = if cfg!(any(target_os = "windows", target_os = "android")) {
+        "https://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    };
+
     builder
-        .manage(HeartbeatState {
-            alive: AtomicBool::new(true),
-            generation: AtomicU64::new(0),
+        .register_asynchronous_uri_scheme_protocol("tauri", {
+            // Build this outside the closure so we only create it once.
+            // We need the AppHandle which isn't available until setup, but
+            // register_asynchronous_uri_scheme_protocol gives us UriSchemeContext.
+            // However, tauri_protocol::get needs AppHandle upfront.
+            // Use a lazy init pattern via the context.
+            let window_origin = window_origin.to_string();
+            let handler: Type = std::sync::OnceLock::new();
+
+            move |ctx, request, responder| {
+                let h = handler.get_or_init(|| {
+                    // Restore persisted bundle root before the first request is served
+                    let app = ctx.app_handle();
+                    if let Ok(cache_dir) = app.path().app_cache_dir() {
+                        tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
+                        if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
+                            tauri::async_runtime::block_on(async {
+                                let mut service = s.lock().await;
+                                service.load_bundle_root(&cache_dir).await;
+                            });
+                        }
+                    }
+                    tauri_protocol::get(app.clone(), &window_origin)
+                });
+                h(ctx.webview_label(), request, responder);
+            }
         })
         .manage(PendingShareFilesState::default())
         .invoke_handler(tauri::generate_handler![
-            heartbeat_response,
+            macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
+            macro_bundle_updater_plugin::inbound::plugin::perform_update,
+            macro_bundle_updater_plugin::inbound::plugin::check_for_update,
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
+            macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             get_pending_share_filenames,
             pop_shared_files,
             clear_shared_files,
-            upload_shared_file_to_presigned_url
+            upload_shared_file_to_presigned_url,
         ])
         .setup(|app| {
+            // Restore persisted bundle root on startup
+            if let Ok(cache_dir) = app.path().app_cache_dir()
+                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
+            {
+                tauri::async_runtime::block_on(async {
+                    let mut service = s.lock().await;
+                    service.load_bundle_root(&cache_dir).await;
+                    tracing::info!(
+                        "Setup: restored bundle root to {:?}",
+                        service.bundle_root_path()
+                    );
+                });
+            }
+
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -221,40 +217,70 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
-
             #[cfg(target_os = "ios")]
-            {
-                let handle = app.handle().clone();
-                let _ = GLOBAL_APP_HANDLE.set(handle.clone());
-                cleanup_stale_staged_shared_files(&handle);
-            }
+            cleanup_stale_staged_shared_files(&app.handle());
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::Resumed = event {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    match apply_completed_update(&app).await {
+                        Ok(true) => {
+                            tracing::info!("auto-applied pending bundle update on foreground");
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            tracing::error!("failed to auto-apply bundle update: {e}");
+                        }
+                    }
+                });
+            }
+        });
 }
 
 /// fn to merge the headers from the http cookie store into the initial
 /// GET request to open a websocket
 fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handle: &AppHandle<R>) {
-    tracing::debug!("got url {url}");
+    let Ok(mut parsed_url) = Url::parse(&url) else {
+        return;
+    };
+
+    // Origin headers are required for service auth and must be set unconditionally,
+    // independent of whether cookie state is available.
+    match parsed_url.host_str() {
+        Some("services.macro.com") | Some("services-dev.macro.com") => {
+            headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
+        }
+        // The sync service (macroverse.workers.dev) also validates Origin.
+        Some("macroverse.workers.dev") => {
+            let origin = if cfg!(debug_assertions) {
+                "https://dev.macro.com"
+            } else {
+                "https://macro.com"
+            };
+            headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        }
+        _ => {}
+    }
+
+    // Cookie forwarding requires the HTTP plugin's cookie jar.
     let Some(s) = handle.try_state::<tauri_plugin_http::Http>() else {
         return;
     };
-    let Ok(mut url) = url.parse::<Url>() else {
-        return;
-    };
-    url.set_scheme(match url.scheme() {
-        "ws" => "http",
-        _ => "https",
-    })
-    .ok();
-    tracing::debug!("checking cookies for {url}");
+    parsed_url
+        .set_scheme(match parsed_url.scheme() {
+            "ws" => "http",
+            _ => "https",
+        })
+        .ok();
+    tracing::trace!("checking cookies for {parsed_url}");
 
-    if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&url) {
-        tracing::info!("inserting cookie value for {url}");
-        tracing::debug!("{cookie:?}");
+    if let Some(cookie) = s.inner().cookies_jar.as_ref().cookies(&parsed_url) {
+        tracing::trace!("inserting cookie value for {parsed_url}");
         headers.insert(COOKIE, cookie);
     }
 }
@@ -272,8 +298,9 @@ impl AppChain for tauri::App {
 
 fn attach_deep_link_handler(app: &mut tauri::App) {
     fn inner_handler(ev: OpenUrlEvent, handle: &AppHandle) -> Result<(), Report> {
-        let url = ev
-            .urls()
+        let urls = ev.urls();
+        tracing::trace!("received open url event {urls:?}");
+        let url = urls
             .into_iter()
             .next()
             .ok_or_else(|| report!("expected at least 1 url"))?;
@@ -304,7 +331,7 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
         // we send a navigate event instead of calling navigate directly
         // because navigate performs a full browser navigation
 
-        tracing::info!("{payload:?}");
+        tracing::trace!("{payload:?}");
         Ok(handle.emit("navigate", payload)?)
     }
 

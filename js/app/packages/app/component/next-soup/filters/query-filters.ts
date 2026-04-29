@@ -1,5 +1,4 @@
 import type { SoupItemsQueryFilters, SoupBody } from '@queries/soup/items';
-import { ChannelTypeEnum } from '@service-comms/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
@@ -9,10 +8,11 @@ export const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  call_filters: { channel_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
-  email_filters: { recipients: EXCLUDE },
+  email_filters: { email_thread_ids: EXCLUDE },
   project_filters: { project_ids: EXCLUDE },
 };
 
@@ -28,6 +28,14 @@ function isValueFilteredOut(
   if (!values || values.length === 0) return false;
   if (!value) return true;
   return !values.includes(value);
+}
+
+function isAttendedFilteredOut(
+  attendedFilter: boolean | null | undefined,
+  itemAttended: boolean
+): boolean {
+  if (attendedFilter !== true && attendedFilter !== false) return false;
+  return itemAttended !== attendedFilter;
 }
 
 // TODO: this only supports the subset of soup filters needed for cache matching.
@@ -64,102 +72,11 @@ export function filterSoupItemByRequestBody(
       ({ data }) =>
         !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
     )
+    .with(
+      { tag: 'call' },
+      ({ data }) =>
+        !isIdFilteredOut(body.call_filters?.channel_ids, data.channelId) &&
+        !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
+    )
     .exhaustive();
 }
-
-/** File types or associations for soup */
-export const getFileAssociations = () => {
-  return ['assoc:code', 'assoc:image', 'assoc:other', 'pdf'];
-};
-
-export const QUERY_FILTERS = {
-  document: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    document_filters: { file_types: ['md', 'canvas'] },
-  },
-
-  task: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    document_filters: { sub_types: ['task'] },
-  },
-
-  email: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    email_filters: {},
-  },
-
-  people: {
-    chat_filters: { chat_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    channel_filters: { channel_types: [ChannelTypeEnum.DirectMessage] },
-  },
-
-  teams: {
-    chat_filters: { chat_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    channel_filters: {
-      channel_types: [
-        ChannelTypeEnum.Private,
-        ChannelTypeEnum.Organization,
-        ChannelTypeEnum.Public,
-      ],
-    },
-  },
-
-  agent: {
-    channel_filters: { channel_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    chat_filters: {},
-  },
-
-  file: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    document_filters: { file_types: getFileAssociations() },
-  },
-
-  documentAndFile: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    document_filters: {
-      file_types: ['md', 'canvas', 'docx', ...getFileAssociations()],
-    },
-  },
-
-  channels: {
-    chat_filters: { chat_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    channel_filters: {},
-  },
-
-  folders: {
-    channel_filters: { channel_ids: EXCLUDE },
-    chat_filters: { chat_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    project_filters: {},
-  },
-
-  default: {},
-} satisfies Record<string, SoupItemsQueryFilters>;

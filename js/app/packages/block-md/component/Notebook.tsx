@@ -7,8 +7,13 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
-import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { useBlockAliasedName, useBlockId } from '@core/block';
+import { ParamsProvider } from '@core/component/ParamsProvider';
+import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import {
+  ENABLE_MARKDOWN_COMMENTS,
+  ENABLE_RAIL_CHAT_TASK_COMMENTS,
+} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -25,12 +30,15 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  Show,
   untrack,
 } from 'solid-js';
 import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { TaskDiscussion } from './TaskDiscussion';
 import { TitleEditor } from './TitleEditor';
+import { registerMarkdownCommands } from './useMarkdownCommands';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -68,6 +76,7 @@ export function Notebook() {
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
+  const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
 
   let notebookRef!: HTMLDivElement;
@@ -179,6 +188,23 @@ export function Notebook() {
     );
   });
 
+  // Register markdown formatting commands on the block scope so they appear in
+  // Cmd+K, but only when the editor has focus (not just the block container).
+  const [editorHasFocus, setEditorHasFocus] = createSignal(false);
+  createEffect(() => {
+    const editor = md.editor;
+    if (!editor) return;
+    const cleanup = editorFocusSignal(editor, setEditorHasFocus);
+    onCleanup(cleanup);
+  });
+  createEffect(() => {
+    if (!scopeId()) return;
+    const group = untrack(() =>
+      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus)
+    );
+    onCleanup(() => group.dispose());
+  });
+
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
   let hasRun = false;
   createEffect(() => {
@@ -263,7 +289,12 @@ export function Notebook() {
           documentName={documentName()}
           fallback={<div class="h-6 w-full" />}
         />
-        <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+        <ParamsProvider>
+          <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
+          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
+            <TaskDiscussion />
+          </Show>
+        </ParamsProvider>
       </div>
       <div
         class={commentPositioning().classes}

@@ -1,4 +1,4 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { resolveEmoji, useEmojiData } from '@core/component/Emoji/emojis';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
@@ -71,6 +71,9 @@ export function EmojiItem(props: {
 export function EmojiMenu(props: EmojiMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [escapeSpaceState, setEscapeSpaceState] = createSignal<
+    'start' | 'single' | null
+  >('start');
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
     number | undefined
@@ -105,6 +108,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
     if (props.menu.isOpen()) {
       setMountSelection(document.getSelection());
       setSelectedIndex(0);
+      setEscapeSpaceState('start');
     } else {
       setMountSelection(null);
     }
@@ -187,6 +191,21 @@ export function EmojiMenu(props: EmojiMenuProps) {
       }
     },
     onClose: closeMenu,
+    onSpace: () => {
+      switch (escapeSpaceState()) {
+        case 'single':
+        case 'start':
+          closeMenu();
+          return true;
+        case null:
+          setEscapeSpaceState('single');
+          return false;
+      }
+      return false;
+    },
+    onOtherKey: () => {
+      setEscapeSpaceState(null);
+    },
   });
 
   const focusOut = () => {
@@ -226,7 +245,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           }}
           ref={menuRef}
         >
-          <ClippedPanel active class="py-2 bg-panel" cornerRadius={'4px'}>
+          <Panel active class="py-2">
             <div class="flex flex-col gap-1 px-2 w-full">
               <Show
                 when={emojiOptions().length > 0}
@@ -264,7 +283,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
                 </VList>
               </Show>
             </div>
-          </ClippedPanel>
+          </Panel>
         </div>
       </ScopedPortal>
     </Show>

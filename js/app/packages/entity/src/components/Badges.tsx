@@ -6,7 +6,7 @@ function Badge(props: ParentProps<{ class?: string }>) {
   return (
     <div
       class={cn(
-        'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-[0.625rem] rounded-full border',
+        'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-xxs rounded-full border',
         props.class
       )}
     >
@@ -33,6 +33,20 @@ export function ImportantBadge() {
   return (
     <Badge class="text-accent bg-accent/10 px-2 border-accent/10">
       important
+    </Badge>
+  );
+}
+
+export function AttendanceBadge(props: { attended: boolean }) {
+  return (
+    <Badge
+      class={
+        props.attended
+          ? 'text-ink-extra-muted border-edge-muted px-2'
+          : 'text-accent-30 border-edge-muted px-2'
+      }
+    >
+      {props.attended ? 'attended' : 'unattended'}
     </Badge>
   );
 }

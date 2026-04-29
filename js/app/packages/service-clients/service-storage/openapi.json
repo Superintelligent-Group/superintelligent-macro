@@ -594,6 +594,381 @@
         }
       }
     },
+    "/call/record/preview": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/record/preview`.",
+        "description": "Batch-fetches lightweight previews for a list of call ids. Mirrors the\n`POST /documents/preview` endpoint: no per-id access checks, duplicate\nids are deduplicated server-side, and missing ids come back as\n`CallRecordPreview::DoesNotExist` rather than producing an error.",
+        "operationId": "get_batch_call_record_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchCallRecordPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchCallRecordPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "call_ids exceeds MAX_BATCH_CALL_IDS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/record/{call_id}`.",
+        "description": "Returns the full [`CallRecord`] (metadata + participants + transcript)\nfor a call identified by its own id. Covers both active and archived calls.\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "get_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `DELETE /call/record/{call_id}`.",
+        "description": "Deletes a call record (and its participants/transcripts via cascade).\nAccess is validated via channel membership (MemberParticipantRole).",
+        "operationId": "delete_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Call record deleted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `PATCH /call/record/{call_id}`.",
+        "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership",
+        "operationId": "edit_call_record",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCallRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Call record updated"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/share-with-team/toggle": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `POST /call/record/{call_id}/share-with-team/toggle`.",
+        "description": "Toggles the `share_with_team` flag on the active call. Returns the new\nvalue as the JSON body.",
+        "operationId": "toggle_share_with_team",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "New value of share_with_team after toggle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/transcript": {
+      "patch": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `PATCH /call/record/{call_id}/transcript`.",
+        "description": "Applies per-diarized-speaker `custom_speaker` overrides to the call's\narchived transcript rows. Auth uses the same `EditAccessLevel` extractor\nas `edit_call_record_handler`.",
+        "operationId": "edit_call_transcript",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCallTranscriptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Transcript updated"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -731,6 +1106,61 @@
         }
       }
     },
+    "/call/{channel_id}/active": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/{channel_id}/active`.",
+        "description": "Returns 200 with call info if an active call exists, or 204 No Content if not.",
+        "operationId": "check_active_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallActiveResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No active call"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/{channel_id}/transcript": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -827,6 +1257,15 @@
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachment_type",
+            "in": "query",
+            "description": "Filter by type: 'static' for images/videos, 'dss' for documents",
             "required": false,
             "schema": {
               "type": "string"
@@ -933,6 +1372,124 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `POST /channels/{channel_id}/messages`.",
+        "operationId": "post_channel_messages",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "load_around_message_id",
+            "in": "query",
+            "description": "Return a centered window around this message ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelMessageFilters"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
@@ -1999,8 +2556,9 @@
     "/documents/{document_id}/copy": {
       "post": {
         "tags": ["document"],
-        "summary": "Handles copying a given document. This is the similar to\ncreate_document_handler where you provide the branched_from_id,\nbranched_from_version_id and document_family_id in the request body. Except\nthis will not require you to re-upload the document when it's made saving\ntime and resources.",
-        "operationId": "copy_document_handler",
+        "summary": "Handler for `POST /documents/{document_id}/copy`.",
+        "description": "Copies an existing document, creating a new document with the same content.\nDoes not require re-uploading the document file.",
+        "operationId": "copy_document",
         "parameters": [
           {
             "name": "document_id",
@@ -2038,7 +2596,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetDocumentResponse"
+                  "$ref": "#/components/schemas/CopyDocumentResponse"
                 }
               }
             }
@@ -2048,7 +2606,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2058,17 +2616,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2078,7 +2626,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2088,7 +2636,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4653,6 +5201,66 @@
         }
       }
     },
+    "/threads/{thread_id}": {
+      "patch": {
+        "tags": ["threads"],
+        "summary": "Edits the share permissions of a thread.",
+        "operationId": "edit_thread_v2",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchThreadRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_document_view_location/{document_id}": {
       "get": {
         "tags": [
@@ -4895,66 +5503,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PatchProjectRequestV2"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/threads/{thread_id}": {
-      "patch": {
-        "tags": ["threads"],
-        "summary": "Edits the share permissions of a thread.",
-        "operationId": "edit_thread_v2",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "thread ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchThreadRequestV2"
               }
             }
           },
@@ -5701,6 +6249,287 @@
           }
         }
       },
+      "CallActiveResponse": {
+        "type": "object",
+        "description": "Response indicating whether an active call exists for a channel.",
+        "required": ["callId", "channelId", "createdBy", "createdAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          }
+        }
+      },
+      "CallFilters": {
+        "type": "object",
+        "description": "Filters for call records.",
+        "properties": {
+          "attended": {
+            "type": ["boolean", "null"],
+            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs to filter calls by. Empty to include all calls."
+          },
+          "speaker_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Speaker macro user ids. Empty to include all."
+          }
+        }
+      },
+      "CallRecord": {
+        "type": "object",
+        "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
+        "required": [
+          "callId",
+          "channelId",
+          "roomName",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "participants",
+          "transcript"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "customName": {
+            "type": ["string", "null"],
+            "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "egressId": {
+            "type": ["string", "null"],
+            "description": "Recording egress ID, if any."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active (from `calls` table)."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordParticipant"
+            },
+            "description": "Participants (both active and historic)."
+          },
+          "recordingUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording, if available."
+          },
+          "roomName": {
+            "type": "string",
+            "description": "The RTC room name."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`."
+          },
+          "transcript": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordTranscriptSegment"
+            },
+            "description": "Transcript segments ordered by `sequence_num`."
+          }
+        }
+      },
+      "CallRecordParticipant": {
+        "type": "object",
+        "description": "A participant as returned in a [`CallRecord`] (historic — includes `left_at`).",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
+      "CallRecordPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallRecordPreviewData",
+                "description": "The call exists (in either the active or archived table)."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["exists"]
+                  }
+                }
+              }
+            ],
+            "description": "The call exists (in either the active or archived table)."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithCallId",
+                "description": "No call with this id exists in either the active or archived tables."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
+                }
+              }
+            ],
+            "description": "No call with this id exists in either the active or archived tables."
+          }
+        ],
+        "description": "Lightweight preview of a call record, returned by the batch preview endpoint.\n\nEach requested id resolves to one of two outcomes: the call exists\n(`Exists`) or it does not (`DoesNotExist`). The endpoint does not perform\naccess checks, so there is no separate \"not authorized\" variant."
+      },
+      "CallRecordPreviewData": {
+        "type": "object",
+        "description": "Preview payload returned for each found call id.",
+        "required": ["callId", "channelId", "startedAt"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
+      "CallRecordTranscriptSegment": {
+        "type": "object",
+        "description": "A transcript segment as returned in a [`CallRecord`].",
+        "required": [
+          "transcriptId",
+          "speakerId",
+          "content",
+          "startedAt",
+          "sequenceNum"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The transcribed text content."
+          },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Unique across tracks in the call. `None` when the provider didn't\nreturn a speaker label."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the speaker stopped (if known)."
+          },
+          "segmentId": {
+            "type": ["string", "null"],
+            "description": "LiveKit segment ID (nullable for archived records)."
+          },
+          "sequenceNum": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ordering within the call."
+          },
+          "speakerId": {
+            "type": "string",
+            "description": "The speaker's user ID."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the speaker started this segment."
+          },
+          "transcriptId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable DB-row id for the segment."
+          }
+        }
+      },
       "CallTokenResponse": {
         "type": "object",
         "description": "Response returned when creating or joining a call.",
@@ -5873,6 +6702,29 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ChannelMessageFilters": {
+        "type": "object",
+        "description": "Filters for channel message queries.",
+        "properties": {
+          "last_activity": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages that have activity after this\ntimestamp. Activity means either the message itself was created after\nthis time, or a thread reply was created after this time."
+          },
+          "message_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "When non-empty, only return messages with these IDs."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "When set, only return top-level messages where the message itself or\nany active thread reply has a notification for the requesting user that\nmatches these notification state constraints."
           }
         }
       },
@@ -6085,21 +6937,23 @@
       },
       "CopyDocumentQueryParams": {
         "type": "object",
+        "description": "Query parameters for the copy document endpoint.",
         "properties": {
           "version_id": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "The version id of the document to copy. Defaults to copying the latest version of the document."
+            "description": "The DB version id of the document to copy. Defaults to latest."
           }
         }
       },
       "CopyDocumentRequest": {
         "type": "object",
+        "description": "Request body for copying a document.",
         "required": ["documentName"],
         "properties": {
           "documentName": {
             "type": "string",
-            "description": "The name of the document without extension."
+            "description": "The name of the new document (without extension)."
           },
           "versionId": {
             "oneOf": [
@@ -6107,9 +6961,25 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/SyncServiceVersionID"
+                "$ref": "#/components/schemas/SyncServiceVersionID",
+                "description": "Optional sync service version ID for MD documents."
               }
             ]
+          }
+        }
+      },
+      "CopyDocumentResponse": {
+        "type": "object",
+        "description": "Response wrapper for the copy document endpoint.",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentResponse",
+            "description": "The copied document data."
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred."
           }
         }
       },
@@ -6330,6 +7200,7 @@
           },
           "projectParentId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The project that the new project will belong to."
           }
         }
@@ -6451,6 +7322,21 @@
           "config": {},
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CustomSpeakerAssignment": {
+        "type": "object",
+        "description": "One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].\n\n`custom_speaker = None` clears any existing override for this\n`diarized_speaker_id`; `Some(macro_user_id)` sets it. The string is\nexpected to parse as a `MacroUserId` (e.g. `macro|alice@example.com`);\nthe service layer rejects malformed values with `400 Bad Request`.",
+        "required": ["diarizedSpeakerId", "customSpeaker"],
+        "properties": {
+          "customSpeaker": {
+            "type": "string",
+            "description": "Macro user id to attribute matching rows to, or `None` to clear."
+          },
+          "diarizedSpeakerId": {
+            "type": "string",
+            "description": "The diarization label whose rows this assignment targets."
           }
         }
       },
@@ -7041,6 +7927,45 @@
           }
         ]
       },
+      "EditCallRecordRequest": {
+        "type": "object",
+        "description": "Edit call request",
+        "properties": {
+          "customName": {
+            "type": ["string", "null"],
+            "description": "Updated user-supplied display name for the call. `None` is a no-op;\n`Some(\"\")` clears `call_records.custom_name`; any other `Some(s)`\noverwrites it with `s`. Only the archived `call_records` row carries\nthis column — patching while the call is still active is a no-op for\nthis field."
+          },
+          "sharePermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
+                "description": "Updated share permissions."
+              }
+            ]
+          },
+          "shareWithTeam": {
+            "type": ["boolean", "null"],
+            "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+          }
+        }
+      },
+      "EditCallTranscriptRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /call/record/{call_id}/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.",
+        "required": ["assignments"],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomSpeakerAssignment"
+            },
+            "description": "The set of per-diarized-speaker overrides to apply."
+          }
+        }
+      },
       "EditCommentRequest": {
         "type": "object",
         "required": ["threadId"],
@@ -7225,6 +8150,10 @@
             },
             "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
           },
+          "calendar_only": {
+            "type": ["boolean", "null"],
+            "description": "When `Some(true)`, only include threads that have at least one message\nwith an iCalendar attachment (`.ics` filename or `application/ics` mime\ntype). `Some(false)` and `None` apply no constraint."
+          },
           "cc": {
             "type": "array",
             "items": {
@@ -7296,6 +8225,9 @@
         "type": "object",
         "description": "Describes a bundle of filters that should be applied across different entity types",
         "properties": {
+          "callf": {
+            "description": "the filters that should be applied to the call entity"
+          },
           "cf": {
             "description": "the filters that should be applied to the chat entity"
           },
@@ -7320,6 +8252,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "call_filters": {
+            "$ref": "#/components/schemas/CallFilters",
+            "description": "the bundled [CallFilters]"
+          },
           "channel_filters": {
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"
@@ -8078,6 +9014,35 @@
         },
         "deprecated": true
       },
+      "GetBatchCallRecordPreviewRequest": {
+        "type": "object",
+        "description": "Request body for `POST /call/record/preview`.\n\nThe `call_ids` list is bounded at [`MAX_BATCH_CALL_IDS`]; the handler\nrejects anything larger with a 400 before touching the database.",
+        "required": ["callIds"],
+        "properties": {
+          "callIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The call ids to preview. Duplicate ids are deduplicated server-side.\nCapped at [`MAX_BATCH_CALL_IDS`] entries."
+          }
+        }
+      },
+      "GetBatchCallRecordPreviewResponse": {
+        "type": "object",
+        "description": "Response body for `POST /call/record/preview`.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallRecordPreview"
+            },
+            "description": "One entry per deduplicated input id."
+          }
+        }
+      },
       "GetBatchPreviewRequest": {
         "type": "object",
         "required": ["document_ids"],
@@ -8597,15 +9562,15 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification-level filters that apply to an entity type.",
+        "description": "Notification state filters for channel message queries.",
         "properties": {
           "done": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
+            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
           },
           "seen": {
             "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
           }
         }
       },
@@ -10114,6 +11079,94 @@
           }
         }
       },
+      "SoupCallRecord": {
+        "type": "object",
+        "description": "A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.",
+        "required": [
+          "callId",
+          "channelId",
+          "createdBy",
+          "startedAt",
+          "isActive",
+          "attended",
+          "participants"
+        ],
+        "properties": {
+          "attended": {
+            "type": "boolean",
+            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+          },
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel this call belongs to."
+          },
+          "channelName": {
+            "type": ["string", "null"],
+            "description": "Resolved display name for the channel."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User who created the call."
+          },
+          "customName": {
+            "type": ["string", "null"],
+            "description": "User-supplied or AI-generated display name for the call."
+          },
+          "durationMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Call duration in milliseconds (None if still active)."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the call ended (None if still active)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the call is currently active."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCallRecordParticipant"
+            },
+            "description": "Participants in the call."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call started."
+          }
+        }
+      },
+      "SoupCallRecordParticipant": {
+        "type": "object",
+        "description": "A participant in a call record, as displayed in Soup.",
+        "required": ["userId", "joinedAt"],
+        "properties": {
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined the call."
+          },
+          "leftAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the user left (None if still in an active call)."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The user id."
+          }
+        }
+      },
       "SoupChannel": {
         "allOf": [
           {
@@ -10516,6 +11569,19 @@
                 "enum": ["channel"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCallRecord"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["call"]
+              }
+            }
           }
         ]
       },
@@ -10763,6 +11829,10 @@
           "content": {
             "type": "string",
             "description": "The transcribed text content."
+          },
+          "diarizedSpeakerId": {
+            "type": ["string", "null"],
+            "description": "Stable per-speaker identifier produced by the STT provider's diarization\npass. Namespaced upstream by audio track so values are unique across all\ntracks in a call. `None` when the provider didn't return a speaker label."
           },
           "endedAt": {
             "type": ["string", "null"],
@@ -11103,6 +12173,18 @@
             "items": {
               "$ref": "#/components/schemas/View"
             }
+          }
+        }
+      },
+      "WithCallId": {
+        "type": "object",
+        "description": "Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.",
+        "required": ["callId"],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The call identifier."
           }
         }
       },

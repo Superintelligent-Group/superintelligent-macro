@@ -19,11 +19,20 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 
 export { useIsShared } from './utils/shared';
 export {
+  formatTimestamp,
+  formatRelativeTimestamp,
+  formatDateAndTime,
+} from './utils/timestamp';
+export {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from './utils/notification';
 
 export { unreadFilterFn } from './utils/filter';
+export {
+  buildEntityData,
+  type BuildEntityDataArgs,
+} from './utils/buildEntityData';
 export {
   TASK_STATUS_OPTIONS,
   getTaskAssigneeIds,
@@ -31,5 +40,12 @@ export {
   isTaskClosed,
   isCurrentUserAssigned,
 } from './utils/task-properties';
+
+export {
+  getSnippetHit,
+  isHitSnippetComplete,
+  isSnippetEntity,
+  type SnippetEntity,
+} from './extractors-search/snippet-entity';
 
 export { default as DebugEntityView } from './debug/DebugEntityView';

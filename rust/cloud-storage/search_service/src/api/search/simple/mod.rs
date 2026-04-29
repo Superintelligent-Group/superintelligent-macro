@@ -5,16 +5,15 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use email_contact_search::EmailContactSearchError;
 use model::response::ErrorResponse;
 use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
 
 pub(in crate::api) mod filter;
+pub(in crate::api) mod simple_call_record;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
-pub(in crate::api) mod simple_email;
 pub(in crate::api) mod simple_project;
 pub mod simple_unified;
 
@@ -48,9 +47,6 @@ pub enum SearchError {
     /// Name search error occurred
     #[error("unable to name search")]
     NameSearch(#[from] NameSearchError),
-    /// Email contact search error occurred
-    #[error("unable to search email contacts")]
-    EmailContactSearch(#[from] EmailContactSearchError),
     /// Internal error occurred
     #[error("internal error")]
     InternalError(#[from] anyhow::Error),
@@ -64,10 +60,9 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidQuerySize
             | SearchError::InvalidCursor
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
-            SearchError::Search(_)
-            | SearchError::NameSearch(_)
-            | SearchError::EmailContactSearch(_)
-            | SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (

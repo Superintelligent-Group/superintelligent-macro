@@ -2,16 +2,26 @@
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
-        DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
-        GithubSyncAppPemSecretKey, GithubWebhookSecretKey,
+        CalEventTypeContentNamesKey, CalWebhookSecretKey, DocumentPermissionJwtSecretKey,
+        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName, GithubSyncAppPemSecretKey,
+        GithubWebhookSecretKey, MetaAccessToken, MetaPixelId, MetaTestEventCode,
     },
     service::s3::S3,
 };
+use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
+use cal::{
+    domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
+    inbound::cal_webhook_router::CalWebhookRouterState,
+    outbound::analytics_client::AnalyticsClientSink,
+};
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
-    outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
+    outbound::{
+        ai_call_summarizer::AiCallSummarizer, livekit_rtc_client::LivekitRtcClient,
+        pg_call_repo::PgCallRepo,
+    },
 };
 use channels::{
     domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
@@ -47,7 +57,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -239,10 +249,10 @@ async fn main() -> anyhow::Result<()> {
     ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::new(&aws_config),
-        queue_url: config.vars.notification_queue.as_ref().to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.vars.notification_queue.as_ref().to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
@@ -318,6 +328,11 @@ async fn main() -> anyhow::Result<()> {
     let connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
 
+    let entity_access_management_service =
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -328,6 +343,7 @@ async fn main() -> anyhow::Result<()> {
             properties: properties_service.clone(),
         },
         connection_service,
+        entity_access_management_service.clone(),
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -350,6 +366,37 @@ async fn main() -> anyhow::Result<()> {
         GithubSyncClientImpl::default(),
     );
 
+    // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
+    // (rather than on Config) to keep cal/Meta wiring colocated.
+    let cal_webhook_secret = secretsmanager_client
+        .get_maybe_secret_value(env, CalWebhookSecretKey::new()?)
+        .await?;
+    let cal_event_type_content_names_secret = secretsmanager_client
+        .get_maybe_secret_value(env, CalEventTypeContentNamesKey::new()?)
+        .await?;
+
+    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
+        google_analytics: None,
+        meta: Some(MetaConfig {
+            pixel_id: MetaPixelId::new()?.as_ref().to_string(),
+            access_token: MetaAccessToken::new()?.as_ref().to_string(),
+            test_event_code: MetaTestEventCode::new().map(|v| v.as_ref().to_string()),
+        }),
+        posthog: None,
+    }));
+
+    let cal_event_type_meta: std::collections::HashMap<u64, CalEventMeta> =
+        serde_json::from_str(cal_event_type_content_names_secret.as_ref())
+            .context("CalEventTypeContentNames secret must be a JSON object mapping eventTypeId (u64) to { content_name: string, value: number (USD) }")?;
+    let cal_webhook_service = CalWebhookServiceImpl::new(
+        CalConfig {
+            webhook_secret: cal_webhook_secret.as_ref().to_string(),
+            event_type_meta: cal_event_type_meta,
+        },
+        AnalyticsClientSink::new(analytics_client.clone()),
+    );
+    let cal_webhook_state = CalWebhookRouterState::new(cal_webhook_service);
+
     // Call service (LiveKit)
     let transcription_agent_name =
         config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
@@ -368,32 +415,51 @@ async fn main() -> anyhow::Result<()> {
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
     let call_repo = PgCallRepo::new(db.clone());
-    let mut call_service_builder = CallServiceImpl::new(
-        call_repo,
-        livekit_rtc_client,
-        call_connection_service,
-        config.vars.livekit_server_url.as_ref(),
-    );
-    if let Some(secret) = internal_call_secret {
-        call_service_builder = call_service_builder.with_internal_call_secret(secret);
-    }
-    if let (Some(bucket), Some(region), Some(access_key), Some(secret)) = (
+    let egress_config = match (
         config::CallRecordingS3Bucket::new(),
         config::CallRecordingS3Region::new(),
         config::CallRecordingS3AccessKey::new(),
         config::CallRecordingS3Secret::new(),
     ) {
-        tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
-        call_service_builder =
-            call_service_builder.with_egress(call::domain::models::EgressS3Config {
+        (Some(bucket), Some(region), Some(access_key), Some(secret)) => {
+            tracing::info!(bucket = bucket.as_ref(), "call recording enabled");
+            Some(call::domain::models::EgressS3Config {
                 bucket: bucket.as_ref().to_string(),
                 region: region.as_ref().to_string(),
                 access_key: access_key.as_ref().to_string(),
                 secret: secret.as_ref().to_string(),
-            });
+            })
+        }
+        _ => None,
+    };
+    let recording_storage = match &egress_config {
+        Some(config) => Some(
+            call::outbound::s3_recording_storage::S3RecordingStorage::new(config.bucket.clone())
+                .await,
+        ),
+        None => None,
+    };
+    let mut call_service_builder = CallServiceImpl::<_, _, _, _, _, _, AiCallSummarizer>::new(
+        call_repo,
+        livekit_rtc_client,
+        call_connection_service,
+        (*entity_access_service).clone(),
+        (*notification_ingress_service).clone(),
+        recording_storage,
+        config.vars.livekit_server_url.as_ref(),
+    )
+    .with_summarizer(AiCallSummarizer::new());
+    if let Some(secret) = internal_call_secret {
+        call_service_builder = call_service_builder.with_internal_call_secret(secret);
+    }
+    if let Some(config) = egress_config {
+        call_service_builder = call_service_builder.with_egress(config);
     }
 
-    let call_service = Arc::new(call_service_builder);
+    let call_search_indexer = crate::service::call_search_indexer::SqsCallSearchIndexer::new(
+        Arc::new(sqs_client.clone()),
+    );
+    let call_service = Arc::new(call_service_builder.with_search_indexer(call_search_indexer));
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
@@ -407,6 +473,10 @@ async fn main() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
+    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        PgCallRepo::new(readonly_db.clone()),
+    );
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -414,11 +484,13 @@ async fn main() -> anyhow::Result<()> {
                 frecency_service,
                 readonly_email_service,
                 channel_service_for_soup,
+                call_record_query_service,
             ),
             email_service,
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
         db: db.clone(),
+        readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
@@ -450,6 +522,8 @@ async fn main() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         call_internal_state,
+        cal_webhook_state,
+        entity_access_management_service,
     };
 
     // Spawn the delete document worker

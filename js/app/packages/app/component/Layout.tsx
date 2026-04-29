@@ -1,13 +1,8 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
-import { Resize } from '@core/component/Resize';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import {
-  LAYOUT_CONTEXT_ID,
-  setPersistedLayoutSizes,
-} from '@core/signal/layout';
 import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui/utils/classname';
@@ -21,6 +16,8 @@ import {
   Suspense,
 } from 'solid-js';
 import Banner from './banner/Banner';
+import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { DevStatusBar } from './DevStatusBar';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
@@ -29,9 +26,9 @@ import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
+import { AutomationComposer } from '@block-automation/component';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
-import { SettingsWrapper } from './settings/SettingsWrapper';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 import {
   AppSidebar,
@@ -40,6 +37,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileDock } from './mobile/MobileDock';
 import { MobileSearchOuter } from './mobile/MobileSearch';
+import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   SidebarVisibilityContext,
@@ -55,6 +53,7 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}signup`,
   `${ROUTER_BASE_CONCAT}email-signup-callback`,
   `${ROUTER_BASE_CONCAT}welcome`,
+  `${ROUTER_BASE_CONCAT}team-invite`,
 ];
 
 export const [sidebarState, setSidebarState] = makePersisted(
@@ -111,18 +110,6 @@ function LayoutInner(props: RouteSectionProps) {
     }
   });
 
-  // This effect is to handle moving from unauthenticated to authenticated
-  createEffect((prevAuth: boolean | undefined) => {
-    const currentAuth = isAuthenticated();
-    if (prevAuth === false && currentAuth === true) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    if (currentAuth === false) {
-      setPersistedLayoutSizes([1, 0]);
-    }
-    return currentAuth;
-  }, isAuthenticated());
-
   mountGlobalFocusListener();
 
   attachGlobalDOMScope(document.body);
@@ -130,12 +117,13 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-[var(--safe-top)] pl-[var(--safe-left)] pr-[var(--safe-right)]',
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
         {
-          'pb-[var(--safe-bottom)]': !virtualKeyboardVisible(),
+          'pb-(--safe-bottom)': !virtualKeyboardVisible(),
         }
       )}
     >
+      <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
@@ -168,7 +156,7 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="max-h-full grow-1 flex">
+      <div class="max-h-full grow flex">
         <Show when={isSidebarVisible()}>
           <AppSidebar
             sidebarState={sidebarState()}
@@ -183,19 +171,11 @@ function LayoutInner(props: RouteSectionProps) {
           />
         </Show>
 
-        <Resize.Zone
-          gutter={2}
-          direction="horizontal"
-          class="flex-1 w-full min-h-0 font-sans text-ink caret-accent"
-          id={'main-layout'}
-        >
-          <ItemDndProvider>
-            <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
-              {props.children}
-            </Resize.Panel>
-            <SettingsWrapper />
-          </ItemDndProvider>
-        </Resize.Zone>
+        <ItemDndProvider>
+          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
+            {props.children}
+          </div>
+        </ItemDndProvider>
       </div>
       <Show
         when={
@@ -210,13 +190,16 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={isMobile()}>
         <MobileSearchOuter />
       </Show>
+      <SwipeDownDismissKeyboard />
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+          <AutomationComposer />
         </Show>
       </Suspense>
+      <DevStatusBar />
     </div>
   );
 }

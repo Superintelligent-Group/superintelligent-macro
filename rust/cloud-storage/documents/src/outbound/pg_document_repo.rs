@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod tests;
 
+mod copy;
 mod create;
 mod edit;
 mod share;
@@ -14,7 +15,10 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
-use crate::domain::models::{CreateDocumentRepoArgs, EditDocumentRepoArgs};
+use crate::domain::models::{
+    Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs,
+    Thread,
+};
 use crate::domain::ports::DocumentRepo;
 
 /// PostgreSQL-backed document repository.
@@ -444,8 +448,16 @@ impl DocumentRepo for PgDocumentRepo {
             create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
         }
 
-        // Insert user item access (Owner level)
-        create::insert_item_access(&mut transaction, &document_id, &user_id).await?;
+        // Insert user entity access (Owner level)
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &document_id,
+            entity_access_db_utils::EntityType::Document,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
 
         // Link to email attachment if provided
         if let Some(attachment_id) = email_attachment_id {
@@ -552,5 +564,307 @@ impl DocumentRepo for PgDocumentRepo {
     #[tracing::instrument(err, skip(self))]
     async fn share_with_team(&self, user_id: &str, document_id: &str) -> Result<(), Self::Err> {
         share::share_with_team(&self.pool, user_id, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_metadata_at_version(
+        &self,
+        document_id: &str,
+        version_id: i64,
+    ) -> Result<DocumentMetadata, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT
+                d.id as "document_id",
+                d.owner as "owner",
+                d.name as "document_name",
+                COALESCE(di.id, db.id) as "document_version_id!",
+                d."branchedFromId" as "branched_from_id",
+                d."branchedFromVersionId" as "branched_from_version_id",
+                d."documentFamilyId" as "document_family_id",
+                d."createdAt"::timestamptz as "created_at",
+                d."updatedAt"::timestamptz as "updated_at",
+                d."fileType" as "file_type",
+                db.bom_parts as "document_bom?",
+                di.modification_data as "modification_data?",
+                d."projectId" as "project_id",
+                p.name as "project_name?",
+                di.sha as "sha?",
+                dt.sub_type as "sub_type?: DocumentSubType",
+                d."deletedAt"::timestamptz as "deleted_at"
+            FROM
+                "Document" d
+            LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+            LEFT JOIN LATERAL (
+                SELECT
+                    i.id,
+                    i.sha,
+                    i."createdAt",
+                    (
+                        SELECT
+                            imod."modificationData"
+                        FROM
+                            "DocumentInstanceModificationData" imod
+                        WHERE
+                            imod."documentInstanceId" = i.id
+                    ) as modification_data,
+                    i."updatedAt"
+                FROM
+                    "DocumentInstance" i
+                WHERE
+                    i."documentId" = d.id
+                AND
+                    i.id = $2
+            ) di ON true
+            LEFT JOIN LATERAL (
+                SELECT
+                    b.id,
+                    (
+                        SELECT
+                            json_agg(
+                                json_build_object(
+                                    'id', bp.id,
+                                    'sha', bp.sha,
+                                    'path', bp.path
+                                )
+                            )
+                        FROM
+                            "BomPart" bp
+                        WHERE
+                            bp."documentBomId" = b.id
+                    ) as bom_parts
+                FROM
+                    "DocumentBom" b
+                WHERE
+                    b."documentId" = d.id
+                AND
+                    b.id = $2
+            ) db ON d."fileType" = 'docx'
+            LEFT JOIN LATERAL (
+                SELECT
+                    p.name
+                FROM "Project" p
+                WHERE p.id = d."projectId"
+            ) p ON d."projectId" IS NOT NULL
+            WHERE
+                d.id = $1
+            LIMIT 1
+            "#,
+            document_id,
+            version_id,
+        )
+        .try_map(|row| {
+            Ok(DocumentMetadata {
+                document_id: row.document_id,
+                document_version_id: row.document_version_id,
+                owner: MacroUserIdStr::parse_from_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                    .into_owned(),
+                document_name: row.document_name,
+                file_type: row.file_type,
+                sha: row.sha,
+                project_id: row.project_id,
+                project_name: row.project_name,
+                branched_from_id: row.branched_from_id,
+                branched_from_version_id: row.branched_from_version_id,
+                document_family_id: row.document_family_id,
+                document_bom: row.document_bom,
+                modification_data: row.modification_data,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                sub_type: row.sub_type,
+                deleted_at: row.deleted_at,
+            })
+        })
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_owner(
+        &self,
+        project_id: &str,
+    ) -> Result<MacroUserIdStr<'static>, Self::Err> {
+        let row = sqlx::query!(
+            r#"SELECT "userId" as user_id FROM "Project" WHERE id = $1"#,
+            project_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        MacroUserIdStr::parse_from_str(&row.user_id)
+            .map(|u| u.into_owned())
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+    }
+
+    #[tracing::instrument(err, skip(self, args))]
+    async fn copy_document(
+        &self,
+        args: CopyDocumentRepoArgs,
+    ) -> Result<DocumentMetadata, Self::Err> {
+        let CopyDocumentRepoArgs {
+            original_document,
+            user_id,
+            document_name,
+            file_type,
+        } = args;
+
+        let mut transaction = self.pool.begin().await?;
+
+        let document = match file_type {
+            Some(model::document::FileType::Docx) => {
+                copy::copy_docx_document(
+                    &mut transaction,
+                    &original_document,
+                    user_id.clone(),
+                    &document_name,
+                )
+                .await
+            }
+            _ => {
+                copy::copy_non_docx_document(
+                    &mut transaction,
+                    &original_document,
+                    user_id.clone(),
+                    &document_name,
+                )
+                .await
+            }
+        }?;
+
+        let document_id = uuid::Uuid::parse_str(&document.document_id)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        // Create share permission
+        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
+
+        // Insert user entity access (Owner level)
+
+        // Insert user entity access (Owner level)
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &document_id,
+            entity_access_db_utils::EntityType::Document,
+            user_id.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
+
+        // Insert user history
+        let now = chrono::Utc::now();
+        create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
+
+        transaction.commit().await?;
+
+        Ok(document)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn copy_pdf_parts(
+        &self,
+        new_document_id: &str,
+        original_document_id: &str,
+    ) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_comments(
+        &self,
+        document_id: &str,
+    ) -> Result<Vec<CommentThread>, Self::Err> {
+        let threads = sqlx::query!(
+            r#"
+            SELECT
+                t.id as "thread_id!",
+                t.resolved as "resolved!",
+                t."documentId" as "document_id!",
+                t."createdAt"::timestamptz as "created_at",
+                t."updatedAt"::timestamptz as "updated_at",
+                t."deletedAt"::timestamptz as "deleted_at",
+                t.metadata as "metadata",
+                t.owner as "owner!"
+            FROM "Thread" t
+            WHERE t."documentId" = $1 AND t."deletedAt" IS NULL
+            "#,
+            document_id,
+        )
+        .map(|row| Thread {
+            thread_id: row.thread_id,
+            resolved: row.resolved,
+            document_id: row.document_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            metadata: row.metadata,
+            owner: row.owner,
+        })
+        .fetch_all(&self.pool)
+        .await?;
+
+        let comments = sqlx::query!(
+            r#"
+            SELECT
+                c.id as "comment_id!",
+                c."threadId" as "thread_id!",
+                c.owner as "owner!",
+                c.sender,
+                c.text as "text!",
+                c.metadata,
+                c."createdAt"::timestamptz as "created_at",
+                c."updatedAt"::timestamptz as "updated_at",
+                c."deletedAt"::timestamptz as "deleted_at",
+                c.order
+            FROM "Comment" c
+            JOIN "Thread" t ON c."threadId" = t.id
+            WHERE t."documentId" = $1
+                AND t."deletedAt" IS NULL
+                AND c."deletedAt" IS NULL
+            ORDER BY c."createdAt" ASC
+            "#,
+            document_id,
+        )
+        .map(|row| Comment {
+            comment_id: row.comment_id,
+            thread_id: row.thread_id,
+            owner: row.owner,
+            sender: row.sender,
+            text: row.text,
+            metadata: row.metadata,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            order: row.order,
+        })
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut comments_by_thread: std::collections::HashMap<i64, Vec<Comment>> =
+            std::collections::HashMap::new();
+        for comment in comments {
+            comments_by_thread
+                .entry(comment.thread_id)
+                .or_default()
+                .push(comment);
+        }
+
+        let comment_threads = threads
+            .into_iter()
+            .map(|thread| {
+                let thread_comments = comments_by_thread
+                    .remove(&thread.thread_id)
+                    .unwrap_or_default();
+                CommentThread {
+                    thread,
+                    comments: thread_comments,
+                }
+            })
+            .collect();
+
+        Ok(comment_threads)
     }
 }

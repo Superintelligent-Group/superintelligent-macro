@@ -1,11 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
-import {
-  isSettingsPanelOpen,
-  setIsSettingsPanelOpen,
-} from '@core/signal/layout/settings';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
   | 'Account'
@@ -15,50 +10,40 @@ export type SettingsTab =
   | 'Mobile'
   | 'AI Memory'
   | 'Inbox'
-  | 'Shortcuts';
+  | 'Shortcuts'
+  | 'Mobile App'
+  | 'Team';
 
-export const settingsOpen = isSettingsPanelOpen;
-export const setSettingsOpen = setIsSettingsPanelOpen;
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
-  const { replaceSplit } = useSplitLayout();
+  const { insertSplit } = useSplitLayout();
 
-  const activeSplit = () => {
+  const getSettingsSplit = () => {
     const splitManager = globalSplitManager();
-    const activeSplitId = splitManager?.activeSplitId();
-    return activeSplitId ? splitManager?.getSplit(activeSplitId) : undefined;
+    if (!splitManager) return undefined;
+    return splitManager.splits().find((split) => {
+      const content = split.content;
+      return content.type === 'component' && content.id === 'settings';
+    });
   };
 
-  const splitContent = () => {
-    return activeSplit()?.content();
-  };
-
-  const isOpen = () => {
-    if (isMobile()) {
-      const content = splitContent();
-      return content?.type === 'component' && content?.id === 'settings';
-    } else {
-      return isSettingsPanelOpen();
-    }
-  };
+  const isOpen = createMemo(() => {
+    return getSettingsSplit() !== undefined;
+  });
 
   const openSettings = (activeTabId?: SettingsTab) => {
-    if (isMobile()) {
-      replaceSplit({ content: { type: 'component', id: 'settings' } });
-    } else {
-      setIsSettingsPanelOpen(true);
-    }
     if (activeTabId) setActiveTabId(activeTabId);
+    if (isOpen()) return; // Already open
+    insertSplit({ type: 'component', id: 'settings' });
   };
+
   const closeSettings = () => {
-    if (isMobile()) {
-      if (isOpen()) {
-        activeSplit()?.goBack();
-      }
-    } else {
-      setIsSettingsPanelOpen(false);
+    const settingsSplit = getSettingsSplit();
+    if (settingsSplit) {
+      const splitManager = globalSplitManager();
+      splitManager?.removeSplit(settingsSplit.id);
     }
   };
   const toggleSettings = () => {

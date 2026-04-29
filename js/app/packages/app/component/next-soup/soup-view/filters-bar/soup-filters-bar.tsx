@@ -6,7 +6,6 @@ import type { ListView } from '@app/constants/list-views';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
-import { SearchIndexFilter } from '@app/component/next-soup/soup-view/filters-bar/search-filter-controls';
 import { isMobile } from '@core/mobile/isMobile';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { Button } from './button';
@@ -72,8 +71,32 @@ export const SoupFiltersBar = () => {
     <Switch>
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted/50">
-          <SoupSearchbar autoFocus />
-          <SearchIndexFilter />
+          <SoupSearchbar autoFocus placeholder="Search, @mention contacts" />
+          <div class="flex items-start gap-2">
+            <UnifiedFilterDropdown />
+            <ActiveFilterChips
+              filters={activeFiltersList()}
+              onRemove={removeFilter}
+              onReplace={replaceFilter}
+              onClearAll={resetToTabDefaults}
+              isOptionActive={isOptionActive}
+            />
+            <div class="flex-1" />
+            <Tooltip
+              tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}
+            >
+              <Button
+                variant={soup.previewEntity() ? 'primary' : 'ghost'}
+                size="sm"
+                class="rounded-xs [&_svg]:size-4 px-1 border border-transparent"
+                onClick={togglePreview}
+                onMouseEnter={() => setPreviewBtnHovering(true)}
+                onMouseLeave={() => setPreviewBtnHovering(false)}
+              >
+                <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
+              </Button>
+            </Tooltip>
+          </div>
         </div>
       </Match>
       <Match when={true}>

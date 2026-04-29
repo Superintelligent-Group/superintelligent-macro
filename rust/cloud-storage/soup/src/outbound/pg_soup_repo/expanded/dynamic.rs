@@ -9,6 +9,7 @@ use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
     chat::ChatLiteral,
+    date::DateLiteral,
     document::DocumentLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyMatchValue},
@@ -29,47 +30,21 @@ use uuid::Uuid;
 use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 
 static PREFIX: &str = r#"
-    WITH RECURSIVE ProjectHierarchy AS (
-        SELECT p.id, uia.access_level
-        FROM "Project" p
-        JOIN "UserItemAccess" uia ON p.id = uia.item_id AND uia.item_type = 'project'
-        WHERE uia.user_id = $1 AND p."deletedAt" IS NULL
+    WITH user_source_ids AS (
+        SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
         UNION ALL
-        SELECT p.id, ph.access_level
-        FROM "Project" p
-        JOIN ProjectHierarchy ph ON p."parentId" = ph.id
-        WHERE p."deletedAt" IS NULL
-    ),
-    AllAccessGrants AS (
-        SELECT item_id, item_type, access_level
-        FROM "UserItemAccess"
-        WHERE user_id = $1
+        SELECT t.team_id::text FROM team_user t
+            WHERE t.user_id = $1
         UNION ALL
-        SELECT d.id AS item_id, 'document' AS item_type,
-               (SELECT ph.access_level FROM ProjectHierarchy ph WHERE ph.id = d."projectId" LIMIT 1) as access_level
-        FROM "Document" d
-        WHERE d."projectId" = ANY(ARRAY(SELECT id FROM ProjectHierarchy))
-          AND d."deletedAt" IS NULL
-        UNION ALL
-        SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level
-        FROM "Chat" c
-        JOIN ProjectHierarchy ph ON c."projectId" = ph.id
-        WHERE c."projectId" IS NOT NULL AND c."deletedAt" IS NULL
-        UNION ALL
-        SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level
-        FROM ProjectHierarchy ph
+        SELECT $1
     ),
     UserAccessibleItems AS (
-        SELECT DISTINCT ON (item_id, item_type) item_id, item_type
-        FROM AllAccessGrants
-        ORDER BY item_id, item_type,
-            CASE access_level
-                WHEN 'owner' THEN 4
-                WHEN 'edit' THEN 3
-                WHEN 'comment' THEN 2
-                WHEN 'view' THEN 1
-                ELSE 0
-            END DESC
+        SELECT DISTINCT
+            ea.entity_id::text as item_id,
+            ea.entity_type as item_type
+        FROM entity_access ea
+        WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
     ),
 "#;
 
@@ -314,6 +289,17 @@ fn build_task_include_cbm_atm_nc_clause() -> String {
     .to_string()
 }
 
+fn date_predicate(col: &str, lit: &DateLiteral) -> String {
+    match lit {
+        DateLiteral::GreaterThan(dt) => format!("{col} > '{}'::timestamptz", dt.to_rfc3339()),
+        DateLiteral::LessThan(dt) => format!("{col} < '{}'::timestamptz", dt.to_rfc3339()),
+        DateLiteral::GreaterThanOrEqual(dt) => {
+            format!("{col} >= '{}'::timestamptz", dt.to_rfc3339())
+        }
+        DateLiteral::LessThanOrEqual(dt) => format!("{col} <= '{}'::timestamptz", dt.to_rfc3339()),
+    }
+}
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -362,7 +348,7 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         // false is equivalent to disabled/no-op.
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
         filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
-            format!("dt.sub_type = '{st}'")
+            format!("(dt.sub_type IS NOT NULL AND dt.sub_type = '{st}')")
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(true)) => {
             r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
@@ -371,6 +357,12 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(false)) => {
             r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
                 .to_string()
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"d."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"d."updatedAt""#, &lit)
         }
     });
     if formatting.is_empty() {
@@ -406,6 +398,12 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("c.id", "chat", seen)
         }
+        filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"c."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(ChatLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"c."updatedAt""#, &lit)
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -436,6 +434,12 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
             build_notification_seen_clause("p.id", "project", seen)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(lit)) => {
+            date_predicate(r#"p."createdAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(lit)) => {
+            date_predicate(r#"p."updatedAt""#, &lit)
         }
     });
     if formatting.is_empty() {

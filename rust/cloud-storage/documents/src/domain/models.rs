@@ -1,11 +1,24 @@
 //! Domain models for the documents crate.
 
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
+use model::document::{DocumentMetadata, FileType};
+use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
+use serde_json::Value;
 
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+/// Assignee property id
+pub const ASSIGNEES_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000001";
+
+/// Status property id
+pub const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
+
+/// Not started status option
+pub const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
+    uuid::uuid!("00000001-0000-0000-0002-000000000001");
 
 /// Errors that can occur during document operations.
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +41,48 @@ pub enum DocumentError {
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+}
+
+/// Response wrapper for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentResponse {
+    /// Indicates if an error occurred.
+    pub error: bool,
+    /// The copied document data.
+    pub data: model::document::response::DocumentResponse,
+}
+
+/// Arguments for copying a document in the repository.
+pub struct CopyDocumentRepoArgs {
+    /// The original document metadata to copy from.
+    pub original_document: DocumentMetadata,
+    /// The new owner/copier user ID.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The name for the new document.
+    pub document_name: String,
+    /// The file type of the document.
+    pub file_type: Option<FileType>,
+}
+
+/// Request body for copying a document.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentRequest {
+    /// The name of the new document (without extension).
+    pub document_name: String,
+    /// Optional sync service version ID for MD documents.
+    pub version_id: Option<SyncServiceVersionID>,
+}
+
+/// Query parameters for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct CopyDocumentQueryParams {
+    /// The DB version id of the document to copy. Defaults to latest.
+    pub version_id: Option<i64>,
 }
 
 /// Arguments for creating a document in the repository.
@@ -159,4 +214,68 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskResponse {
     /// The document ID of the created task.
     pub document_id: String,
+}
+
+/// A comment thread attached to a document.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct Thread {
+    /// The unique id of the thread.
+    pub thread_id: i64,
+    /// The user id of the thread owner.
+    pub owner: String,
+    /// Whether the thread has been resolved.
+    pub resolved: bool,
+    /// The document the thread is attached to.
+    pub document_id: String,
+    /// When the thread was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the thread was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When the thread was deleted, if ever.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Arbitrary thread metadata.
+    pub metadata: Option<Value>,
+}
+
+/// A single comment in a thread.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct Comment {
+    /// The unique id of the comment.
+    pub comment_id: i64,
+    /// The thread this comment belongs to.
+    pub thread_id: i64,
+    /// Ordering position within the thread.
+    pub order: Option<i32>,
+    /// The user id of the comment owner.
+    pub owner: String,
+    /// Sender display string.
+    pub sender: Option<String>,
+    /// Comment body.
+    pub text: String,
+    /// Arbitrary comment metadata.
+    pub metadata: Option<Value>,
+    /// When the comment was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the comment was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When the comment was deleted, if ever.
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// A thread bundled together with its ordered comments.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CommentThread {
+    /// The thread metadata.
+    pub thread: Thread,
+    /// The comments in the thread, ordered by `createdAt` ASC.
+    pub comments: Vec<Comment>,
 }

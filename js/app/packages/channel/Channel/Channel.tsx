@@ -2,12 +2,15 @@ import {
   type ChannelMessagesData,
   useChannelMessagesQuery,
   createMessageIndex,
+  getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
+import { queryClient } from '@queries/client';
 import {
   createEffect,
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   type Accessor,
@@ -36,13 +39,16 @@ import { ChannelThread } from '../Thread';
 import {
   ChannelInput,
   createInputAttachmentTracker,
+  type InputHandle,
   type InputSnapshot,
 } from '../Input';
+import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { openChatWithInput } from '@app/component/ChatWithAgentButton';
 import { useChannelName, useChannelActivity } from '@core/context/channels';
-import { buildMentionMarkdownString } from '@lexical-core';
+import { buildMentionMarkdownString, markdownToPlainText } from '@lexical-core';
 import { createActivityTracker } from '@channel/activity-tracker';
 import {
   invalidateChannelsActivity,
@@ -71,7 +77,6 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
-import { resetKeyboardModality } from './util';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -119,13 +124,15 @@ export function Channel(props: ChannelProps) {
     channelId: () => props.channelId,
     initialTargetMessageId: props.targetMessageId,
     initialTargetMessageReplyId: props.targetMessageReplyId,
-    messageKeys: () => messageIndex.keys(),
+    messageKeys: () => messageIndex.keys,
     navigation: threadListNavigation,
     didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
   });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
     createSignal<InputSnapshot>();
+  const [channelInputHandle, setChannelInputHandle] =
+    createSignal<InputHandle>();
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
@@ -136,8 +143,8 @@ export function Channel(props: ChannelProps) {
     () => messagesQuery.data as ChannelMessagesData | undefined
   );
 
-  const messages = createMemo(() => messageIndex.items());
-  const messageById = () => messageIndex.byId();
+  const messages = createMemo(() => [...messageIndex.items]);
+  const messageById = () => messageIndex.byId;
 
   const participants = useChannelParticipants(() => props.channelId);
 
@@ -149,18 +156,23 @@ export function Channel(props: ChannelProps) {
     },
   });
 
-  onMount(() => {
+  const markAsViewed = () => {
     updateActivityMutation.mutate({
       channelId: props.channelId,
       activityType: 'view',
     });
+  };
+
+  onMount(() => {
+    markAsViewed();
+  });
+
+  onCleanup(() => {
+    markAsViewed();
   });
 
   useBeforeLeave(() => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
-    });
+    markAsViewed();
   });
 
   const threadManager = createThreadManager();
@@ -202,6 +214,21 @@ export function Channel(props: ChannelProps) {
   const channelName = useChannelName(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
+  const buildChannelMessageMention = (message: {
+    id: string;
+    thread_id?: string | null;
+  }) =>
+    buildMentionMarkdownString({
+      type: 'document',
+      documentId: props.channelId,
+      documentName: channelName() ?? '',
+      blockName: 'channel',
+      blockParams: {
+        channel_message_id: message.id,
+        ...(message.thread_id && { channel_thread_id: message.thread_id }),
+      },
+    });
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
@@ -217,25 +244,34 @@ export function Channel(props: ChannelProps) {
       messageEditor.start(message);
     },
     onCreateTask: (ctx) => {
+      const plainText = markdownToPlainText(ctx.message.content).trim();
+      const title =
+        plainText.length > 70 ? `${plainText.slice(0, 70)}...` : plainText;
       popoverSplit({
         type: 'component',
         id: 'task-compose',
         params: {
-          initialContent: buildMentionMarkdownString({
-            type: 'document',
-            documentId: props.channelId,
-            documentName: channelName() ?? '',
-            blockName: 'channel',
-            blockParams: { channel_message_id: ctx.message.id },
-          }),
+          initialTitle: title,
+          initialContent: buildChannelMessageMention(ctx.message),
         },
       });
+    },
+    onChat: (ctx) => {
+      openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`);
     },
   });
 
   const selection = createMessageSelection({
-    keys: () => messageIndex.keys(),
+    keys: () => messageIndex.keys,
   });
+
+  const selectMessage = (messageId: string) => {
+    selection.select(messageId);
+  };
+
+  const clearSelection = () => {
+    selection.clear();
+  };
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
@@ -248,6 +284,16 @@ export function Channel(props: ChannelProps) {
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
     });
+
+  const handleScrollToBottom = () => {
+    if (messagesQuery.hasPreviousPage) {
+      targetMessageController.reset();
+      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
+      queryClient.resetQueries({ queryKey: defaultKey });
+    } else {
+      threadListNavigation()?.scrollToBottom('end');
+    }
+  };
 
   createStickyScrollEffect({
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
@@ -269,15 +315,26 @@ export function Channel(props: ChannelProps) {
     const senderId = userId();
     if (!senderId) return;
 
-    sendMessageMutation.mutate({
-      channelID: props.channelId,
-      senderId,
-      optimisticId: crypto.randomUUID(),
-      message: buildPostMessageRequest({
-        snapshot,
-        participantIds: participants.ids(),
-      }),
-    });
+    sendMessageMutation.mutate(
+      {
+        channelID: props.channelId,
+        senderId,
+        optimisticId: crypto.randomUUID(),
+        message: buildPostMessageRequest({
+          snapshot,
+          participantIds: participants.ids(),
+        }),
+      },
+      {
+        onError: () => {
+          const handle = channelInputHandle();
+          if (!handle) return;
+          const current = channelInputSnapshot();
+          if (current && hasSendableInputContent(current)) return;
+          handle.restoreSnapshot(snapshot);
+        },
+      }
+    );
   };
 
   const isChannelReady = () => {
@@ -289,8 +346,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    const el = messageListElement();
-    if (el) resetKeyboardModality(el);
+    selectMessage(messageId);
     targetMessageController.goToMessage(messageId, replyId);
   };
 
@@ -308,25 +364,18 @@ export function Channel(props: ChannelProps) {
       <StaticMarkdownContext>
         <MaybeMessageActionDrawerManager>
           <ChannelDropZone dragState={dragState}>
-            <Show when={messages().length > 0}>
-              <div
-                class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
-                ref={(element) => {
-                  setMessageListElement(element);
-                  attachMessageListRef(element);
-                }}
-                tabIndex={-1}
-                data-channel-message-list
-                data-channel-nav="keyboard"
-                onMouseMove={(e) => {
-                  const el = e.currentTarget;
-                  if (el.dataset.channelNav !== 'mouse') {
-                    el.dataset.channelNav = 'mouse';
-                  }
-                }}
-              >
+            <div
+              class="ph-no-capture relative flex-1 min-h-0 suppress-css-brackets suppress-css-bracket outline-none"
+              ref={(element) => {
+                setMessageListElement(element);
+                attachMessageListRef(element);
+              }}
+              tabIndex={-1}
+              data-channel-message-list
+            >
+              <Show when={messages().length > 0}>
                 <ThreadList
-                  keys={() => messageIndex.keys()}
+                  keys={() => messageIndex.keys}
                   initialScrollTarget={threadListInitialScrollTarget()}
                   shift={shift}
                   prepend={threadPaginator.isPrepending}
@@ -339,7 +388,7 @@ export function Channel(props: ChannelProps) {
                     const message = () => messageById().get(item.id);
                     const state = threadManager.getOrCreateThreadState(item.id);
                     const isNewestThread = () =>
-                      item.id === messageIndex.keys().at(-1);
+                      item.id === messageIndex.keys.at(-1);
 
                     return (
                       <Show when={message()}>
@@ -350,17 +399,12 @@ export function Channel(props: ChannelProps) {
                             isNewestThread={isNewestThread()}
                             getMessageActions={getMessageActions}
                             targetReplyId={targetMessageController.pendingTargetReplyId()}
-                            highlightedReplyId={targetMessageController.activeTargetMessageReplyId()}
                             onTargetReplyScrolled={(replyId) => {
                               targetMessageController.completePendingReplyScroll(
                                 m().id,
                                 replyId
                               );
                             }}
-                            highlighted={
-                              m().id ===
-                              targetMessageController.highlightedMessageId()
-                            }
                             isExpanded={state.isExpanded}
                             setIsExpanded={state.setIsExpanded}
                             isReplying={state.isReplying}
@@ -376,6 +420,8 @@ export function Channel(props: ChannelProps) {
                             }}
                             isNewMessage={activityTracker.isNewMessage}
                             selectedMessageId={selection.selectedId}
+                            onSelectMessage={selectMessage}
+                            onClearSelection={clearSelection}
                             messageListScopeId={messageListScopeId}
                           />
                         )}
@@ -384,11 +430,11 @@ export function Channel(props: ChannelProps) {
                   }}
                 </ThreadList>
                 <ScrollToBottomOverlay
-                  navigation={threadListNavigation}
                   scrollState={threadListScrollState}
+                  onScrollToBottom={handleScrollToBottom}
                 />
-              </div>
-            </Show>
+              </Show>
+            </div>
             <DebugSuspense name="Channel.input">
               <ChannelInputContainer
                 ref={(el) => {
@@ -413,6 +459,7 @@ export function Channel(props: ChannelProps) {
                   })}
                   onReady={(handle) => {
                     dragState.setAttachFilesToChannel(handle.attachFiles);
+                    setChannelInputHandle(handle);
                   }}
                   onChange={(snapshot) =>
                     void setChannelInputSnapshot(snapshot)

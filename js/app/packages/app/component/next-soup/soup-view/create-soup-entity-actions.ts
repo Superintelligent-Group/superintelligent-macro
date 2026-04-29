@@ -6,6 +6,7 @@ import {
   makeBlockSenderAction,
   makeCopyAction,
   makeCopyBranchNameAction,
+  makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
   makeMarkDoneAction,
@@ -20,6 +21,8 @@ import { useUserId } from '@core/context/user';
 import { useAnalytics } from '@app/component/analytics-context';
 import { getChannelParams } from '@block-channel/utils/link';
 import { isMobile } from '@core/mobile/isMobile';
+import { canExecuteMarkDoneOnView } from '@app/component/next-soup/actions/make-mark-done-action';
+import { isListViewID } from '@app/constants/list-views';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -39,12 +42,17 @@ export type SoupEntityActionGroup = {
   items: SoupEntityActionItem[];
 };
 
+type BuildActionGroups = (
+  soup: SoupState,
+  entities: EntityData[],
+  context: {
+    activeListView: string;
+    activeTab: string | undefined;
+  }
+) => SoupEntityActionGroup[];
+
 export function createSoupEntityActions(): {
-  buildActionGroups: (
-    entities: EntityData[],
-    soup: SoupState,
-    activeTab: string | undefined
-  ) => SoupEntityActionGroup[];
+  buildActionGroups: BuildActionGroups;
 } {
   const analytics = useAnalytics();
   const userId = useUserId();
@@ -67,16 +75,17 @@ export function createSoupEntityActions(): {
   const moveToProjectAction = makeMoveToProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
+  const copyEntityIdAction = makeCopyEntityIdAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
 
-  const buildActionGroups = (
-    entities: EntityData[],
-    soup: SoupState,
-    activeTab: string | undefined
-  ): SoupEntityActionGroup[] => {
+  const buildActionGroups: BuildActionGroups = (
+    soup,
+    entities,
+    { activeTab, activeListView }
+  ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
 
@@ -88,7 +97,12 @@ export function createSoupEntityActions(): {
     // Top group: Mark Done, Open in new split
     const topItems: SoupEntityActionItem[] = [];
 
-    if (canExecuteAll(markDone.canExecute)) {
+    if (
+      activeTab &&
+      isListViewID(activeListView) &&
+      canExecuteMarkDoneOnView(activeListView, activeTab) &&
+      canExecuteAll(markDone.canExecute)
+    ) {
       topItems.push({
         id: 'mark-done',
         label: 'Mark Done',
@@ -207,6 +221,12 @@ export function createSoupEntityActions(): {
           onClick: handle(copyBranchNameAction.executeWithSoup),
         });
       }
+
+      middleItems.push({
+        id: 'copy-entity-id',
+        label: 'Copy ID',
+        onClick: handle(copyEntityIdAction.executeWithSoup),
+      });
 
       if (shareAction.canExecute(entities[0])) {
         middleItems.push({

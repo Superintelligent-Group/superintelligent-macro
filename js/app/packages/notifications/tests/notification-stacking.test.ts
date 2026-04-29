@@ -19,7 +19,7 @@ function createBaseNotification(
     entity_id: 'channel-1',
     entity_type: 'channel',
     created_at: new Date(createdAt).toISOString(),
-    updated_at: null,
+    updated_at: new Date(createdAt).toISOString(),
     viewed_at: null,
     deleted_at: null,
     done: false,
@@ -81,6 +81,61 @@ function createMentionNotification(
   });
 }
 
+function createDocCommentNotification(
+  id: string,
+  commentId: number,
+  threadId: number,
+  createdAt: number
+): UnifiedNotification {
+  return createBaseNotification(id, createdAt, {
+    tag: 'commented_on_document',
+    content: {
+      commentId,
+      threadId,
+      documentName: 'doc',
+      owner: 'user-1',
+      text: `Comment ${id}`,
+    },
+  });
+}
+
+function createDocReplyNotification(
+  id: string,
+  commentId: number,
+  threadId: number,
+  createdAt: number
+): UnifiedNotification {
+  return createBaseNotification(id, createdAt, {
+    tag: 'replied_to_document_comment_thread',
+    content: {
+      commentId,
+      threadId,
+      documentName: 'doc',
+      owner: 'user-1',
+      text: `Reply ${id}`,
+    },
+  });
+}
+
+function createDocMentionNotification(
+  id: string,
+  commentId: number,
+  threadId: number,
+  createdAt: number
+): UnifiedNotification {
+  return createBaseNotification(id, createdAt, {
+    tag: 'mentioned_in_document_comment',
+    content: {
+      commentId,
+      threadId,
+      documentName: 'doc',
+      mentionId: `mention-${id}`,
+      owner: 'user-1',
+      text: `Mention ${id}`,
+    },
+  });
+}
+
 describe('stackNotifications', () => {
   describe('basic stacking', () => {
     it('stacks multiple new messages into a single group', () => {
@@ -134,7 +189,7 @@ describe('stackNotifications', () => {
       }
     });
 
-    it('keeps mentions as individual items', () => {
+    it('keeps root mentions (no threadId) as individual items', () => {
       const notifications = [
         createMentionNotification('m1', 'msg-1', 1000),
         createMentionNotification('m2', 'msg-2', 2000),
@@ -144,6 +199,116 @@ describe('stackNotifications', () => {
 
       expect(result).toHaveLength(2);
       expect(result.every((g) => g.type === 'channel_mention')).toBe(true);
+    });
+  });
+
+  describe('thread stacking', () => {
+    it('absorbs root send into thread stack when replies exist', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('msg-1');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('n1');
+      expect(ids).toContain('r1');
+    });
+
+    it('keeps root send in new messages stack when no thread activity', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createNewMessageNotification('n2', 'msg-2', 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_send');
+      expect(result[0].notifications).toHaveLength(2);
+    });
+
+    it('groups thread mention (with threadId) into the thread stack', () => {
+      const notifications = [
+        createReplyNotification('r1', 'reply-1', 'thread-A', 1000),
+        createMentionNotification('m1', 'reply-2', 2000, 'thread-A'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('thread-A');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('r1');
+      expect(ids).toContain('m1');
+    });
+
+    it('groups root send, replies, and thread mention all in one thread stack', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+        createMentionNotification('m1', 'reply-2', 3000, 'msg-1'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(result[0].notifications).toHaveLength(3);
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('n1');
+      expect(ids).toContain('r1');
+      expect(ids).toContain('m1');
+      // Sorted most-recent first
+      expect(result[0].notifications[0].id).toBe('m1');
+    });
+
+    it('thread mention shadows reply with same messageId in same thread', () => {
+      const notifications = [
+        createReplyNotification('r1', 'reply-1', 'thread-A', 1000),
+        createMentionNotification('m1', 'reply-1', 2000, 'thread-A'),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).not.toContain('r1'); // shadowed by the thread mention
+    });
+
+    it('root mention for thread root merges into thread stack', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createReplyNotification('r1', 'reply-1', 'msg-1', 2000),
+        createMentionNotification('m1', 'msg-1', 3000), // root mention, no threadId
+      ];
+
+      const result = stackNotifications(notifications);
+
+      // All in one thread stack: m1 + r1 (n1 shadowed by root mention m1)
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_message_reply');
+      expect(getThreadId(result[0])).toBe('msg-1');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).toContain('r1');
+      expect(ids).not.toContain('n1'); // shadowed by root mention
+    });
+
+    it('root mention with no thread activity stays as individual stack', () => {
+      const notifications = [createMentionNotification('m1', 'msg-1', 1000)];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('channel_mention');
     });
   });
 
@@ -334,5 +499,251 @@ describe('getAllNotificationsFromGroup', () => {
     const allNotifications = getAllNotificationsFromGroup(stacked[0]);
     expect(allNotifications).toHaveLength(1);
     expect(allNotifications[0].id).toBe('m1');
+  });
+});
+
+describe('stackNotifications — document comments', () => {
+  // commentId and threadId come from independent DB tables, so equality
+  // between them is essentially never true in real data. Tests use disjoint
+  // id ranges (comment ids 100+, thread ids 1+) to reflect that.
+
+  describe('basic stacking', () => {
+    it('bundles standalone top-level comments into a single new-comments stack', () => {
+      const notifications = [
+        createDocCommentNotification('c1', 100, 1, 1000),
+        createDocCommentNotification('c2', 101, 2, 2000),
+        createDocCommentNotification('c3', 102, 3, 3000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('commented_on_document');
+      expect(result[0].notifications).toHaveLength(3);
+      expect(result[0].notifications[0].id).toBe('c3'); // most recent
+      expect(getThreadId(result[0])).toBe(''); // not a thread stack
+    });
+
+    it('stacks replies by threadId', () => {
+      const notifications = [
+        createDocReplyNotification('r1', 110, 10, 1000),
+        createDocReplyNotification('r2', 111, 10, 2000),
+        createDocReplyNotification('r3', 112, 20, 3000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(2);
+      const threadAStack = result.find(
+        (g) =>
+          g.type === 'replied_to_document_comment_thread' &&
+          getThreadId(g) === '10'
+      );
+      const threadBStack = result.find(
+        (g) =>
+          g.type === 'replied_to_document_comment_thread' &&
+          getThreadId(g) === '20'
+      );
+      expect(threadAStack).toBeDefined();
+      expect(threadBStack).toBeDefined();
+      expect(threadAStack!.notifications).toHaveLength(2);
+      expect(threadBStack!.notifications).toHaveLength(1);
+    });
+
+    it('keeps standalone mentions as individual stacks', () => {
+      const notifications = [
+        createDocMentionNotification('m1', 100, 1, 1000),
+        createDocMentionNotification('m2', 101, 2, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(2);
+      expect(
+        result.every((g) => g.type === 'mentioned_in_document_comment')
+      ).toBe(true);
+      expect(getThreadId(result[0])).toBe('');
+      expect(getThreadId(result[1])).toBe('');
+    });
+  });
+
+  describe('thread stacking', () => {
+    it('folds top-level comment into thread stack when replies exist', () => {
+      const notifications = [
+        createDocCommentNotification('c1', 100, 10, 1000),
+        createDocReplyNotification('r1', 110, 10, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(getThreadId(result[0])).toBe('10');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('c1');
+      expect(ids).toContain('r1');
+    });
+
+    it('groups owner-side commented_on_document reply with the thread', () => {
+      // The doc owner gets `commented_on_document` for any comment on their
+      // document, including replies. When peers share the threadId, they fold.
+      const notifications = [
+        createDocReplyNotification('r1', 110, 10, 1000),
+        createDocCommentNotification('c1', 111, 10, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(getThreadId(result[0])).toBe('10');
+      expect(result[0].notifications).toHaveLength(2);
+    });
+
+    it('groups mention into thread stack when other thread activity exists', () => {
+      const notifications = [
+        createDocReplyNotification('r1', 110, 10, 1000),
+        createDocMentionNotification('m1', 111, 10, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(getThreadId(result[0])).toBe('10');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('r1');
+      expect(ids).toContain('m1');
+    });
+
+    it('groups top-level comment, replies, and mention into one thread stack', () => {
+      const notifications = [
+        createDocCommentNotification('c1', 100, 10, 1000),
+        createDocReplyNotification('r1', 110, 10, 2000),
+        createDocMentionNotification('m1', 111, 10, 3000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(result[0].notifications).toHaveLength(3);
+      expect(result[0].notifications[0].id).toBe('m1');
+    });
+
+    it('mention on the thread root shadows the root comment when both share commentId', () => {
+      const notifications = [
+        createDocCommentNotification('c1', 100, 10, 1000),
+        createDocReplyNotification('r1', 110, 10, 2000),
+        createDocMentionNotification('m1', 100, 10, 3000), // same commentId as c1
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(getThreadId(result[0])).toBe('10');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).toContain('r1');
+      expect(ids).not.toContain('c1'); // shadowed by mention with same commentId
+    });
+
+    it('lone mention with no other thread activity stays as an individual stack', () => {
+      const notifications = [createDocMentionNotification('m1', 100, 10, 1000)];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('mentioned_in_document_comment');
+      expect(getThreadId(result[0])).toBe('');
+    });
+
+    it('two top-level comments sharing a threadId fold into a thread stack', () => {
+      // E.g. doc owner getting both their own root comment and a reply.
+      const notifications = [
+        createDocCommentNotification('c1', 100, 10, 1000),
+        createDocCommentNotification('c2', 101, 10, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('replied_to_document_comment_thread');
+      expect(getThreadId(result[0])).toBe('10');
+      expect(result[0].notifications).toHaveLength(2);
+    });
+  });
+
+  describe('getThreadId standalone regression', () => {
+    it('returns "" for a standalone commented_on_document stack', () => {
+      const notifications = [createDocCommentNotification('c1', 100, 1, 1000)];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('commented_on_document');
+      expect(getThreadId(result[0])).toBe('');
+    });
+
+    it('returns "" for a standalone mentioned_in_document_comment stack', () => {
+      const notifications = [createDocMentionNotification('m1', 100, 1, 1000)];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('mentioned_in_document_comment');
+      expect(getThreadId(result[0])).toBe('');
+    });
+  });
+
+  describe('mention shadowing', () => {
+    it('shadows commented_on_document when mention exists for same commentId', () => {
+      const notifications = [
+        createDocCommentNotification('c1', 100, 1, 1000),
+        createDocMentionNotification('m1', 100, 1, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('mentioned_in_document_comment');
+    });
+
+    it('shadows replied_to_document_comment_thread when mention exists for same commentId', () => {
+      const notifications = [
+        createDocReplyNotification('r1', 110, 10, 1000),
+        createDocMentionNotification('m1', 110, 10, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(1);
+      // The reply was shadowed; only the mention remains in the thread, with
+      // no other peers, so it stands alone as an orphan mention.
+      expect(result[0].type).toBe('mentioned_in_document_comment');
+      const ids = result[0].notifications.map((n) => n.id);
+      expect(ids).toContain('m1');
+      expect(ids).not.toContain('r1');
+    });
+  });
+
+  describe('isolation', () => {
+    it('does not mix channel and document comment notifications in the same stack', () => {
+      const notifications = [
+        createNewMessageNotification('n1', 'msg-1', 1000),
+        createDocCommentNotification('c1', 100, 1, 2000),
+      ];
+
+      const result = stackNotifications(notifications);
+
+      expect(result).toHaveLength(2);
+      const channelStack = result.find(
+        (g) => g.type === 'channel_message_send'
+      );
+      const docStack = result.find((g) => g.type === 'commented_on_document');
+      expect(channelStack).toBeDefined();
+      expect(docStack).toBeDefined();
+    });
   });
 });

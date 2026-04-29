@@ -1,7 +1,7 @@
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamRequest, PatchTeamUserTierRequest, Team, TeamInviteDetails, TeamMember, TeamRole,
-    TeamUserTier, TeamWithMembers,
+    PatchTeamRequest, PatchTeamUserRole, PatchTeamUserTierRequest, Team, TeamInviteDetails,
+    TeamMember, TeamRole, TeamUserTier, TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -27,11 +27,12 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::{
-    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeProductTier,
-    StripeSessionResponse,
+    CreateCheckoutSessionRequest, CreatePortalSessionRequest, PatchSubscriptionTierRequest,
+    StripeProductTier, StripeSessionResponse,
 };
 use crate::api::{
-    email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, user,
+    email, health, jwt, link, login, logout, merge, mobile_welcome_email, oauth, oauth2,
+    permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -99,6 +100,7 @@ use model::user::{
                 user::patch_tutorial::handler,
                 user::stripe::create_checkout_session,
                 user::stripe::create_portal_session,
+                user::stripe::patch_subscription_tier,
 
                 /// /session
                 session::session_login::handler,
@@ -128,6 +130,9 @@ use model::user::{
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType>,
+
+                /// /mobile-welcome-email
+                mobile_welcome_email::handler,
 
                 /// /merge
                 merge::create_merge_request::handler,
@@ -168,6 +173,7 @@ use model::user::{
                         StripeProductTier,
                         CreateCheckoutSessionRequest,
                         CreatePortalSessionRequest,
+                        PatchSubscriptionTierRequest,
                         StripeSessionResponse,
 
                         // User onboarding
@@ -183,10 +189,15 @@ use model::user::{
                         CreateTeamRequest,
                         InviteToTeamRequest,
                         PatchTeamRequest,
+                        PatchTeamUserRole,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
                         PatchTeamUserTierRequest,
                         TeamUserTier,
+
+                        // Mobile welcome email
+                        mobile_welcome_email::SendMobileWelcomeEmailRequest,
+                        mobile_welcome_email::SendMobileWelcomeEmailResponse,
 
                         // Merge
                         CreateAccountMergeRequest,

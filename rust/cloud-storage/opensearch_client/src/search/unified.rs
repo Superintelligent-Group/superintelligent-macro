@@ -5,6 +5,9 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryConfig, search_after, updated_at_sort},
+        call_records::{
+            CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
+        },
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
             ChannelMessageSearchConfig,
@@ -15,8 +18,8 @@ use crate::{
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
-            DefaultSearchResponse, Hit, MacroEm, SearchGotoChannel, SearchGotoChat,
-            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit,
+            DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
+            SearchGotoChat, SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit,
             exclude_source_content, inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
@@ -26,7 +29,7 @@ use chrono::{DateTime, Utc};
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use tracing::Instrument;
 
-use models_opensearch::SearchEntityType;
+use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::*;
 
 impl UnifiedSearchArgs {
@@ -49,7 +52,7 @@ pub struct UnifiedSearchArgs {
     /// The cursor to use
     pub cursor: SearchCursorOption,
     /// The indices to search over
-    pub search_indices: HashSet<SearchEntityType>,
+    pub search_indices: HashSet<OpenSearchEntityType>,
     /// The document search args
     pub document_search_args: UnifiedDocumentSearchArgs,
     /// The email search args. If None, we do not search emails
@@ -58,6 +61,8 @@ pub struct UnifiedSearchArgs {
     pub channel_message_search_args: UnifiedChannelMessageSearchArgs,
     /// The chat search args. If None, we do not search chats
     pub chat_search_args: UnifiedChatSearchArgs,
+    /// The call record search args. If None, we do not search call records
+    pub call_record_search_args: UnifiedCallRecordSearchArgs,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -95,6 +100,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
+            subject_only: args.email_search_args.subject_only,
         }
     }
 }
@@ -133,6 +139,23 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
     }
 }
 
+impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        CallRecordSearchArgs {
+            terms: args.call_record_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.call_record_search_args.ids_only,
+            call_ids: args.call_record_search_args.call_ids,
+            channel_ids: args.call_record_search_args.channel_ids,
+            speaker_ids: args.call_record_search_args.speaker_ids,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
     pub terms: Vec<String>,
@@ -161,6 +184,7 @@ pub struct UnifiedEmailSearchArgs {
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
+    pub subject_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -172,6 +196,15 @@ pub struct UnifiedChannelMessageSearchArgs {
     pub sender_ids: Vec<String>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedCallRecordSearchArgs {
+    pub terms: Vec<String>,
+    pub call_ids: Vec<String>,
+    pub channel_ids: Vec<String>,
+    pub speaker_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
 /// Possible search result indices for unified search
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -180,6 +213,7 @@ pub(crate) enum UnifiedSearchIndex {
     Document(DocumentIndex),
     Chat(ChatIndex),
     Email(EmailIndex),
+    CallRecord(CallRecordIndex),
 }
 
 pub struct SplitUnifiedSearchResponseValues {
@@ -188,6 +222,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub document: Vec<SearchHit>,
     pub email: Vec<SearchHit>,
     pub project: Vec<SearchHit>,
+    pub call_record: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -199,9 +234,17 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![]),
-            |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
+        let (channel_message, chat, document, email, project, call_record) = self.into_iter().fold(
+            (vec![], vec![], vec![], vec![], vec![], vec![]),
+            |(
+                mut channel_message,
+                mut chat,
+                mut document,
+                mut email,
+                mut project,
+                mut call_record,
+            ),
+             item| {
                 match item.entity_type {
                     SearchEntityType::Channels => {
                         channel_message.push(item);
@@ -218,8 +261,11 @@ where
                     SearchEntityType::Projects => {
                         project.push(item);
                     }
+                    SearchEntityType::CallRecords => {
+                        call_record.push(item);
+                    }
                 }
-                (channel_message, chat, document, email, project)
+                (channel_message, chat, document, email, project, call_record)
             },
         );
 
@@ -229,6 +275,7 @@ where
             document,
             email,
             project,
+            call_record,
         }
     }
 }
@@ -342,6 +389,36 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
+            UnifiedSearchIndex::CallRecord(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::CallRecords,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: CallRecordSearchConfig::TITLE_KEY,
+                                content_key: CallRecordSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::CallRecords(SearchGotoCallRecord {
+                    channel_id: a.channel_id,
+                    transcript_id: a.transcript_id,
+                    speaker_id: a.speaker_id,
+                    sequence_num: a.sequence_num,
+                    started_at: DateTime::from_timestamp(a.started_at_seconds, 0)
+                        .unwrap_or_default(),
+                    ended_at: a
+                        .ended_at_seconds
+                        .and_then(|s| DateTime::from_timestamp(s, 0)),
+                    participant_ids: a.participant_ids,
+                })),
+                updated_at: DateTime::from_timestamp(a.started_at_seconds, 0),
+            },
         }
     }
 }
@@ -363,7 +440,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     // There will always be 1 query as the indices are never empty
     bool_query.minimum_should_match(1);
 
-    if args.search_indices.contains(&SearchEntityType::Documents) {
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Documents)
+    {
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
         let document_bool_query = document_query_builder.build_bool_query()?;
@@ -371,7 +451,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Emails) {
+    if args.search_indices.contains(&OpenSearchEntityType::Emails) {
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
         let email_bool_query = email_query_builder.build_bool_query()?;
@@ -379,7 +459,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Channels) {
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Channels)
+    {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
@@ -388,11 +471,22 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Chats) {
+    if args.search_indices.contains(&OpenSearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
         let chat_bool_query = chat_query_builder.build_bool_query()?;
         let query_type: QueryType = chat_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::CallRecords)
+    {
+        let call_record_search_args: CallRecordSearchArgs = args.clone().into();
+        let call_record_query_builder: CallRecordQueryBuilder = call_record_search_args.into();
+        let call_record_bool_query = call_record_query_builder.build_bool_query()?;
+        let query_type: QueryType = call_record_bool_query.build().into();
         bool_query.should(query_type.to_owned());
     }
 
@@ -416,14 +510,24 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         search_request_builder.add_sort(sort);
     }
 
-    let highlight = Highlight::new().require_field_match(true).field(
-        "content",
+    let em_field = || {
         HighlightField::new()
             .highlight_type("plain")
             .pre_tags(vec![MacroEm::Open.to_string()])
             .post_tags(vec![MacroEm::Close.to_string()])
-            .number_of_fragments(1),
-    );
+    };
+    let highlight = Highlight::new()
+        .require_field_match(true)
+        .field("content", em_field().number_of_fragments(1))
+        .field("subject", em_field().number_of_fragments(0))
+        .field("sender", em_field().number_of_fragments(0))
+        .field("sender_name", em_field().number_of_fragments(0))
+        .field("recipients", em_field().number_of_fragments(0))
+        .field("recipient_names", em_field().number_of_fragments(0))
+        .field("cc", em_field().number_of_fragments(0))
+        .field("cc_names", em_field().number_of_fragments(0))
+        .field("bcc", em_field().number_of_fragments(0))
+        .field("bcc_names", em_field().number_of_fragments(0));
 
     search_request_builder.highlight(highlight);
 
@@ -447,18 +551,7 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    // We cannot search over the projects index in opensearch as it doesn't exist
-    let search_indices: Vec<&str> = args
-        .search_indices
-        .iter()
-        .filter(|i| **i != SearchEntityType::Projects)
-        .map(|i| i.index_name())
-        .collect();
-
-    // After we filter out invalid search entities if we have nothing we should return that the cursor is exhausted
-    if search_indices.is_empty() {
-        return Ok((Vec::new(), SearchCursorOption::Done));
-    }
+    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
     let response = async {
         client

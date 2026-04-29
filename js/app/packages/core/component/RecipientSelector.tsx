@@ -42,6 +42,7 @@ import {
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+import { cn } from '@ui/utils/classname';
 
 function RecipientChip(props: {
   icon?: JSX.Element;
@@ -53,7 +54,7 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row flex-shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
+      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover"
       classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
@@ -161,8 +162,10 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
   return (
     <Combobox.Item
       item={props}
-      class={`flex flex-row px-2 py-1 mb-1 justify-between items-center data-highlighted:bg-hover hover-transition-bg
-        ${props.disabled ? ' hover:bg-hover hover-transition-bg' : ''}`}
+      class={cn(
+        'flex flex-row px-2 py-1 mb-1 justify-between items-center data-highlighted:bg-hover hover-transition-bg',
+        props.disabled && 'hover:bg-hover hover-transition-bg'
+      )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
       onMouseLeave={props.disabled ? handleMouseLeave : undefined}
     >
@@ -189,7 +192,10 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
                 <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
                 <p
-                  class={`ph-no-capture truncate my-auto ${props.disabled ? 'italic' : ''}`}
+                  class={cn(
+                    'ph-no-capture truncate my-auto',
+                    props.disabled && 'italic'
+                  )}
                 >
                   {contactInfo}
                 </p>
@@ -239,7 +245,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
-  mobileHorizontalScroll?: boolean;
+  horizontalScroll?: boolean;
+  class?: string;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -474,12 +481,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           ? (props.placeholder ?? placeholderText())
           : undefined
       }
-      class="ph-no-capture w-full text-sm offset-2"
-      classList={{
-        'border border-edge': !props.hideBorder,
-        'py-2': !props.noPadding,
-        'focus-within:bracket-offset-2': !props.noBrackets,
-      }}
+      class={cn(
+        'ph-no-capture w-full text-sm offset-2 bg-input',
+        !props.hideBorder && 'border border-edge',
+        !props.noPadding && 'py-2',
+        !props.noBrackets && 'focus-within:bracket-offset-2',
+        props.class
+      )}
     >
       <Combobox.Control<CombinedRecipientItem>>
         {(state) => {
@@ -489,10 +497,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           return (
             <div class="relative">
               <div
-                ref={
-                  props.mobileHorizontalScroll ? setChipsScrollRef : undefined
-                }
-                class={`flex gap-1.5 text-ink scrollbar-hidden ${props.mobileHorizontalScroll ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0' : 'flex-wrap max-h-[150px] overflow-y-auto'}`}
+                ref={props.horizontalScroll ? setChipsScrollRef : undefined}
+                class={cn(
+                  'flex gap-1.5 text-ink scrollbar-hidden',
+                  props.horizontalScroll
+                    ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-[150px] sm:overflow-y-auto pb-[2px] sm:pb-0'
+                    : 'flex-wrap max-h-[150px] overflow-y-auto'
+                )}
               >
                 <For each={state.selectedOptions()}>
                   {(option) => {
@@ -515,14 +526,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                               <Tooltip
                                 placement="bottom"
                                 unstyled
-                                tooltip={
+                                tooltip={(close) => (
                                   <UserTooltip
                                     displayName={name || ''}
                                     email={email}
                                     id={opt.id}
                                     isDeleted={false}
+                                    onClose={close}
                                   />
-                                }
+                                )}
                               >
                                 <RecipientChip
                                   icon={
@@ -574,13 +586,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                               <Tooltip
                                 placement="bottom"
                                 unstyled
-                                tooltip={
+                                tooltip={(close) => (
                                   <UserTooltip
                                     displayName={email}
                                     email={email}
                                     isDeleted={false}
+                                    onClose={close}
                                   />
-                                }
+                                )}
                               >
                                 <RecipientChip
                                   icon={
@@ -648,7 +661,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   }}
                 />
               </div>
-              <Show when={props.mobileHorizontalScroll}>
+              <Show when={props.horizontalScroll}>
                 <CustomScrollbar
                   scrollContainer={chipsScrollRef}
                   horizontal

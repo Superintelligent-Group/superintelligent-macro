@@ -243,6 +243,11 @@ export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
   true
 );
 
+export const ENABLE_DOCUMENT_MENTION_NOTIFICATIONS = resolveFeatureFlag(
+  'ENABLE_DOCUMENT_MENTION_NOTIFICATIONS',
+  DEV_MODE_ENV
+);
+
 // Auto expand stand-alone mentions to richer previews in channels
 export const ENABLE_STATIC_DOCUMENT_CARDS = resolveFeatureFlag(
   'ENABLE_STATIC_DOCUMENT_CARDS',
@@ -305,6 +310,21 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
+  'ENABLE_APP_STORE_QR_CODE',
+  DEV_MODE_ENV
+);
+
+export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
+  'RAIL_CHAT_TASK_COMMENTS',
+  DEV_MODE_ENV
+);
+
+// skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
+// can also be overridden via VITE_ENABLE_TEAMS env var
+export const ENABLE_TEAMS_OVERRIDE =
+  resolveFeatureFlag('ENABLE_TEAMS', DEV_MODE_ENV) || undefined;
+
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
 const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
@@ -315,3 +335,7 @@ export function ENABLE_CALLS(): boolean {
 
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
+
+export const ENABLE_INVITE_TEAM_ONBOARDING_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;

@@ -17,6 +17,7 @@ export type BaseFetchErrorCode =
   | 'NOT_FOUND'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
+  | 'CONFLICT'
   | 'SERVER_ERROR'
   | 'INVALID_JSON'
   | 'UNKNOWN_ERROR'
@@ -175,6 +176,7 @@ export async function safeFetch<
         ...fetchInit,
         headers: {
           ...(fetchInit?.method !== 'GET' &&
+            fetchInit?.method !== 'HEAD' &&
             !(fetchInit?.body instanceof FormData) && {
               'Content-Type':
                 (fetchInit?.headers as Record<string, string> | undefined)?.[
@@ -198,6 +200,8 @@ export async function safeFetch<
             return err('UNAUTHORIZED', 'Unauthorized access');
           case 403:
             return err('FORBIDDEN', 'Forbidden');
+          case 409:
+            return err('CONFLICT', 'Resource conflict');
           case 410:
             return err('GONE', 'Resource deleted');
           case 500:
@@ -207,6 +211,8 @@ export async function safeFetch<
             return err('HTTP_ERROR', `HTTP error! status: ${response.status}`);
         }
       } else {
+        if (fetchInit.method === 'HEAD') return ok({} as T);
+
         const contentType = response.headers.get('Content-Type');
         if (!contentType) return ok({} as T);
 

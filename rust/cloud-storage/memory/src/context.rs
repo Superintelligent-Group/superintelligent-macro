@@ -114,6 +114,7 @@ pub async fn build_tool_service_context(
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
     // Document tool context
@@ -144,6 +145,9 @@ pub async fn build_tool_service_context(
         s3_upload_adapter,
         NoOpTaskProperties,
         NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
     );
     let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
     let entity_access_service = Arc::new(entity_access_service);

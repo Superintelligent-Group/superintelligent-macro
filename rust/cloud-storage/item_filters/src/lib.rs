@@ -246,6 +246,12 @@ pub struct EmailFilters {
     /// Defaults to "exclude" (only the user's own threads).
     #[serde(default, skip_serializing_if = "SharedEmailFilter::is_default")]
     pub shared: SharedEmailFilter,
+
+    /// When `Some(true)`, only include threads that have at least one message
+    /// with an iCalendar attachment (`.ics` filename or `application/ics` mime
+    /// type). `Some(false)` and `None` apply no constraint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendar_only: Option<bool>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -262,6 +268,7 @@ impl IsEmpty for EmailFilters {
             include_labels,
             exclude_labels,
             shared,
+            calendar_only,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -274,6 +281,35 @@ impl IsEmpty for EmailFilters {
             && include_labels.is_empty()
             && exclude_labels.is_empty()
             && shared.is_default()
+            && !calendar_only.unwrap_or(false)
+    }
+}
+
+/// Filters for call records.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CallFilters {
+    /// Channel IDs to filter calls by. Empty to include all calls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_ids: Vec<String>,
+    /// Speaker macro user ids. Empty to include all.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub speaker_ids: Vec<String>,
+    /// Filter by whether the requesting user attended the call.
+    /// `None` = no filter, `Some(true)` = only calls the user joined,
+    /// `Some(false)` = only calls the user did not join.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attended: Option<bool>,
+}
+
+impl IsEmpty for CallFilters {
+    fn is_empty(&self) -> bool {
+        let CallFilters {
+            channel_ids,
+            speaker_ids,
+            attended,
+        } = self;
+        channel_ids.is_empty() && speaker_ids.is_empty() && attended.is_none()
     }
 }
 
@@ -419,6 +455,9 @@ pub struct EntityFilters {
     /// the bundled [ChannelFilters]
     #[serde(default)]
     pub channel_filters: ChannelFilters,
+    /// the bundled [CallFilters]
+    #[serde(default)]
+    pub call_filters: CallFilters,
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
@@ -434,15 +473,16 @@ impl IsEmpty for EntityFilters {
             document_filters,
             chat_filters,
             channel_filters,
+            call_filters,
             email_filters,
             property_filters,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
-            && chat_filters.is_empty()
-            && email_filters.is_empty()
             && channel_filters.is_empty()
+            && call_filters.is_empty()
+            && email_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
     }
 }

@@ -1,12 +1,17 @@
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import {
+  staticFileIdEndpoint,
+  staticFileSizedEndpoint,
+} from '@core/constant/servers';
 import SpinnerIcon from '@icon/bold/spinner-gap-bold.svg';
 import XIcon from '@icon/regular/x.svg';
 import { cn } from '@ui/utils/classname';
 import {
   children,
+  createMemo,
+  createSignal,
   For,
   type JSX,
   Match,
@@ -14,6 +19,8 @@ import {
   Switch,
   splitProps,
 } from 'solid-js';
+import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
+import type { MediaItem } from '@channel/Media/media-items';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 
@@ -52,9 +59,13 @@ function RemoveButton(props: {
 function MediaAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
+  onOpen?: () => void;
 }) {
   const isPending = () => !!props.attachment.pending;
-  const mediaSrc = () => staticFileIdEndpoint(props.attachment.id);
+  const mediaSrc = () =>
+    props.attachment.kind === 'image'
+      ? staticFileSizedEndpoint(props.attachment.id, 'medium')
+      : staticFileIdEndpoint(props.attachment.id);
 
   const removeButton = () => (
     <RemoveButton
@@ -88,31 +99,32 @@ function MediaAttachmentItem(props: {
           }
         >
           <MediaImage.Root>
-            <MediaImage.Image
-              src={mediaSrc()}
-              previewSrc={props.attachment.previewSrc}
-              class="size-23 select-none rounded-2xl border border-edge object-cover"
-              width={92}
-              height={92}
-              loading="lazy"
-              fallback={<MediaImage.Fallback square />}
-            />
+            <button type="button" onClick={() => props.onOpen?.()}>
+              <MediaImage.Image
+                src={mediaSrc()}
+                previewSrc={props.attachment.previewSrc}
+                class="size-23 select-none rounded-2xl border border-edge object-cover"
+                width={92}
+                height={92}
+                loading="lazy"
+                fallback={<MediaImage.Fallback square />}
+              />
+            </button>
             {pendingOverlay()}
             {removeButton()}
           </MediaImage.Root>
         </Match>
 
-        <Match
-          when={props.attachment.kind === 'video' && !isPending()}
-        >
-          <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
-            <MediaVideo.Preview
-              src={mediaSrc()}
-              class="size-full object-cover"
-            />
-            <MediaVideo.PlayOverlay />
-            {pendingOverlay()}
-          </MediaVideo.Root>
+        <Match when={props.attachment.kind === 'video' && !isPending()}>
+          <button type="button" onClick={() => props.onOpen?.()}>
+            <MediaVideo.Root class="size-23 group overflow-hidden border border-edge bg-menu">
+              <MediaVideo.Preview
+                src={mediaSrc()}
+                class="size-full object-cover"
+              />
+              <MediaVideo.PlayOverlay />
+            </MediaVideo.Root>
+          </button>
           {removeButton()}
         </Match>
       </Switch>
@@ -150,6 +162,9 @@ export function Attachments(props: AttachmentsProps) {
   const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
   const resolved = children(() => local.children);
 
+  const [viewerOpen, setViewerOpen] = createSignal(false);
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+
   const visibleAttachments = () => {
     const items = input().attachments ?? [];
     if (!local.kind) return items;
@@ -162,8 +177,38 @@ export function Attachments(props: AttachmentsProps) {
     return items.filter((attachment) => attachment.kind === local.kind);
   };
 
+  const mediaAttachments = () =>
+    visibleAttachments().filter(
+      (a): a is InputAttachmentData & { kind: 'image' | 'video' } =>
+        !a.pending && (a.kind === 'image' || a.kind === 'video')
+    );
+
+  const mediaItems = createMemo((): MediaItem[] =>
+    mediaAttachments().map((a) => {
+      const fullSrc = staticFileIdEndpoint(a.id);
+      return {
+        id: a.id,
+        src:
+          a.kind === 'image'
+            ? staticFileSizedEndpoint(a.id, 'medium')
+            : fullSrc,
+        fullSrc,
+        kind: a.kind,
+        width: a.width,
+        height: a.height,
+      };
+    })
+  );
+
   const handleRemove = (attachment: InputAttachmentData) => {
     commands.removeAttachment(attachment);
+  };
+
+  const handleOpen = (attachment: InputAttachmentData) => {
+    const index = mediaAttachments().findIndex((a) => a.id === attachment.id);
+    if (index === -1) return;
+    setSelectedIndex(index);
+    setViewerOpen(true);
   };
 
   return (
@@ -172,7 +217,7 @@ export function Attachments(props: AttachmentsProps) {
         class={cn(
           'flex flex-row w-full px-2 py-2 gap-2 flex-wrap',
           // On mobile, attachments scroll horizontally
-          'mobile:flex-nowrap mobile:[&>*]:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
+          'mobile:flex-nowrap mobile:*:shrink-0 mobile:overflow-x-auto mobile:scrollbar-hidden',
           local.class
         )}
         data-input-attachments={local.kind ?? 'all'}
@@ -192,6 +237,7 @@ export function Attachments(props: AttachmentsProps) {
                     <MediaAttachmentItem
                       attachment={attachment}
                       onRemove={handleRemove}
+                      onOpen={() => handleOpen(attachment)}
                     />
                   </Match>
                   <Match when={attachment.kind === 'document'}>
@@ -208,6 +254,13 @@ export function Attachments(props: AttachmentsProps) {
           {(children) => children()}
         </Show>
       </div>
+      <MediaViewerDialog
+        items={() => mediaItems()}
+        open={viewerOpen()}
+        onOpenChange={setViewerOpen}
+        currentIndex={selectedIndex}
+        onCurrentIndexChange={setSelectedIndex}
+      />
     </Show>
   );
 }

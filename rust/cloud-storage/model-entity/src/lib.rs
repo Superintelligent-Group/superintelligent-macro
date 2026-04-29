@@ -7,7 +7,7 @@ use cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 pub use strum::ParseError;
-use strum::{Display, EnumString, IntoStaticStr};
+use strum::{AsRefStr, Display, EnumString, IntoStaticStr};
 use utoipa::ToSchema;
 
 #[cfg(test)]
@@ -27,6 +27,7 @@ mod tests;
     ToSchema,
     Eq,
     IntoStaticStr,
+    AsRefStr,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -45,9 +46,30 @@ pub enum EntityType {
     EmailThread,
     /// The entity is a team
     Team,
+    /// The entity is a voice/video call
+    Call,
+    /// A public file in the static file service
+    StaticFile,
 }
 
 impl EntityType {
+    /// Returns if the given entity type is a valid entity that is stored in
+    /// entity_access
+    pub fn is_valid_entity_access_entity(&self) -> bool {
+        match self {
+            EntityType::User => false,
+            EntityType::Team => false,
+            EntityType::Channel => false,
+            EntityType::Chat => true,
+            EntityType::Document => true,
+            EntityType::Project => true,
+            EntityType::EmailThread => true,
+            // Calls are handled by entity_access by resolving through the call's
+            // owning channel (access is inherited from channel membership).
+            EntityType::Call => true,
+            EntityType::StaticFile => false,
+        }
+    }
     /// provide an entity string slice to upgrade this type into an [Entity]
     pub fn with_entity_str<'a>(self, entity_id: &'a str) -> Entity<'a> {
         Entity {

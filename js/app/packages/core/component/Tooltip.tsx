@@ -2,13 +2,20 @@ import type { HotkeyToken } from '@core/hotkey/tokens';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { cn } from '@ui/utils/classname';
-import { For, type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
+import {
+  For,
+  type JSX,
+  mergeProps,
+  type ParentProps,
+  Show,
+  createSignal,
+} from 'solid-js';
 import { Hotkey } from './Hotkey';
 
 const TOOLTIP_DELAY = 250;
 
 export type TooltipProps = ParentProps<{
-  tooltip: JSX.Element;
+  tooltip?: JSX.Element | ((close: () => void) => JSX.Element);
   placement?: Placement;
   floatingOptions?: FloatingOptions;
   ref?: (el: HTMLDivElement | HTMLSpanElement) => void;
@@ -56,8 +63,20 @@ export function Tooltip(props: TooltipProps) {
     return 0;
   };
 
+  const [open, setOpen] = createSignal(false);
+  const close = () => setOpen(false);
+
+  const tooltipContent = () => {
+    if (typeof props.tooltip === 'function') {
+      return props.tooltip(close);
+    }
+    return props.tooltip;
+  };
+
   return (
     <CorvuTooltip
+      open={open()}
+      onOpenChange={setOpen}
       placement={props.placement}
       floatingOptions={props.floatingOptions}
       group={'tooltip-single-group'} // hardcoding implies we only allow one tooltip to be open at a time throughout app
@@ -81,9 +100,9 @@ export function Tooltip(props: TooltipProps) {
             'max-width': `calc(100vw - ${2 * padding()}px)`,
           }}
         >
-          <Show when={!props.unstyled} fallback={props.tooltip}>
-            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/5">
-              {props.tooltip}
+          <Show when={!props.unstyled} fallback={tooltipContent()}>
+            <div class="flex items-center justify-center bg-panel p-1.5 text-ink-muted text-xs wrap-break-word rounded-sm border border-edge-muted shadow-md shadow-[#000]/05">
+              {tooltipContent()}
             </div>
           </Show>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
@@ -137,7 +156,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
           <For each={props.hotkeySequence}>
             {(step, ndx) => (
               <>
-                <div class="text-[0.625rem] rounded-sm border border-edge-muted px-1.5 py-0.25">
+                <div class="text-xxs rounded-sm border border-edge-muted px-1.5 py-0.25">
                   <Hotkey
                     token={step.token}
                     shortcut={step.shortcut}
@@ -153,7 +172,7 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
         </div>
       </Show>
       <Show when={hasSingleHotkey()}>
-        <div class="text-[0.625rem] rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
+        <div class="text-xxs rounded-sm ml-auto border border-edge-muted px-1.5 py-0.25">
           {props.hotkeyToken
             ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
             : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}

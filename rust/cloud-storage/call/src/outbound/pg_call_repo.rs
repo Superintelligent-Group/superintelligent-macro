@@ -1,19 +1,90 @@
 //! Postgres-backed repository for call state.
 
+mod edit;
+
 #[cfg(test)]
 mod test;
 
+use std::collections::{HashMap, HashSet};
+
 use chrono::Utc;
 use entity_access::domain::models::AccessLevel;
+use filter_ast::Expr;
+use item_filters::ast::{LiteralTree, call::CallLiteral};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{Call, CallParticipant, TranscriptSegmentRequest};
+use crate::domain::channel_name::{NameLookup, display_name, resolve_channel_name};
+use crate::domain::models::{
+    AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
+    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    EditCallRecordRequest, TranscriptSegmentRequest, WithCallId,
+};
 use crate::domain::ports::CallRepository;
 
+/// Name of the partial unique index enforcing one active call per user.
+const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
+
+/// Translate a sqlx error from an `add_participant` insert into the domain
+/// [`AddParticipantError`]. A unique-violation on the
+/// `call_participants_one_active_per_user` partial index becomes
+/// [`AddParticipantError::UserAlreadyActive`]; everything else is wrapped.
+fn classify_add_participant_err(err: sqlx::Error) -> AddParticipantError {
+    if err.as_database_error().and_then(|db| db.constraint()) == Some(ACTIVE_CALL_UNIQUE_INDEX) {
+        AddParticipantError::UserAlreadyActive
+    } else {
+        AddParticipantError::Repository(err.into())
+    }
+}
+
+/// Extract channel_id UUIDs from a call filter AST.
+fn extract_channel_ids(filter: &LiteralTree<CallLiteral>) -> Vec<Uuid> {
+    let Some(expr) = filter else {
+        return Vec::new();
+    };
+    let mut ids = Vec::new();
+    collect_channel_ids(expr, &mut ids);
+    ids
+}
+
+fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
+    match expr {
+        Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
+        Expr::Literal(CallLiteral::Attended(_)) => {}
+        // Speaker is transcript-segment-only; soup's call list ignores it.
+        Expr::Literal(CallLiteral::Speaker(_)) => {}
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            collect_channel_ids(a, ids);
+            collect_channel_ids(b, ids);
+        }
+        Expr::Not(inner) => collect_channel_ids(inner, ids),
+    }
+}
+
+/// Extract the `attended` literal from a call filter AST, if any.
+///
+/// `ExpandFrame::expand_ast` only emits at most one `Attended` literal, so we
+/// return the first one we find during a simple traversal.
+fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
+    let expr = filter.as_ref()?;
+    find_attended(expr)
+}
+
+fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
+    match expr {
+        Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
+        Expr::Literal(CallLiteral::ChannelId(_)) => None,
+        Expr::Literal(CallLiteral::Speaker(_)) => None,
+        Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
+        Expr::Not(inner) => find_attended(inner).map(|b| !b),
+    }
+}
+
 /// Postgres implementation of [`CallRepository`].
+#[derive(Clone)]
 pub struct PgCallRepo {
     pool: PgPool,
 }
@@ -22,6 +93,112 @@ impl PgCallRepo {
     /// Create a new repo with the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Batch-resolve display names for a list of channel ids from the
+    /// perspective of `viewer_user_id`. The viewer is only used to pick the
+    /// right "other person" for DM channels; it is not an authorization check.
+    ///
+    /// Channels the query can't find simply have no entry in the returned map.
+    async fn batch_resolve_channel_names<'a>(
+        &self,
+        channel_ids: &[Uuid],
+        viewer_user_id: MacroUserIdStr<'a>,
+    ) -> Result<HashMap<Uuid, String>, sqlx::Error> {
+        if channel_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let channel_info_rows = sqlx::query!(
+            r#"
+            SELECT id, name, channel_type::text as "channel_type!"
+            FROM comms_channels
+            WHERE id = ANY($1)
+            "#,
+            channel_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let channel_map: HashMap<Uuid, (Option<String>, String)> = channel_info_rows
+            .into_iter()
+            .map(|r| (r.id, (r.name, r.channel_type)))
+            .collect();
+
+        // Channels that need participant-derived names (DMs, unnamed privates).
+        let needs_participants: Vec<Uuid> = channel_map
+            .iter()
+            .filter(|(_, (name, ct))| {
+                ct == "direct_message"
+                    || (ct == "private" && name.as_ref().is_none_or(|n| n.trim().is_empty()))
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        let (participant_map, name_lookup) = if needs_participants.is_empty() {
+            (HashMap::new(), NameLookup::new())
+        } else {
+            let participant_rows = sqlx::query!(
+                r#"
+                SELECT channel_id, user_id
+                FROM comms_channel_participants
+                WHERE channel_id = ANY($1) AND left_at IS NULL
+                "#,
+                &needs_participants
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let mut part_map: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
+            let mut all_user_ids = HashSet::new();
+            for row in participant_rows {
+                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .expect("valid user id from db")
+                    .into_owned();
+                all_user_ids.insert(row.user_id);
+                part_map.entry(row.channel_id).or_default().push(uid);
+            }
+
+            let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
+            let name_rows = sqlx::query!(
+                r#"
+                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
+                FROM macro_user_info mui
+                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+                WHERE u.id = ANY($1)
+                "#,
+                &user_id_strings
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let lookup: NameLookup = name_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
+                    Some((row.user_profile_id, name))
+                })
+                .collect();
+
+            (part_map, lookup)
+        };
+
+        let mut resolved: HashMap<Uuid, String> = HashMap::with_capacity(channel_map.len());
+        for (channel_id, (name, channel_type)) in &channel_map {
+            let empty = Vec::new();
+            let participants = participant_map.get(channel_id).unwrap_or(&empty);
+            let resolved_name = resolve_channel_name(
+                channel_type,
+                name.as_deref(),
+                participants,
+                channel_id,
+                viewer_user_id.copied(),
+                &name_lookup,
+            );
+            resolved.insert(*channel_id, resolved_name);
+        }
+
+        Ok(resolved)
     }
 }
 
@@ -34,7 +211,7 @@ impl CallRepository for PgCallRepo {
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
-        created_by: &str,
+        created_by: MacroUserIdStr<'_>,
     ) -> Result<Option<Call>, Self::Err> {
         // Create share permission
         let share_permission_id = uuid::Uuid::now_v7();
@@ -45,7 +222,7 @@ impl CallRepository for PgCallRepo {
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),
-                access_level: AccessLevel::View,
+                access_level: AccessLevel::Edit,
             }]),
         };
 
@@ -75,9 +252,30 @@ impl CallRepository for PgCallRepo {
             "#,
             &share_permission.id,
             &channel_id.to_string(),
-            share_permission.channel_share_permissions.as_ref().unwrap()[0].access_level as _,
+            AccessLevel::Edit as _,
         )
         .execute(tx.as_mut())
+        .await?;
+
+        // owner entity access row
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+            created_by.as_ref(),
+            entity_access_db_utils::EntityAccessSourceType::User,
+            entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await?;
+
+        entity_access_db_utils::insert_entity_access_row(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+            &channel_id.to_string(),
+            entity_access_db_utils::EntityAccessSourceType::Channel,
+            entity_access_db_utils::AccessLevel::Edit,
+        )
         .await?;
 
         let row = sqlx::query!(
@@ -90,7 +288,7 @@ impl CallRepository for PgCallRepo {
             call_id,
             channel_id,
             room_name,
-            created_by,
+            created_by.as_ref(),
             &share_permission_id.to_string(),
         )
         .fetch_optional(tx.as_mut())
@@ -115,6 +313,33 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_call_by_channel_id(&self, channel_id: &Uuid) -> Result<Option<Call>, Self::Err> {
+        sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id
+            FROM calls
+            WHERE channel_id = $1
+            "#,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| {
+            opt.map(|row| Call {
+                id: row.id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                created_at: row.created_at,
+                egress_id: row.egress_id,
+            })
+        })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_active_call_by_channel(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Option<Call>, Self::Err> {
         sqlx::query!(
             r#"
             SELECT id, channel_id, room_name, created_by, created_at, egress_id
@@ -165,8 +390,8 @@ impl CallRepository for PgCallRepo {
     async fn add_participant(
         &self,
         call_id: &Uuid,
-        user_id: &str,
-    ) -> Result<CallParticipant, Self::Err> {
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<CallParticipant, AddParticipantError> {
         let row = sqlx::query!(
             r#"
             INSERT INTO call_participants (call_id, user_id)
@@ -175,10 +400,11 @@ impl CallRepository for PgCallRepo {
             RETURNING call_id, user_id, joined_at
             "#,
             call_id,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_one(&self.pool)
-        .await?;
+        .await
+        .map_err(classify_add_participant_err)?;
 
         Ok(CallParticipant {
             call_id: row.call_id,
@@ -188,7 +414,32 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn remove_participant(&self, call_id: &Uuid, user_id: &str) -> Result<(), Self::Err> {
+    async fn find_active_call_for_user(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<(Uuid, Uuid)>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT c.id, c.channel_id
+            FROM call_participants cp
+            JOIN calls c ON c.id = cp.call_id
+            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| (r.id, r.channel_id)))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn remove_participant(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE call_participants
@@ -196,7 +447,7 @@ impl CallRepository for PgCallRepo {
             WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL
             "#,
             call_id,
-            user_id,
+            user_id.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -259,14 +510,25 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
         sqlx::query!(
             r#"
             DELETE FROM calls WHERE id = $1
             "#,
             call_id,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
         Ok(())
     }
 
@@ -285,13 +547,29 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET share_with_team = NOT share_with_team
+             WHERE id = $1
+            RETURNING share_with_team, channel_id
+            "#,
+            call_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok((row.share_with_team, row.channel_id))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn archive_call(&self, call_id: &Uuid) -> Result<Uuid, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_url, share_permission_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -302,16 +580,44 @@ impl CallRepository for PgCallRepo {
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
+        // If the call opted in to team sharing, grant the creator's team View
+        // access on the archived call. Silently skip if the creator has no team.
+        if call.share_with_team {
+            let team_id: Option<Uuid> = sqlx::query_scalar!(
+                r#"
+                SELECT team_id
+                FROM team_user
+                WHERE user_id = $1
+                LIMIT 1
+                "#,
+                &call.created_by,
+            )
+            .fetch_optional(tx.as_mut())
+            .await?;
+
+            if let Some(team_id) = team_id {
+                entity_access_db_utils::insert_entity_access_row(
+                    &mut tx,
+                    call_id,
+                    entity_access_db_utils::EntityType::Call,
+                    &team_id.to_string(),
+                    entity_access_db_utils::EntityAccessSourceType::Team,
+                    entity_access_db_utils::AccessLevel::View,
+                )
+                .await?;
+            }
+        }
+
         let now = Utc::now();
         let duration_ms = now
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        // Insert into call_records (including egress_id and any early recording_url).
+        // Insert into call_records (including egress_id and any early recording_key).
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_url, share_permission_id)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, share_permission_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             call_id,
@@ -322,7 +628,7 @@ impl CallRepository for PgCallRepo {
             now,
             duration_ms,
             call.egress_id,
-            call.recording_url,
+            call.recording_key,
             &call.share_permission_id,
         )
         .execute(tx.as_mut())
@@ -345,8 +651,8 @@ impl CallRepository for PgCallRepo {
         // Copy transcripts to call_record_transcripts.
         sqlx::query!(
             r#"
-            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
-            SELECT $1, segment_id, speaker_id, content, started_at, ended_at, sequence_num
+            INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
+            SELECT $1, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
             FROM call_transcripts
             WHERE call_id = $2
             "#,
@@ -371,17 +677,17 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_recording_url(
+    async fn set_recording_key(
         &self,
         call_record_id: &Uuid,
-        recording_url: &str,
+        recording_key: &str,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            UPDATE call_records SET recording_url = $2 WHERE id = $1
+            UPDATE call_records SET recording_key = $2 WHERE id = $1
             "#,
             call_record_id,
-            recording_url,
+            recording_key,
         )
         .execute(&self.pool)
         .await?;
@@ -404,17 +710,17 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn set_active_call_recording_url(
+    async fn set_active_call_recording_key(
         &self,
         egress_id: &str,
-        recording_url: &str,
+        recording_key: &str,
     ) -> Result<bool, Self::Err> {
         let result = sqlx::query!(
             r#"
-            UPDATE calls SET recording_url = $2 WHERE egress_id = $1
+            UPDATE calls SET recording_key = $2 WHERE egress_id = $1
             "#,
             egress_id,
-            recording_url,
+            recording_key,
         )
         .execute(&self.pool)
         .await?;
@@ -429,8 +735,8 @@ impl CallRepository for PgCallRepo {
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, content, started_at, ended_at, sequence_num)
-            VALUES ($1, $2, $3, $4, $5, $6, (
+            INSERT INTO call_transcripts (call_id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, (
                 SELECT COALESCE(MAX(sequence_num), 0) + 1
                 FROM call_transcripts
                 WHERE call_id = $1
@@ -440,12 +746,647 @@ impl CallRepository for PgCallRepo {
             call_id,
             segment.segment_id,
             segment.speaker_id,
+            segment.diarized_speaker_id,
             segment.content,
             segment.started_at,
             segment.ended_at,
         )
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record_by_call_id(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<CallRecord>, Self::Err> {
+        // Use a read-only snapshot-isolation transaction so the call row and its
+        // participants/transcripts all reflect the same point in time. Without this,
+        // a concurrent `archive_call` can move rows from `calls` -> `call_records`
+        // between our SELECTs, leaving us with an "active" call row but empty
+        // participants/transcript (or vice versa). REPEATABLE READ gives a stable
+        // snapshot; READ ONLY avoids blocking writers.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            .execute(&mut *tx)
+            .await?;
+
+        // Try active `calls` first.
+        if let Some(active) = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key
+            FROM calls
+            WHERE id = $1
+            "#,
+            call_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        {
+            let participants = sqlx::query!(
+                r#"
+                SELECT user_id, joined_at, left_at
+                FROM call_participants
+                WHERE call_id = $1
+                ORDER BY joined_at ASC
+                "#,
+                call_id,
+            )
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .map(|row| CallRecordParticipant {
+                user_id: row.user_id,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
+            })
+            .collect();
+
+            let transcript = sqlx::query!(
+                r#"
+                SELECT id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num
+                FROM call_transcripts
+                WHERE call_id = $1
+                ORDER BY sequence_num ASC
+                "#,
+                call_id,
+            )
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .map(|row| CallRecordTranscriptSegment {
+                transcript_id: row.id,
+                segment_id: Some(row.segment_id),
+                speaker_id: row.speaker_id,
+                diarized_speaker_id: row.diarized_speaker_id,
+                content: row.content,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                sequence_num: row.sequence_num,
+            })
+            .collect();
+
+            tx.commit().await?;
+            return Ok(Some(CallRecord {
+                call_id: active.id,
+                channel_id: active.channel_id,
+                room_name: active.room_name,
+                created_by: active.created_by,
+                started_at: active.created_at,
+                ended_at: None,
+                duration_ms: None,
+                egress_id: active.egress_id,
+                recording_key: active.recording_key,
+                recording_url: None,
+                channel_name: None,
+                custom_name: None,
+                summary: None,
+                is_active: true,
+                participants,
+                transcript,
+            }));
+        }
+
+        // Fall back to archived `call_records`.
+        let Some(archived) = sqlx::query!(
+            r#"
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, custom_name, summary
+            FROM call_records
+            WHERE id = $1
+            "#,
+            call_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        else {
+            tx.commit().await?;
+            return Ok(None);
+        };
+
+        let participants = sqlx::query!(
+            r#"
+            SELECT user_id, joined_at, left_at
+            FROM call_record_participants
+            WHERE call_record_id = $1
+            ORDER BY joined_at ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordParticipant {
+            user_id: row.user_id,
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
+        .collect();
+
+        let transcript = sqlx::query!(
+            r#"
+            SELECT id, segment_id, speaker_id, diarized_speaker_id, custom_speaker, content, started_at, ended_at, sequence_num
+            FROM call_record_transcripts
+            WHERE call_record_id = $1
+            ORDER BY sequence_num ASC
+            "#,
+            call_id,
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .map(|row| CallRecordTranscriptSegment {
+            transcript_id: row.id,
+            segment_id: row.segment_id,
+            speaker_id: row.custom_speaker.unwrap_or(row.speaker_id),
+            diarized_speaker_id: row.diarized_speaker_id,
+            content: row.content,
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            sequence_num: row.sequence_num,
+        })
+        .collect();
+
+        tx.commit().await?;
+        Ok(Some(CallRecord {
+            call_id: archived.id,
+            channel_id: archived.channel_id,
+            room_name: archived.room_name,
+            created_by: archived.created_by,
+            started_at: archived.started_at,
+            ended_at: Some(archived.ended_at),
+            duration_ms: Some(archived.duration_ms),
+            egress_id: archived.egress_id,
+            recording_key: archived.recording_key,
+            recording_url: None,
+            channel_name: None,
+            custom_name: archived.custom_name,
+            summary: archived.summary,
+            is_active: false,
+            participants,
+            transcript,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self, call_ids), fields(num_call_ids = call_ids.len()))]
+    async fn batch_get_call_record_previews<'a>(
+        &self,
+        call_ids: &[Uuid],
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<CallRecordPreview>, Self::Err> {
+        if call_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Deduplicate ids while preserving first-occurrence order for the response.
+        let mut seen = HashSet::new();
+        let unique_call_ids: Vec<Uuid> = call_ids
+            .iter()
+            .copied()
+            .filter(|id| seen.insert(*id))
+            .collect();
+
+        // Single query across both `calls` (active) and `call_records` (archived).
+        // An id in both tables should be impossible; if it somehow happens the
+        // active row wins by appearing first.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                created_at as "started_at!",
+                NULL::timestamptz as "ended_at"
+            FROM calls
+            WHERE id = ANY($1)
+            UNION ALL
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                started_at as "started_at!",
+                ended_at as "ended_at"
+            FROM call_records
+            WHERE id = ANY($1)
+            "#,
+            &unique_call_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        struct Found {
+            channel_id: Uuid,
+            started_at: chrono::DateTime<Utc>,
+            ended_at: Option<chrono::DateTime<Utc>>,
+        }
+
+        let mut found: HashMap<Uuid, Found> = HashMap::with_capacity(rows.len());
+        for row in rows {
+            // If the same id ever shows up twice, keep the first (active) hit.
+            found.entry(row.call_id).or_insert(Found {
+                channel_id: row.channel_id,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+            });
+        }
+
+        let unique_channel_ids: Vec<Uuid> = {
+            let mut seen = HashSet::new();
+            found
+                .values()
+                .filter_map(|f| seen.insert(f.channel_id).then_some(f.channel_id))
+                .collect()
+        };
+
+        let channel_names = self
+            .batch_resolve_channel_names(&unique_channel_ids, user_id)
+            .await?;
+
+        let previews = unique_call_ids
+            .into_iter()
+            .map(|call_id| match found.remove(&call_id) {
+                Some(f) => CallRecordPreview::Exists(CallRecordPreviewData {
+                    call_id,
+                    channel_id: f.channel_id,
+                    channel_name: channel_names.get(&f.channel_id).cloned(),
+                    started_at: f.started_at,
+                    ended_at: f.ended_at,
+                }),
+                None => CallRecordPreview::DoesNotExist(WithCallId { call_id }),
+            })
+            .collect();
+
+        Ok(previews)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_records_by_user<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        limit: u32,
+        filter: &LiteralTree<CallLiteral>,
+    ) -> Result<Vec<CallRecord>, Self::Err> {
+        // Fetch call headers from both active and archived tables, ordered by
+        // start time descending. We intentionally exclude transcripts (too
+        // large for the soup feed).
+        //
+        // Visibility is derived from the `entity_access` table: a call is
+        // visible to the user if there's an entity_access row whose
+        // `source_id` matches one of the user's source ids (their
+        // channel memberships, team memberships, or their own user id).
+        // This mirrors `entity_access::pg_access_repo::queries::call_access`.
+        let channel_ids = extract_channel_ids(filter);
+        let has_channel_filter = !channel_ids.is_empty();
+        let attended = extract_attended(filter);
+
+        let rows = sqlx::query!(
+            r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text AS source_id
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1 AS source_id
+            )
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                room_name as "room_name!",
+                created_by as "created_by!",
+                created_at as "started_at!",
+                NULL::timestamptz as "ended_at",
+                NULL::bigint as "duration_ms",
+                egress_id,
+                recording_key,
+                NULL::text as "custom_name",
+                true as "is_active!"
+            FROM calls c
+            WHERE EXISTS (
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = c.id
+                  AND ea.entity_type = 'call'
+            )
+            AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_participants cp
+                WHERE cp.call_id = c.id AND cp.user_id = $1
+            ) = $5)
+            UNION ALL
+            SELECT
+                id as "call_id!",
+                channel_id as "channel_id!",
+                room_name as "room_name!",
+                created_by as "created_by!",
+                started_at as "started_at!",
+                ended_at as "ended_at",
+                duration_ms as "duration_ms",
+                egress_id,
+                recording_key,
+                custom_name,
+                false as "is_active!"
+            FROM call_records cr
+            WHERE EXISTS (
+                SELECT 1 FROM entity_access ea
+                JOIN user_source_ids u ON u.source_id = ea.source_id
+                WHERE ea.entity_id = cr.id
+                  AND ea.entity_type = 'call'
+            )
+            AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
+            AND ($5::bool IS NULL OR EXISTS (
+                SELECT 1 FROM call_record_participants crp
+                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+            ) = $5)
+            ORDER BY "started_at!" DESC
+            LIMIT $2
+            "#,
+            user_id.as_ref(),
+            limit as i64,
+            has_channel_filter,
+            &channel_ids,
+            attended,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut records = Vec::with_capacity(rows.len());
+        for row in rows {
+            // Fetch participants from the appropriate table.
+            let participants = if row.is_active {
+                sqlx::query!(
+                    r#"
+                    SELECT user_id, joined_at, left_at
+                    FROM call_participants
+                    WHERE call_id = $1
+                    ORDER BY joined_at ASC
+                    "#,
+                    row.call_id,
+                )
+                .fetch_all(&self.pool)
+                .await?
+                .into_iter()
+                .map(|p| CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                })
+                .collect()
+            } else {
+                sqlx::query!(
+                    r#"
+                    SELECT user_id, joined_at, left_at
+                    FROM call_record_participants
+                    WHERE call_record_id = $1
+                    ORDER BY joined_at ASC
+                    "#,
+                    row.call_id,
+                )
+                .fetch_all(&self.pool)
+                .await?
+                .into_iter()
+                .map(|p| CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                })
+                .collect()
+            };
+
+            records.push(CallRecord {
+                call_id: row.call_id,
+                channel_id: row.channel_id,
+                room_name: row.room_name,
+                created_by: row.created_by,
+                started_at: row.started_at,
+                ended_at: row.ended_at,
+                duration_ms: row.duration_ms,
+                egress_id: row.egress_id,
+                recording_key: row.recording_key,
+                recording_url: None,
+                channel_name: None,
+                custom_name: row.custom_name,
+                summary: None,
+                is_active: row.is_active,
+                participants,
+                transcript: Vec::new(),
+            });
+        }
+
+        // --- Resolve channel names ---
+        let unique_channel_ids: Vec<Uuid> = {
+            let mut seen = HashSet::new();
+            records
+                .iter()
+                .filter_map(|r| seen.insert(r.channel_id).then_some(r.channel_id))
+                .collect()
+        };
+
+        let channel_names = self
+            .batch_resolve_channel_names(&unique_channel_ids, user_id.copied())
+            .await?;
+
+        for record in &mut records {
+            record.channel_name = channel_names.get(&record.channel_id).cloned();
+        }
+
+        Ok(records)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_profile_picture<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT mui.profile_picture
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1 AND mui.profile_picture IS NOT NULL
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|opt| opt.flatten())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_channel_name<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Option<String>, Self::Err> {
+        let Some(channel_info) = sqlx::query!(
+            r#"
+            SELECT name, channel_type::text as "channel_type!"
+            FROM comms_channels
+            WHERE id = $1
+            "#,
+            channel_id
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let channel_type = &channel_info.channel_type;
+        let needs_participants = channel_type == "direct_message"
+            || (channel_type == "private"
+                && channel_info
+                    .name
+                    .as_ref()
+                    .is_none_or(|n| n.trim().is_empty()));
+
+        let (participant_ids, name_lookup) = if !needs_participants {
+            (Vec::new(), NameLookup::new())
+        } else {
+            let participant_rows = sqlx::query!(
+                r#"
+                SELECT user_id
+                FROM comms_channel_participants
+                WHERE channel_id = $1 AND left_at IS NULL
+                "#,
+                channel_id
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let mut ids = Vec::new();
+            let mut all_user_ids = Vec::new();
+            for row in participant_rows {
+                let uid = MacroUserIdStr::parse_from_str(&row.user_id)
+                    .expect("valid user id from db")
+                    .into_owned();
+                all_user_ids.push(row.user_id);
+                ids.push(uid);
+            }
+
+            let name_rows = sqlx::query!(
+                r#"
+                SELECT u.id as user_profile_id, mui.first_name, mui.last_name
+                FROM macro_user_info mui
+                JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+                WHERE u.id = ANY($1)
+                "#,
+                &all_user_ids
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            let lookup: NameLookup = name_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let name = display_name(row.first_name.as_deref(), row.last_name.as_deref())?;
+                    Some((row.user_profile_id, name))
+                })
+                .collect();
+
+            (ids, lookup)
+        };
+
+        Ok(Some(resolve_channel_name(
+            channel_type,
+            channel_info.name.as_deref(),
+            &participant_ids,
+            channel_id,
+            user_id.copied(),
+            &name_lookup,
+        )))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        let row = sqlx::query!(
+            r#"
+            DELETE FROM call_records WHERE id = $1 RETURNING recording_key
+            "#,
+            call_record_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut tx,
+            call_record_id,
+            entity_access_db_utils::EntityType::Call,
+        )
+        .await?;
+
+        tx.commit().await?;
+        Ok(row.and_then(|r| r.recording_key))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_call_record(
+        &self,
+        call_record_id: &Uuid,
+        request: &EditCallRecordRequest,
+    ) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+
+        if let Some(share_permission) = request.share_permission.as_ref() {
+            edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
+        }
+
+        if let Some(share_with_team) = request.share_with_team {
+            edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
+        }
+
+        if let Some(custom_name) = request.custom_name.as_deref() {
+            let custom_name = if custom_name.is_empty() {
+                None
+            } else {
+                Some(custom_name)
+            };
+            edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]
+    async fn patch_call_transcript_custom_speakers(
+        &self,
+        call_record_id: &Uuid,
+        assignments: &[CustomSpeakerAssignment],
+    ) -> Result<(), Self::Err> {
+        if assignments.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_speakers(&mut tx, call_record_id, assignments).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, summary), err)]
+    async fn insert_call_summary(&self, call_id: &Uuid, summary: &str) -> Result<(), Self::Err> {
+        // Tolerate missing rows: summarization can race with record deletion.
+        sqlx::query!(
+            r#"
+            UPDATE call_records SET summary = $2 WHERE id = $1
+            "#,
+            call_id,
+            summary,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, name), err)]
+    async fn set_custom_name_if_null(&self, call_id: &Uuid, name: &str) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
+        tx.commit().await?;
         Ok(())
     }
 }

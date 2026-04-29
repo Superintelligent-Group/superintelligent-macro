@@ -20,6 +20,8 @@ export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
   entityHasUnreadNotifications,
+  executeMarkNotificationsDone,
+  executeMarkNotificationsUndone,
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsDone,
   markNotificationsForEntityAsRead,
@@ -39,8 +41,11 @@ export {
   getNotificationTargetName,
   shouldShowNotificationTarget,
 } from './notification-metadata';
+export { getChannelNotificationParams } from './notification-navigation';
 export { openNotificationFromId } from './notification-navigation';
 export { openNotification } from './notification-navigation';
+export { openSingleStackNotification } from './notification-navigation';
+export { CHANNEL_EVENT_TYPES } from './notification-source';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,
@@ -63,7 +68,10 @@ export type {
 } from './notification-settings';
 export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
-export { createNotificationSource } from './notification-source';
+export {
+  createNotificationSource,
+  setDoneOverride,
+} from './notification-source';
 export type { NotificationStack } from './notification-stacking';
 export {
   getAllNotificationsFromGroup,

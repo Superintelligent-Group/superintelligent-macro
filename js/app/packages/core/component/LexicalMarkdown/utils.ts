@@ -1,4 +1,5 @@
 import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
+import { SKIP_SCROLL_INTO_VIEW_TAG } from '@lexical-core/constants';
 import { $isCodeNode } from '@lexical/code';
 import { $generateNodesFromDOM } from '@lexical/html';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@lexical/utils';
 import {
   $isDocumentMentionNode,
+  $isMentionNode,
   $isWatermarkNode,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
@@ -71,7 +73,7 @@ import type { Setter } from 'solid-js';
 import {
   $getId,
   INITIALIZE_DOCUMENT_IDS,
-} from '../../../lexical-core/plugins/nodeIdPlugin';
+} from '@lexical-core/plugins/nodeIdPlugin';
 import { MarkdownEditorErrors } from './constants';
 import {
   $applyDocumentMetadataFromSerialized,
@@ -412,6 +414,10 @@ export function $isEmpty() {
       if (!$isParagraphNode(firstChild)) {
         return false;
       }
+      // Early return on pasted mentions before preview can fetch their names.
+      $traverseNodes(child, (n) => {
+        if ($isMentionNode(n)) return false;
+      });
     }
 
     if (child.getTextContent() !== '') return false;
@@ -1319,4 +1325,19 @@ export function pendingEditorState(
       resolve(editorState);
     });
   });
+}
+
+/**
+ * Calls `editor.focus()` on the editor instance with `SKIP_SCROLL_INTO_VIEW_TAG`
+ * to prevent focus scrolling
+ */
+export function focusEditorWithoutScroll(editor: LexicalEditor): void {
+  editor.update(
+    () => {
+      editor.focus();
+    },
+    {
+      tag: SKIP_SCROLL_INTO_VIEW_TAG,
+    }
+  );
 }

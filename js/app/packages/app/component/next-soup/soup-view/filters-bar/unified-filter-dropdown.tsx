@@ -7,17 +7,22 @@ import { isListViewID } from '@app/constants/list-views';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import {
   type Accessor,
+  batch,
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
+  Match,
+  onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 import SlidersHorizontalIcon from '@macro-icons/wide/sliders-horizontal.svg';
 import CaretRightIcon from '@icon/regular/caret-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
+import { SearchableMultiSelectInline } from './searchable-multi-select';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -26,19 +31,39 @@ import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
 import { UserIcon } from '@core/component/UserIcon';
 import type { FilterID } from '@app/component/next-soup/filters';
-import { NO_ASSIGNEE } from '@app/component/next-soup/soup-view/task-sub-filter-matcher';
+import {
+  NO_ASSIGNEE,
+  type FilterContext,
+} from '@app/component/next-soup/filters/configs/';
+import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import {
+  INDEX_OPTIONS,
+  useCallSearchFilter,
+  useChannelSearchFilter,
+  useEmailSearchFilter,
+  useSearchFilterOptions,
+  useSearchIndexController,
+  type SearchableOption,
+} from './search-filter-controls';
+
+const TypeIndicator = (props: { active: boolean }) => (
+  <span
+    class={cn(
+      'size-4 flex items-center justify-center shrink-0 rounded-full border transition-colors',
+      props.active ? 'bg-accent border-accent' : 'border-edge'
+    )}
+  >
+    <Show when={props.active}>
+      <CheckIcon class="size-2.5 text-page" />
+    </Show>
+  </span>
+);
 
 export type FilterOption = {
   id: FilterID;
-  label: string;
-  icon?: () => JSX.Element;
-};
-
-/** Options whose ids are arbitrary strings (e.g. contact IDs), not FilterIDs. */
-type SearchableOption = {
-  id: string;
   label: string;
   icon?: () => JSX.Element;
 };
@@ -308,6 +333,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
   channels: [],
+  calls: [],
   folders: [],
   search: [],
 };
@@ -317,177 +343,318 @@ const SearchableFilterSubmenu = (props: {
   label: string;
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
-  onToggle: (id: string) => void;
+  onChange: (ids: string[]) => void;
   placeholder?: string;
-  multiple?: boolean;
+  open?: Accessor<boolean>;
+  onOpenChange?: (v: boolean) => void;
 }) => {
-  const [search, setSearch] = createSignal('');
-  const [highlightedIndex, setHighlightedIndex] = createSignal(0);
-  let inputRef: HTMLInputElement | undefined;
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const isOpen = () => props.open?.() ?? internalOpen();
+  const setIsOpen = (v: boolean) => {
+    if (props.onOpenChange) props.onOpenChange(v);
+    else setInternalOpen(v);
+  };
+  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
 
-  const filteredOptions = createMemo(() => {
-    const query = search().toLowerCase();
-    if (!query) return props.options();
-    return props.options().filter((o) => o.label.toLowerCase().includes(query));
+  // Focus the search input while the sub is open.
+  //
+  // Two issues conspire:
+  //   1. Initial focus has to wait for Kobalte's DismissableLayer to register
+  //      itself as a nested layer of the parent menu (done in its onMount).
+  //      The sub is portaled, so focusing the input before that registration
+  //      looks like "focus outside" to the parent and closes the whole menu
+  //      tree. One rAF is enough to get past those onMount callbacks.
+  //   2. After that, Kobalte's `onPointerMove` on the SubTrigger keeps
+  //      calling `focusWithoutScrolling(e.currentTarget)` on every mouse
+  //      move, stealing focus back to the trigger. Reclaim on blur — user
+  //      dismissal routes (Escape / click-outside) close the sub first,
+  //      which unregisters this listener before focus moves elsewhere.
+  createEffect(() => {
+    const el = inputRef();
+    if (!isOpen() || !el) return;
+
+    const raf = requestAnimationFrame(() => {
+      if (isOpen()) el.focus();
+    });
+
+    const onBlur = () => {
+      queueMicrotask(() => {
+        if (isOpen() && document.activeElement !== el) el.focus();
+      });
+    };
+    el.addEventListener('blur', onBlur);
+
+    onCleanup(() => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('blur', onBlur);
+    });
   });
 
-  const isActive = (id: string) => props.activeIds().includes(id);
-
-  const [isOpen, setIsOpen] = createSignal(false);
-
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    if (!open) return;
-    setSearch('');
-    setHighlightedIndex(0);
-    // Double rAF to run after Kobalte finishes its own focus management
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        inputRef?.focus();
-      });
-    });
-  };
-
-  const handleSubContentFocusOut = (e: FocusEvent) => {
-    const subContentEl = e.currentTarget as HTMLElement;
-    // If focus leaves SubContent while sub is still open (e.g. Kobalte focusing
-    // the SubTrigger on hover), refocus the input
-    if (isOpen() && !subContentEl.contains(e.relatedTarget as Node)) {
-      requestAnimationFrame(() => {
-        if (isOpen()) inputRef?.focus();
-      });
-    }
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const options = filteredOptions();
-    const maxIndex = options.length - 1;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.min(i + 1, maxIndex));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setHighlightedIndex((i) => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        const option = options[highlightedIndex()];
-        if (option) {
-          props.onToggle(option.id);
-        }
-        break;
-      case 'ArrowLeft':
-        if (search() === '') {
-          e.preventDefault();
-          setIsOpen(false);
-        }
-        break;
-      default:
-        // Stop propagation for other keys to prevent Kobalte typeahead
-        e.stopPropagation();
-    }
-  };
-
   return (
-    <DropdownMenu.Sub
-      gutter={4}
-      open={isOpen()}
-      onOpenChange={handleOpenChange}
-    >
-      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+    <DropdownMenu.Sub gutter={4} open={isOpen()} onOpenChange={setIsOpen}>
+      <DropdownMenu.SubTrigger
+        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+        onPointerEnter={(e) => {
+          // Kobalte's "grace polygon" keeps an open sub alive when the
+          // pointer crosses toward its content. For sibling In/From triggers,
+          // that means moving between them leaves the prior sub stuck open
+          // and the prior trigger stuck with data-highlighted. Force focus
+          // + open so Kobalte's parent selection manager updates to this
+          // trigger and the shared signal closes the sibling.
+          if (e.pointerType !== 'mouse') return;
+          e.currentTarget.focus({ preventScroll: true });
+          if (!isOpen()) setIsOpen(true);
+        }}
+      >
         <span class="text-ink">{props.label}</span>
         <CaretRightIcon class="size-3 text-ink-muted" />
       </DropdownMenu.SubTrigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent
-          class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[200px] max-w-[500px] p-1"
-          onFocusOut={handleSubContentFocusOut}
-        >
-          {/* Search input */}
-          <div class="flex items-center gap-2 px-2 py-2 border-b border-edge-muted mb-2">
-            <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={search()}
-              onInput={(e) => {
-                setSearch(e.currentTarget.value);
-                setHighlightedIndex(0);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={props.placeholder ?? 'Search...'}
-              class="flex-1 bg-transparent text-xs outline-none placeholder:text-ink-muted"
-            />
-          </div>
-
-          {/* Options list */}
-          <div class="max-h-48 overflow-y-auto">
-            <For each={filteredOptions()}>
-              {(option, index) => {
-                const active = () => isActive(option.id);
-                const highlighted = () => highlightedIndex() === index();
-                return (
-                  <button
-                    type="button"
-                    class={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors',
-                      highlighted() ? 'bg-hover' : 'hover:bg-hover'
-                    )}
-                    onClick={() => props.onToggle(option.id)}
-                    onMouseEnter={() => setHighlightedIndex(index())}
-                  >
-                    <span
-                      class={cn(
-                        'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                        active() ? 'bg-accent border-accent' : 'border-edge'
-                      )}
-                    >
-                      <Show when={active()}>
-                        <CheckIcon class="size-2.5 text-page" />
-                      </Show>
-                    </span>
-
-                    <Show when={option.icon}>
-                      {(icon) => (
-                        <span class="size-4 flex items-center justify-center shrink-0">
-                          {icon()()}
-                        </span>
-                      )}
-                    </Show>
-
-                    <span
-                      class={cn(
-                        'flex-1 truncate',
-                        active() ? 'text-ink' : 'text-ink-muted'
-                      )}
-                    >
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              }}
-            </For>
-
-            <Show when={filteredOptions().length === 0}>
-              <div class="px-3 py-2 text-xs text-ink-muted">No results</div>
-            </Show>
-          </div>
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl w-[260px] max-w-[90vw] overflow-hidden">
+          <SearchableMultiSelectInline
+            options={props.options}
+            activeIds={props.activeIds}
+            onChange={props.onChange}
+            placeholder={props.placeholder}
+            inputRef={setInputRef}
+            onRequestClose={() => setIsOpen(false)}
+          />
         </DropdownMenu.SubContent>
       </DropdownMenu.Portal>
     </DropdownMenu.Sub>
   );
 };
 
+/** Single-value sub-menu (e.g. Importance, Attended). */
+function SingleValueSubmenu<T>(props: {
+  label: string;
+  options: { label: string; value: T }[];
+  current: Accessor<T>;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <DropdownMenu.Sub gutter={4}>
+      <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
+        <span class="text-ink">{props.label}</span>
+        <CaretRightIcon class="size-3 text-ink-muted" />
+      </DropdownMenu.SubTrigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[160px] p-1">
+          <For each={props.options}>
+            {(option) => {
+              const active = () => props.current() === option.value;
+              return (
+                <DropdownMenu.Item
+                  class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                  onSelect={() => props.onSelect(option.value)}
+                  closeOnSelect
+                >
+                  <TypeIndicator active={active()} />
+                  <span
+                    class={cn(
+                      'flex-1 truncate',
+                      active() ? 'text-ink' : 'text-ink-muted'
+                    )}
+                  >
+                    {option.label}
+                  </span>
+                </DropdownMenu.Item>
+              );
+            }}
+          </For>
+        </DropdownMenu.SubContent>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Sub>
+  );
+}
+
+type InFromOpen = 'in' | 'from' | null;
+
+/** In + From (channel messages). */
+const ChannelSearchSubContent = (props: {
+  channel: ReturnType<typeof useChannelSearchFilter>;
+  channelOptions: Accessor<SearchableOption[]>;
+  senderOptions: Accessor<SearchableOption[]>;
+}) => {
+  const [openSub, setOpenSub] = createSignal<InFromOpen>(null);
+  return (
+    <>
+      <SearchableFilterSubmenu
+        label="In"
+        options={props.channelOptions}
+        activeIds={props.channel.channelIds}
+        onChange={props.channel.setChannelIds}
+        placeholder="Search channels..."
+        open={() => openSub() === 'in'}
+        onOpenChange={(v) => setOpenSub(v ? 'in' : null)}
+      />
+      <SearchableFilterSubmenu
+        label="From"
+        options={props.senderOptions}
+        activeIds={props.channel.senderIds}
+        onChange={props.channel.setSenderIds}
+        placeholder="Search senders..."
+        open={() => openSub() === 'from'}
+        onOpenChange={(v) => setOpenSub(v ? 'from' : null)}
+      />
+    </>
+  );
+};
+
+const IMPORTANCE_OPTIONS: {
+  label: string;
+  value: boolean | undefined;
+}[] = [
+  { label: 'Signal', value: true },
+  { label: 'Noise', value: false },
+  { label: 'All', value: undefined },
+];
+
+/** Importance (emails). */
+const EmailSearchSubContent = (props: {
+  email: ReturnType<typeof useEmailSearchFilter>;
+}) => (
+  <SingleValueSubmenu
+    label="Importance"
+    options={IMPORTANCE_OPTIONS}
+    current={props.email.importance}
+    onSelect={props.email.setImportance}
+  />
+);
+
+const ATTENDED_OPTIONS: {
+  label: string;
+  value: boolean | undefined;
+}[] = [
+  { label: 'Attended', value: true },
+  { label: 'Unattended', value: false },
+  { label: 'All', value: undefined },
+];
+
+/** In + From + Attended (calls). */
+const CallSearchSubContent = (props: {
+  call: ReturnType<typeof useCallSearchFilter>;
+  channelOptions: Accessor<SearchableOption[]>;
+  senderOptions: Accessor<SearchableOption[]>;
+}) => {
+  const [openSub, setOpenSub] = createSignal<InFromOpen>(null);
+  return (
+    <>
+      <SearchableFilterSubmenu
+        label="In"
+        options={props.channelOptions}
+        activeIds={props.call.channelIds}
+        onChange={props.call.setChannelIds}
+        placeholder="Search channels..."
+        open={() => openSub() === 'in'}
+        onOpenChange={(v) => setOpenSub(v ? 'in' : null)}
+      />
+      <SearchableFilterSubmenu
+        label="From"
+        options={props.senderOptions}
+        activeIds={props.call.speakerIds}
+        onChange={props.call.setSpeakerIds}
+        placeholder="Search speakers..."
+        open={() => openSub() === 'from'}
+        onOpenChange={(v) => setOpenSub(v ? 'from' : null)}
+      />
+      <SingleValueSubmenu
+        label="Attended"
+        options={ATTENDED_OPTIONS}
+        current={() => props.call.attended() ?? undefined}
+        onSelect={props.call.setAttended}
+      />
+    </>
+  );
+};
+
+const SearchIndexRowLabel = (props: {
+  option: (typeof INDEX_OPTIONS)[number];
+  active: Accessor<boolean>;
+}) => (
+  <>
+    <TypeIndicator active={props.active()} />
+    <Show when={props.option.icon}>
+      {(icon) => (
+        <span class="size-4 flex items-center justify-center shrink-0">
+          {icon()()}
+        </span>
+      )}
+    </Show>
+    <span
+      class={cn(
+        'flex-1 truncate',
+        props.active() ? 'text-ink' : 'text-ink-muted'
+      )}
+    >
+      {props.option.label}
+    </span>
+  </>
+);
+
+/** Flat row — selecting it just switches the active index. */
+const SearchIndexItem = (props: {
+  option: (typeof INDEX_OPTIONS)[number];
+  active: Accessor<boolean>;
+  onSelect: () => void;
+}) => (
+  <DropdownMenu.Item
+    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+    onSelect={props.onSelect}
+    closeOnSelect
+  >
+    <SearchIndexRowLabel option={props.option} active={props.active} />
+  </DropdownMenu.Item>
+);
+
+/** Row with a nested submenu.
+ *
+ * `children` must be lazy (via `<Match>`) so the nested submenus
+ * instantiate *inside* this row's `DropdownMenu.SubContent`. Eager JSX
+ * would evaluate in the outer content's context, which makes Kobalte
+ * register nested `DropdownMenu.Sub`s against the wrong parent —
+ * positioning falls back to the viewport and keyboard nav treats them as
+ * siblings of the row. */
+const SearchIndexSubRow = (props: {
+  option: (typeof INDEX_OPTIONS)[number];
+  active: Accessor<boolean>;
+  onSelect: () => void;
+  closeRoot: () => void;
+  children: JSX.Element;
+}) => (
+  <DropdownMenu.Sub gutter={4}>
+    <DropdownMenu.SubTrigger
+      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+      onPointerDown={props.onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          props.onSelect();
+          props.closeRoot();
+        }
+      }}
+    >
+      <SearchIndexRowLabel option={props.option} active={props.active} />
+      <CaretRightIcon class="size-3 text-ink-muted" />
+    </DropdownMenu.SubTrigger>
+    <DropdownMenu.Portal>
+      <DropdownMenu.SubContent class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
+        {props.children}
+      </DropdownMenu.SubContent>
+    </DropdownMenu.Portal>
+  </DropdownMenu.Sub>
+);
+
 export const UnifiedFilterDropdown = () => {
   const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
-  const { soup, assigneeFilter, setAssigneeFilter } = useSoupView();
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
+    useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
+  const contentId = panel.handle.content().id;
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -503,11 +670,28 @@ export const UnifiedFilterDropdown = () => {
   });
 
   const isOptionActive = (optionId: string) => {
-    return soup.filters.isActive(optionId);
+    return soup.predicates.isActive(optionId);
   };
 
   const toggleFilter = (optionId: string) => {
-    soup.filters.toggle({ or: [optionId] });
+    const wasActive = soup.predicates.isActive(optionId);
+    soup.predicates.toggle({ or: [optionId] });
+
+    const filter = soup.predicates.getConfig(optionId);
+    if (!filter?.query) return;
+
+    const ctx: FilterContext = {
+      userId: userId(),
+      assignees: assigneeFilter(),
+    };
+    const query =
+      typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+
+    if (wasActive) {
+      queryFilters.remove(query);
+    } else {
+      queryFilters.add(query);
+    }
   };
 
   // Assignee options for tasks view
@@ -546,16 +730,52 @@ export const UnifiedFilterDropdown = () => {
     ];
   });
 
-  const toggleAssignee = (id: string) => {
+  const handleAssigneeChange = (ids: string[]) => {
     const current = assigneeFilter();
-    if (current.includes(id)) {
-      setAssigneeFilter(current.filter((a) => a !== id));
-    } else {
-      setAssigneeFilter([...current, id]);
-    }
+    const toAdd = ids.filter((id) => !current.includes(id));
+    const toRemove = current.filter((id) => !ids.includes(id));
+
+    // Exclude NO_ASSIGNEE from backend queries - it's handled client-side only
+    const toProps = (list: string[]): PropertyFilter[] =>
+      list
+        .filter((id) => id !== NO_ASSIGNEE)
+        .map((id) => ({
+          propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          type: 'entity',
+          value: id,
+        }));
+
+    batch(() => {
+      setAssigneeFilter(ids);
+
+      // Activate/deactivate the assignee predicate based on selection
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('assignee')) {
+        soup.predicates.toggle({ and: ['assignee'] });
+      }
+
+      const removeProps = toProps(toRemove);
+      const addProps = toProps(toAdd);
+      if (removeProps.length)
+        queryFilters.remove({ include: { properties: removeProps } });
+      if (addProps.length)
+        queryFilters.add({ include: { properties: addProps } });
+    });
   };
 
   const isTasksView = () => currentView() === 'tasks';
+  const isSearchView = () => currentView() === 'search';
+  const hasActiveIndex = () =>
+    INDEX_OPTIONS.some((opt) => soup.predicates.isActive(opt.value));
+
+  const { changeIndex: handleIndexChange } = useSearchIndexController();
+
+  const channel = useChannelSearchFilter({ contentId, isSearchView });
+  const email = useEmailSearchFilter({ contentId, isSearchView });
+  const call = useCallSearchFilter({ contentId, isSearchView });
+
+  const { channelOptions: inChannelOptions, senderOptions: fromSenderOptions } =
+    useSearchFilterOptions();
 
   registerHotkey({
     hotkey: 'f',
@@ -568,14 +788,14 @@ export const UnifiedFilterDropdown = () => {
   });
 
   return (
-    <Show when={categories().length > 0 || isTasksView()}>
+    <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
       <DropdownMenu open={open()} onOpenChange={setOpen}>
         <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="F" />}>
           <DropdownMenu.Trigger
             as={Button}
             variant="secondary"
             size="sm"
-            class="rounded-xs [&_svg]:size-4"
+            class="rounded-xs [&_svg]:size-4 suppress-css-bracket"
           >
             <SlidersHorizontalIcon />
             <span class="font-medium">Filter</span>
@@ -585,13 +805,15 @@ export const UnifiedFilterDropdown = () => {
         <DropdownMenu.Portal>
           <DropdownMenu.Content class="z-action-menu bg-menu border border-edge-muted rounded-sm shadow-xl min-w-[180px] p-1">
             <Show
-              when={categories().length === 1 && !isTasksView()}
+              when={
+                categories().length === 1 && !isTasksView() && !isSearchView()
+              }
               fallback={
                 <>
                   <For each={categories()}>
                     {(category) => (
                       <DropdownMenu.Sub gutter={4}>
-                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover">
+                        <DropdownMenu.SubTrigger class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover">
                           <span class="text-ink">{category.label}</span>
                           <CaretRightIcon class="size-3 text-ink-muted" />
                         </DropdownMenu.SubTrigger>
@@ -603,7 +825,7 @@ export const UnifiedFilterDropdown = () => {
                                 const active = () => isOptionActive(option.id);
                                 return (
                                   <DropdownMenu.Item
-                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                                    class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
@@ -652,10 +874,67 @@ export const UnifiedFilterDropdown = () => {
                       label="Assignee"
                       options={assigneeOptions}
                       activeIds={assigneeFilter}
-                      onToggle={toggleAssignee}
+                      onChange={handleAssigneeChange}
                       placeholder="Search assignees..."
-                      multiple
                     />
+                  </Show>
+
+                  {/* Search view: 7 type rows (Channels/Email have nested submenus) */}
+                  <Show when={isSearchView()}>
+                    <For each={INDEX_OPTIONS}>
+                      {(option) => {
+                        const rowProps = {
+                          option,
+                          active: () => soup.predicates.isActive(option.value),
+                          onSelect: () => handleIndexChange(option.value),
+                          closeRoot: () => setOpen(false),
+                        };
+                        return (
+                          <Switch fallback={<SearchIndexItem {...rowProps} />}>
+                            <Match when={option.value === 'channels'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <ChannelSearchSubContent
+                                  channel={channel}
+                                  channelOptions={inChannelOptions}
+                                  senderOptions={fromSenderOptions}
+                                />
+                              </SearchIndexSubRow>
+                            </Match>
+                            <Match when={option.value === 'email'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <EmailSearchSubContent email={email} />
+                              </SearchIndexSubRow>
+                            </Match>
+                            <Match when={option.value === 'calls'}>
+                              <SearchIndexSubRow {...rowProps}>
+                                <CallSearchSubContent
+                                  call={call}
+                                  channelOptions={inChannelOptions}
+                                  senderOptions={fromSenderOptions}
+                                />
+                              </SearchIndexSubRow>
+                            </Match>
+                          </Switch>
+                        );
+                      }}
+                    </For>
+
+                    {/* All row */}
+                    <DropdownMenu.Item
+                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover"
+                      onSelect={() => handleIndexChange('all')}
+                      closeOnSelect
+                    >
+                      <TypeIndicator active={!hasActiveIndex()} />
+                      <span
+                        class={cn(
+                          'flex-1 truncate',
+                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
+                        )}
+                      >
+                        All
+                      </span>
+                    </DropdownMenu.Item>
                   </Show>
                 </>
               }
@@ -666,7 +945,7 @@ export const UnifiedFilterDropdown = () => {
                   const active = () => isOptionActive(option.id);
                   return (
                     <DropdownMenu.Item
-                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-[highlighted]:bg-hover cursor-pointer"
+                      class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xs text-left text-xs transition-colors hover:bg-hover outline-none data-highlighted:bg-hover cursor-pointer"
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >

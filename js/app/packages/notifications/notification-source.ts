@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import {
   optimisticInsertNotification,
   useMarkNotificationsAsDoneMutation,
@@ -7,7 +8,11 @@ import {
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
-import type { UserUnsubscribe } from '@service-notification/generated/schemas';
+import type {
+  ConnGatewayInnerNotifValue,
+  NotifEvent,
+  UserUnsubscribe,
+} from '@service-notification/generated/schemas';
 import type {
   UseInfiniteQueryResult,
   UseQueryResult,
@@ -18,6 +23,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  createRoot,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
@@ -26,7 +32,21 @@ import {
   compositeEntity,
   notificationEntity,
   type UnifiedNotification,
+  unifiedNotificationSchema,
 } from './types';
+import { fromZodError } from 'zod-validation-error';
+
+export const CHANNEL_EVENT_TYPES = [
+  'channel_mention',
+  'channel_message_send',
+  'channel_message_reply',
+] as const;
+
+export const DOCUMENT_COMMENT_EVENT_TYPES = [
+  'mentioned_in_document_comment',
+  'replied_to_document_comment_thread',
+  'commented_on_document',
+] as const;
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
@@ -72,6 +92,29 @@ const NOTIFICATION_EVENT_TYPE = 'notification';
 
 const QUERY_LIMIT = 500;
 
+// Persistent overrides for the `done` flag that survive cache writes.
+// In-flight infinite-query page fetches can land after an optimistic cache
+// flip and overwrite it with stale server data; this map keeps the UI
+// consistent regardless of what the cache says.
+const [doneOverrides, setDoneOverrides] = createRoot(() =>
+  createSignal<ReadonlyMap<string, boolean>>(new Map())
+);
+
+export function setDoneOverride(
+  ids: readonly string[],
+  done: boolean | undefined
+) {
+  if (ids.length === 0) return;
+  setDoneOverrides((prev) => {
+    const next = new Map(prev);
+    for (const id of ids) {
+      if (done === undefined) next.delete(id);
+      else next.set(id, done);
+    }
+    return next;
+  });
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -86,9 +129,35 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
-  const notifications = createMemo(() =>
-    notificationsQuery.isSuccess ? notificationsQuery.data : []
-  );
+  const notifications = createMemo(() => {
+    if (!notificationsQuery.isSuccess) return [];
+    const raw = notificationsQuery.data;
+    const overrides = doneOverrides();
+    if (overrides.size === 0) return raw;
+    return raw.map((n) => {
+      const override = overrides.get(n.id);
+      return override !== undefined ? { ...n, done: override } : n;
+    });
+  });
+
+  // Prune overrides for notifications that are no longer in the query cache
+  // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
+  // unbounded. Overrides whose value happens to match the cache are NOT
+  // pruned — during an in-flight mutation the cache may still hold the
+  // pre-mutation value and a stale fetch could flip it back before the
+  // API lands.
+  createEffect(() => {
+    if (!notificationsQuery.isSuccess) return;
+    const raw = notificationsQuery.data;
+    const overrides = doneOverrides();
+    if (overrides.size === 0) return;
+    const presentIds = new Set(raw.map((n) => n.id));
+    const toPrune: string[] = [];
+    for (const id of overrides.keys()) {
+      if (!presentIds.has(id)) toPrune.push(id);
+    }
+    if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
+  });
 
   const notificationsByEntity = createMemo(() => {
     const data = notifications();
@@ -120,13 +189,47 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
+    createEffect(() => {
+      const toDiscard = notifications().filter(
+        (n) => n.notification_event_type === 'document_mention' && !n.done
+      );
+      if (toDiscard.length === 0) return;
+      void markNotificationsAsDoneMutation.mutateAsync({
+        notificationIds: toDiscard.map((n) => n.id),
+      });
+    });
+  }
+
+  const mapWebsocketNotification = (
+    raw: ConnGatewayInnerNotifValue
+  ): UnifiedNotification => {
+    return {
+      ...raw,
+      id: raw.notification_id,
+      notification_metadata: raw.notification_metadata as NotifEvent,
+    };
+  };
+
   createSocketEffect(ws, (wsData) => {
     if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
       return;
     }
     let parsedNotification: UnifiedNotification;
     try {
-      parsedNotification = JSON.parse(wsData.data);
+      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const unsafeMapped = mapWebsocketNotification(raw);
+      const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
+      if (!parseResult.success) {
+        console.warn(
+          'Failed to parse notification',
+          wsData.data,
+          fromZodError(parseResult.error)
+        );
+        parsedNotification = unsafeMapped;
+      } else {
+        parsedNotification = parseResult.data;
+      }
     } catch (e) {
       console.error('Failed to parse notification', wsData.data, e);
       return;

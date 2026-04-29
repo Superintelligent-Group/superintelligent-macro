@@ -65,11 +65,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let OptionalMacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        } = parts
+        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -101,8 +97,8 @@ where
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {
                     entity: Entity {
-                        entity_id: call_info.channel_id.to_string(),
-                        entity_type: EntityType::Channel,
+                        entity_id: call_id,
+                        entity_type: EntityType::Call,
                     },
                     auth: EntityAccessAuth::Internal,
                     entity_permission: EntityPermission::ChannelRole {
@@ -120,16 +116,8 @@ where
             return Err(ExtractorError::Unauthorized);
         };
 
-        let user_org_id = user_context.organization_id.map(i64::from);
-        let channel_id_str = call_info.channel_id.to_string();
-
         let permission = service
-            .get_entity_permission(
-                Some(&macro_user_id),
-                &channel_id_str,
-                EntityType::Channel,
-                user_org_id,
-            )
+            .get_entity_permission(Some(&macro_user_id), &call_id, EntityType::Call, None)
             .await
             .map_err(ExtractorError::from)?;
 
@@ -140,8 +128,8 @@ where
         Ok(Self {
             entity_access_receipt: EntityAccessReceipt {
                 entity: Entity {
-                    entity_id: channel_id_str,
-                    entity_type: EntityType::Channel,
+                    entity_id: call_id,
+                    entity_type: EntityType::Call,
                 },
                 auth: EntityAccessAuth::Authenticated(macro_user_id),
                 entity_permission: permission,

@@ -31,7 +31,6 @@ use crate::{
     model::{
         request::{
             documents::{
-                copy::{CopyDocumentQueryParams, CopyDocumentRequest},
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
                 user_document_view_location::UpsertUserDocumentViewLocationRequest,
@@ -66,7 +65,7 @@ use crate::{
 use channels::inbound::axum_router::{
     ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
     ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiThreadInfo, ApiThreadReply,
+    ApiThreadInfo, ApiThreadReply, ChannelMessageFilters,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::ShortIdResponse;
@@ -104,6 +103,7 @@ use model::{
     version::DocumentStorageServiceApiVersion,
 };
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
@@ -141,7 +141,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_document_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document_handler,
-        documents::copy_document::copy_document_handler,
+        documents_hex::inbound::axum_router::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
         documents_hex::inbound::axum_router::edit_document_handler,
@@ -187,13 +187,21 @@ use utoipa::OpenApi;
 
         // channels
         channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_channel_attachments_handler,
         channels::inbound::axum_router::get_channel_participants_handler,
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
+        call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::get_call_record_handler,
+        call::inbound::axum_router::edit_call_record_handler,
+        call::inbound::axum_router::edit_call_transcript_handler,
+        call::inbound::axum_router::delete_call_record_handler,
+        call::inbound::axum_router::toggle_share_with_team_handler,
+        call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -219,10 +227,10 @@ use utoipa::OpenApi;
         projects::get_project::get_project_handler,
         projects::revert_delete_project::handler,
 
+        entity::get_entity_permission::handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
-
-        entity::get_entity_permission::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -266,8 +274,9 @@ use utoipa::OpenApi;
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
             GetDocumentSearchResponse, // Search document
-            CopyDocumentRequest,
-            CopyDocumentQueryParams, // Copy document
+            documents_hex::domain::models::CopyDocumentRequest,
+            documents_hex::domain::models::CopyDocumentQueryParams,
+            documents_hex::domain::models::CopyDocumentResponse, // Copy document
             documents_hex::domain::models::EditDocumentServiceArgs,
             documents_hex::inbound::axum_router::EditDocumentResponse, // Edit document
             UserDocumentsResponse,
@@ -332,11 +341,26 @@ use utoipa::OpenApi;
             ApiChannelAttachment,
             ApiChannelParticipant,
             ApiParticipantRole,
+            ChannelMessageFilters,
 
             // Calls
             call::domain::models::CallTokenResponse,
+            call::domain::models::CallActiveResponse,
             call::domain::models::LeaveCallResponse,
             call::domain::models::TranscriptSegmentRequest,
+            call::domain::models::CallRecord,
+            call::domain::models::CallRecordParticipant,
+            call::domain::models::CallRecordTranscriptSegment,
+            call::domain::models::EditCallRecordRequest,
+            call::domain::models::EditCallTranscriptRequest,
+            call::domain::models::CustomSpeakerAssignment,
+            call::domain::models::CallRecordPreview,
+            call::domain::models::CallRecordPreviewData,
+            call::domain::models::WithCallId,
+            call::domain::models::GetBatchCallRecordPreviewRequest,
+            call::domain::models::GetBatchCallRecordPreviewResponse,
+            SoupCallRecord,
+            SoupCallRecordParticipant,
 
             DocumentSubType,
 

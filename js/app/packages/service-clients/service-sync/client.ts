@@ -132,7 +132,7 @@ export const syncServiceClient = {
   },
   async exists(args: { documentId: string }) {
     const res = await syncFetch(`/document/${args.documentId}/exists`, {
-      method: 'GET',
+      method: 'HEAD',
     });
 
     if (isErr(res)) {
@@ -191,6 +191,7 @@ export const syncServiceClient = {
         headers: {
           'Content-Type': 'application/octet-stream',
           Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
         },
         method: 'GET',
       }
@@ -210,6 +211,7 @@ export const syncServiceClient = {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
         },
         method: 'GET',
       }

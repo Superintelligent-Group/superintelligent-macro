@@ -1,7 +1,8 @@
 use crate::config::Config;
+use crate::service::ai_stream_registry::AiStreamRegistry;
 use ai_tools::{
-    AiToolSet, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
-    ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
+    AiToolSet, ToolCallToolContext, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
 };
 use axum::extract::FromRef;
 use connection_gateway::service::connection::ConnectionRepo;
@@ -10,7 +11,7 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use scribe::{
     ScribeClient, channel::ChannelClient, dcs::DcsClient, document::DocumentClient,
     email::EmailClient, static_file::StaticFileClient,
@@ -32,7 +33,7 @@ pub use test::*;
 pub type DcsScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
 
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub type DcsMemoryService =
     memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;
@@ -58,10 +59,12 @@ pub struct ApiContext {
     pub memory_service: Arc<DcsMemoryService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
+    pub call_tool_context: ToolCallToolContext,
     pub tool_service_context: ToolServiceContext,
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: &'static str,
     pub entity_access_service: Arc<DcsEntityAccessService>,
+    pub ai_stream_registry: AiStreamRegistry,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();

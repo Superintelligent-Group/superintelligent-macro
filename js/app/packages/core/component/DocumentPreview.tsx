@@ -1,17 +1,18 @@
-// URL params constants
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
+import { cn } from '@ui/utils/classname';
 import {
   type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-// Components
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { Panel } from '@ui';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -22,7 +23,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
-// Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
 import ExpandInlinePreview from '@icon/regular/arrows-out-line-horizontal.svg';
@@ -39,19 +39,31 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
+import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
+import { fetchBinary } from '@service-storage/util/fetchBinary';
+import { isErr } from '@core/util/maybeResult';
 import type { Component, JSX } from 'solid-js';
-import { createMemo, For, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { PropertyValue } from '@core/component/Properties/component/propertyValue/PropertyValue';
-import { beveledCorners } from '../signal/beveledCorners';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
@@ -183,11 +195,16 @@ export const mentionsAccessories = (
     return;
   }
   // Md block handling
-  else if (blockName === 'md') {
+  else if (resolveBlockAlias(blockName) === 'md') {
     const id = params[URL_PARAMS_MD.nodeId];
     const loc = params[URL_PARAMS_MD.location];
     if (id?.trim() || loc?.trim()) {
       return { icon: 'highlight', note: 'Snippet' };
+    }
+
+    const comment = params[URL_PARAMS_MD.commentId];
+    if (comment?.trim()) {
+      return { icon: 'message', note: 'Comment' };
     }
   }
 };
@@ -235,7 +252,14 @@ function MetadataInfo(props: {
 }) {
   return (
     <div
-      class={`${props.align === 'right' ? 'justify-right' : 'justify-left'} mt-2 ${props.align === 'left' ? 'w-fit max-w-[66%]' : ''} text-ink-muted ${props.align === 'left' ? 'overflow-hidden whitespace-nowrap text-ellipsis' : ''}`}
+      class={cn(
+        props.align === 'right' ? 'justify-right' : 'justify-left',
+        'mt-2',
+        props.align === 'left' && 'w-fit max-w-[66%]',
+        'text-ink-muted',
+        props.align === 'left' &&
+          'overflow-hidden whitespace-nowrap text-ellipsis'
+      )}
     >
       <span class="relative text-[0.8em] text-ink-muted max-w-full flex items-center">
         <Dynamic component={props.icon} class="relative size-3 mx-1" />
@@ -268,16 +292,55 @@ function UserInfo(props: { userId: string }) {
 /**
  * Popup preview component for document references
  */
-function ImageCoverStrip(props: { documentId: string; class?: string }) {
+function ImageCoverStrip(props: {
+  documentId: string;
+  fileType?: string;
+  class?: string;
+}) {
   const query = useBinaryDocumentQuery(() => props.documentId);
 
   // Captured once at mount: true means the spinner was shown and we should fade in.
   // Reading .isLoading (not .data) avoids triggering Suspense here.
   const shouldFadeIn = query.isLoading;
 
+  // SVGs served from presigned URLs may not carry the correct Content-Type header
+  // (especially for older uploads), which causes <img> to show a broken image.
+  // Fetching as a blob and creating an object URL with an explicit MIME type
+  // bypasses this, matching the approach used by the full image viewer.
+  const [svgObjectUrl, setSvgObjectUrl] = createSignal<string | undefined>();
+  createEffect(() => {
+    const presignedUrl = query.data;
+    if (!presignedUrl || props.fileType !== 'svg') return;
+
+    const controller = new AbortController();
+    let objectUrl: string | undefined;
+    fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
+      (result) => {
+        if (controller.signal.aborted || isErr(result)) return;
+        const [, blob] = result;
+        objectUrl = URL.createObjectURL(
+          new Blob([blob], { type: 'image/svg+xml' })
+        );
+        setSvgObjectUrl(objectUrl);
+      }
+    );
+
+    onCleanup(() => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setSvgObjectUrl(undefined);
+    });
+  });
+
+  const displayUrl = () =>
+    props.fileType === 'svg' ? svgObjectUrl() : query.data;
+
   return (
     <div
-      class={`w-full overflow-hidden relative bg-edge-muted ${props.class ?? 'h-32'}`}
+      class={cn(
+        'w-full overflow-hidden relative bg-edge-muted',
+        props.class ?? 'h-32'
+      )}
     >
       <Suspense
         fallback={
@@ -286,11 +349,14 @@ function ImageCoverStrip(props: { documentId: string; class?: string }) {
           </div>
         }
       >
-        <Show when={query.data}>
+        <Show when={displayUrl()}>
           {(url) => (
             <img
               src={url()}
-              class={`absolute inset-0 w-full h-full object-cover ${shouldFadeIn ? 'opacity-0 transition-opacity duration-300' : ''}`}
+              class={cn(
+                'absolute inset-0 w-full h-full object-cover',
+                shouldFadeIn && 'opacity-0 transition-opacity duration-300'
+              )}
               onLoad={
                 shouldFadeIn
                   ? (e) => {
@@ -372,6 +438,7 @@ export function PopupPreview(props: {
     date: string;
     characterCount?: number;
   };
+  useFallbackData?: boolean;
 }) {
   // Hooks
   const navigate = useNavigate();
@@ -392,6 +459,17 @@ export function PopupPreview(props: {
   };
 
   const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
+
+  // Resolve the caller-provided type against the item's actual subType so
+  // that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
+  // 'task' block alias instead of raw 'md'. Mirrors BlockLink/EntityMention.
+  const targetBlockType = createMemo<BlockName | BlockAlias>(() => {
+    const i = item();
+    if (isAccessiblePreviewItem(i)) {
+      return itemToBlockName(i);
+    }
+    return props.documentInfo.type;
+  });
 
   // Derived state
   const canOpenInChat = createCallback(() => {
@@ -415,10 +493,11 @@ export function PopupPreview(props: {
   };
 
   const openDocument = createCallback(async () => {
+    const type = targetBlockType();
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.warn('No split manager found');
-      let link = `/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `/${type}/${props.documentInfo.id}`;
       if (props.documentInfo.params) {
         const queryParams = new URLSearchParams(
           props.documentInfo.params
@@ -430,7 +509,7 @@ export function PopupPreview(props: {
     }
 
     splitManager.replaceAllSplits({
-      type: props.documentInfo.type,
+      type,
       id: props.documentInfo.id,
       params: props.documentInfo.params,
     });
@@ -452,7 +531,7 @@ export function PopupPreview(props: {
       if (hostname === 'localhost') {
         hostname = 'dev.macro.com';
       }
-      let link = `https://${hostname}/app/${props.documentInfo.type}/${props.documentInfo.id}`;
+      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
 
       if (
         props.documentInfo.params &&
@@ -483,7 +562,7 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
     return !!splitManager.getSplitByContent(
-      props.documentInfo.type,
+      targetBlockType(),
       props.documentInfo.id
     );
   };
@@ -492,8 +571,9 @@ export function PopupPreview(props: {
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
+    const type = targetBlockType();
     const existing = splitManager.getSplitByContent(
-      props.documentInfo.type,
+      type,
       props.documentInfo.id
     );
     if (existing) {
@@ -501,7 +581,7 @@ export function PopupPreview(props: {
     } else {
       splitManager.createNewSplit({
         content: {
-          type: props.documentInfo.type,
+          type,
           id: props.documentInfo.id,
           params: props.documentInfo.params,
         },
@@ -509,12 +589,12 @@ export function PopupPreview(props: {
       });
     }
 
-    if (props.documentInfo.type !== 'channel') return;
+    if (!isBlockNameWithLocation(type)) return;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
       props.documentInfo.id,
-      'channel'
+      resolveBlockAlias(type)
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
@@ -643,7 +723,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <ClippedPanel tl={!beveledCorners()} active>
+      <Panel active>
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
@@ -670,7 +750,7 @@ export function PopupPreview(props: {
               return (
                 <div class="w-full flex flex-col">
                   {/* Header: icon + filename + action buttons */}
-                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                  <div class="flex items-center justify-between gap-2 p-2">
                     <div class="flex items-center gap-2 min-w-0">
                       <ItemEntityIcon size="sm" />
                       <div class="text-sm font-semibold select-text min-w-0">
@@ -687,7 +767,7 @@ export function PopupPreview(props: {
                     <div class="flex shrink-0">{renderActionButtons()}</div>
                   </div>
 
-                  <div class="line-clamp-2 break-words px-2 mb-2">
+                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
                     {props.documentInfo.name || accessibleItem().name}
                   </div>
 
@@ -704,6 +784,7 @@ export function PopupPreview(props: {
                   <Show when={props.documentInfo.type === 'image'}>
                     <ImageCoverStrip
                       documentId={accessibleItem().id}
+                      fileType={accessibleItem().fileType}
                       class="shrink-0 h-32"
                     />
                   </Show>
@@ -721,7 +802,7 @@ export function PopupPreview(props: {
                       <Show when={messageContext()}>
                         {(context) => (
                           <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                            <div class="line-clamp-3 break-words">
+                            <div class="line-clamp-3 wrap-break-word">
                               <StaticMarkdown
                                 markdown={context().content}
                                 theme={channelTheme}
@@ -793,17 +874,41 @@ export function PopupPreview(props: {
           {/* No access / does not exist errors */}
           <Match when={matches(item(), isPreviewItemNoAccess)}>
             {(noAccessItem) => (
-              <div class="text-sm p-4">
-                {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized />
-                ) : (
-                  <NotFound />
-                )}
-              </div>
+              <Show
+                when={
+                  noAccessItem().access === 'does_not_exist' &&
+                  props.useFallbackData &&
+                  props.documentInfo.name
+                }
+                fallback={
+                  <div class="text-sm p-4">
+                    {noAccessItem().access === 'no_access' ? (
+                      <Unauthorized />
+                    ) : (
+                      <NotFound />
+                    )}
+                  </div>
+                }
+              >
+                <div class="w-full flex flex-col">
+                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <EntityIcon
+                        targetType={props.documentInfo.type}
+                        size="sm"
+                      />
+                    </div>
+                    <div class="flex shrink-0">{renderActionButtons()}</div>
+                  </div>
+                  <div class="line-clamp-2 break-words px-2 mb-2">
+                    {props.documentInfo.name}
+                  </div>
+                </div>
+              </Show>
             )}
           </Match>
         </Switch>
-      </ClippedPanel>
+      </Panel>
     </div>
   );
 }

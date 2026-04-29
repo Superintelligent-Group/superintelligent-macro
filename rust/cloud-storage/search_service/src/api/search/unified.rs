@@ -49,6 +49,14 @@ pub async fn handler(
         "unified_search"
     );
 
+    let document_name_term = match req.search_on {
+        models_search::SearchOn::Name | models_search::SearchOn::NameContent => {
+            let trimmed = req.query.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        }
+        models_search::SearchOn::Content => None,
+    };
+
     let (results, next_cursor) =
         perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
@@ -59,6 +67,7 @@ pub async fn handler(
         document,
         email,
         project,
+        call_record,
     } = {
         let _span = tracing::info_span!("split_search_response_by_type").entered();
         results.into_iter().split_search_response()
@@ -70,36 +79,49 @@ pub async fn handler(
         enriched_channel_results,
         enriched_project_results,
         enriched_email_results,
+        enriched_call_record_results,
     ) = tokio::try_join!(
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             document,
-            models_opensearch::SearchEntityType::Documents
+            models_opensearch::SearchEntityType::Documents,
+            document_name_term.as_deref(),
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             chat,
-            models_opensearch::SearchEntityType::Chats
+            models_opensearch::SearchEntityType::Chats,
+            None,
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             channel_message,
-            models_opensearch::SearchEntityType::Channels
+            models_opensearch::SearchEntityType::Channels,
+            None,
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             project,
-            models_opensearch::SearchEntityType::Projects
+            models_opensearch::SearchEntityType::Projects,
+            None,
         ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
             email,
-            models_opensearch::SearchEntityType::Emails
+            models_opensearch::SearchEntityType::Emails,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            call_record,
+            models_opensearch::SearchEntityType::CallRecords,
+            None,
         ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
@@ -114,6 +136,7 @@ pub async fn handler(
         results.extend(enriched_channel_results);
         results.extend(enriched_project_results);
         results.extend(enriched_email_results);
+        results.extend(enriched_call_record_results);
 
         sort_unified_search_results(results)
     };

@@ -10,6 +10,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
 import { toast } from '@core/component/Toast/Toast';
 import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -39,9 +40,25 @@ import {
   useNotificationSettings,
 } from '@notifications';
 import { useAnalytics } from '@app/component/analytics-context';
+import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
+import { invoke } from '@tauri-apps/api/core';
 
 // NOTE: solid directives
 false && fileSelector;
+
+function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
+  switch (status.status) {
+    case 'Idle': return 'Idle';
+    case 'CheckingForUpdate': return 'Checking for update...';
+    case 'UpdateFound': return `Update available: v${status.data.version}`;
+    case 'NoUpdateNeeded': return 'Up to date';
+    case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
+    case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
+    case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'Completed': return 'Update ready';
+    case 'Error': return 'An error occurred when checking for updates';
+  }
+}
 
 function useUserName() {
   const fetchUserName = async () => {
@@ -220,12 +237,16 @@ export function Account() {
             />
           </Show>
         </div>
+        <BundleUpdateRow />
         <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
           <Show
             when={!emailActive()}
             fallback={
               <div
-                class={`flex items-center justify-between ${!showEmailModal() && 'mb-[18px]'}`}
+                class={cn(
+                  'flex items-center justify-between',
+                  !showEmailModal() && 'mb-[18px]'
+                )}
               >
                 <div class="text-sm">Email</div>
                 <DeprecatedTextButton
@@ -433,5 +454,52 @@ function NotificationNotSupported() {
       <div class="text-sm">Notifications</div>
       <span class="text-sm text-ink-muted">Not supported on this device</span>
     </div>
+  );
+}
+
+function bundleUpdateAction(
+  status: BundleUpdateStatus,
+  cancelWifiWait: () => void,
+): { label: string; action: () => void } | null {
+  switch (status.status) {
+    case 'Idle':
+      return { label: 'Check for Update', action: () => invoke('check_for_update') };
+    case 'Error':
+      return { label: 'Retry', action: () => invoke('check_for_update') };
+    case 'UpdateFound':
+      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
+    case 'WaitingForWifi':
+      return { label: 'Download anyway', action: cancelWifiWait };
+    case 'Completed':
+      return { label: 'Update', action: () => invoke('perform_update') };
+    default:
+      return null;
+  }
+}
+
+function BundleUpdateRow() {
+  const tauri = useTauri();
+  return (
+    <Show when={tauri}>
+      {(ctx) => {
+        const status = () => ctx().bundleUpdateStatus();
+        const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
+        return (
+          <div class="flex items-center justify-between mb-[18px]">
+            <TabContentRow
+              text="App Update"
+              subtext={formatBundleUpdateStatus(status())}
+            />
+            <Show when={action()}>
+              {(a) => (
+                <Button variant="accent" size="sm" onClick={a().action}>
+                  {a().label}
+                </Button>
+              )}
+            </Show>
+          </div>
+        );
+      }}
+    </Show>
   );
 }

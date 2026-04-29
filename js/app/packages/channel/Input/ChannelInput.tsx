@@ -1,5 +1,6 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { isMobile } from '@core/mobile/isMobile';
+import { isIOS } from '@solid-primitives/platform';
 import { Input } from './Input';
 import { FormatButtons } from './FormatButtons';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -31,6 +32,7 @@ import {
 } from 'solid-js';
 import { isReplyInput } from './types';
 import type { IUser } from '@core/user/types';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -135,13 +137,45 @@ export function ChannelInput(props: ChannelInputProps) {
         inputState.commands.attachFiles(entries.map((entry) => entry.file))
       );
     },
+    onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
   });
-  clearComposer = () => markdownEditor.controls.clear();
+  // On iOS, blur before clearing so dictation finalizes and discards its buffer
+  // (otherwise it re-injects the sent text into the cleared editor). Re-focus
+  // via rAF so the keyboard stays up: rAF fires after Lexical's update commits,
+  // avoiding a conflict where clear()'s $setSelection(null) undoes the focus.
+  clearComposer = () => {
+    if (isIOS) {
+      markdownEditor.controls.blur();
+      markdownEditor.controls.clear();
+      requestAnimationFrame(() => markdownEditor.controls.focus());
+    } else {
+      markdownEditor.controls.clear();
+    }
+  };
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
+    restoreSnapshot: (snapshot) => {
+      markdownEditor.controls.setMarkdown(snapshot.value);
+      attachmentTracker.setAttachments(snapshot.attachments);
+      mentionsTracker.setMentions(snapshot.mentions);
+      markdownEditor.controls.focus();
+    },
+  });
+
+  const [attach, scopeId] = useHotkeyDOMScope('channel-input-intercept');
+  registerHotkey({
+    scopeId,
+    description: 'block escape from moving up scope',
+    hotkey: ['escape'],
+    runWithInputFocused: true,
+    hide: true,
+    keyDownHandler: () => {
+      // Block upstream escape handlers when ESC should close inline menus.
+      return markdownEditor.controls.isInlineMenuOpen();
+    },
   });
 
   return (
@@ -177,8 +211,9 @@ export function ChannelInput(props: ChannelInputProps) {
                 config={markdownEditor}
                 placeholder={inputState.view().placeholder}
                 initialValue={inputState.view().value}
-                autofocus={props.autofocus ?? !isMobile()}
+                autofocus={!isMobile() && (props.autofocus ?? true)}
                 class="text-sm"
+                refFn={attach}
               />
             </Input.Editor>
           </Input.EditorShell>

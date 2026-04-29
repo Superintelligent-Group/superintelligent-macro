@@ -51,6 +51,7 @@ export const TOKENS = {
       copyLink: 'entity.action.copyLink',
       share: 'entity.action.share',
       copyBranchName: 'entity.action.copyBranchName',
+      copyEntityId: 'entity.action.copyEntityId',
       properties: 'entity.action.properties',
       priority: 'entity.action.priority',
       status: 'entity.action.status',
@@ -74,8 +75,9 @@ export const TOKENS = {
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
-    toggleVisor: 'global.toggleVisor',
     inviteTeam: 'global.inviteTeam',
+    undo: 'global.undo',
+    redo: 'global.redo',
   },
 
   // email
@@ -116,7 +118,6 @@ export const TOKENS = {
       inbox: 'split.go.inbox',
       docs: 'split.go.docs',
       toggleRightPanel: 'split.go.toggleRightPanel',
-      macroJump: 'split.go.macroJump',
       back: 'split.go.back',
       forward: 'split.go.forward',
     },
@@ -176,6 +177,33 @@ export const TOKENS = {
       bent: 'canvas.line.bent',
       close: 'canvas.line.close',
     },
+  },
+
+  // markdown editor
+  md: {
+    bold: 'md.bold',
+    italic: 'md.italic',
+    underline: 'md.underline',
+    strikethrough: 'md.strikethrough',
+    highlight: 'md.highlight',
+    inlineCode: 'md.inlineCode',
+    superscript: 'md.superscript',
+    subscript: 'md.subscript',
+    heading1: 'md.heading1',
+    heading2: 'md.heading2',
+    heading3: 'md.heading3',
+    paragraph: 'md.paragraph',
+    quote: 'md.quote',
+    codeBlock: 'md.codeBlock',
+    bulletList: 'md.bulletList',
+    numberedList: 'md.numberedList',
+    checklist: 'md.checklist',
+    link: 'md.link',
+    image: 'md.image',
+    video: 'md.video',
+    math: 'md.math',
+    table: 'md.table',
+    divider: 'md.divider',
   },
 
   // create menu
@@ -244,6 +272,7 @@ export const TOKENS = {
       close: 'chat-spotlight-close',
     },
     new: 'chat-new',
+    stop: 'chat-stop',
   },
 } as const;
 

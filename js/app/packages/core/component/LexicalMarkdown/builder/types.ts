@@ -5,19 +5,26 @@ import type { Store } from 'solid-js/store';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
   createAccessoryStore,
+  createDraggableBlockStore,
   createDragInsertStore,
   ItemMention,
   PluginManager,
   SelectionData,
 } from '../plugins';
+import type { Action } from '../plugins/actions/types';
 import type { createMenuOperations } from '../shared/inlineMenu';
+import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
+  /** Extra actions to append to the default slash-menu actions. */
+  additionalActions?: Action[];
+  /** IDs of default actions to hide from the slash menu. */
+  ignoreActionIds?: string[];
 }
 
 export interface MentionsOptions {
-  sources?: Array<'users' | 'documents'>;
+  sources?: MentionBucketId[];
   onRemove?: (mention: ItemMention) => void;
   onCreate?: (mention: ItemMention) => void;
   block?: string;
@@ -88,6 +95,8 @@ export interface EditorControls {
   getState: () => SerializedEditorState;
   setState: (state: SerializedEditorState) => void;
   getLexical: () => LexicalEditor;
+  /** Signal that is true when either the MentionsMenu, EmojiMenu, or ActionMenu is open in this Editor. */
+  isInlineMenuOpen: () => boolean;
 }
 
 /**
@@ -103,6 +112,7 @@ export interface EditorComponentProps {
   autofocus?: boolean;
   class?: string;
   portalScope?: PortalScope;
+  refFn?: (ref: HTMLDivElement) => void;
 }
 
 export interface EditorConfig {
@@ -125,6 +135,8 @@ export interface EditorConfig {
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;
+  /** Enable drag-to-rearrange handles on top-level blocks. */
+  draggableBlocks?: boolean;
 }
 
 /** @internal consumed by MarkdownShell; do not access directly */
@@ -141,6 +153,9 @@ export interface EditorInternals {
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
+  draggableBlockStore:
+    | ReturnType<typeof createDraggableBlockStore>[0]
+    | undefined;
   fileDropConfig: MediaDropOptions | undefined;
 }
 

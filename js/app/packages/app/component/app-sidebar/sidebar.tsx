@@ -1,6 +1,14 @@
 import { AnimatedUsersIcon } from '@macro-icons/wide/animating/users';
 import { AnimatedGearIcon } from '@macro-icons/wide/animating/gear';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
@@ -46,6 +54,12 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { AnimatedCallIcon } from '@macro-icons/wide/animating/call';
+import BellIcon from '@icon/regular/bell.svg';
+import { useCallContextOptional } from '@channel/Call/CallContext';
+import { InCallPanel } from '@channel/Call';
+import { useNotificationSettings } from '@notifications';
 
 interface SidebarItem {
   id: ListView;
@@ -120,12 +134,91 @@ export const SIDEBAR_LINKS = [
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
 
+/** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
+const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 100;
+const SIDEBAR_MAX_WIDTH_TRANSITION_STYLE = `max-width ease-in-out ${SIDEBAR_MAX_WIDTH_TRANSITION_MS}ms`;
+
+/**
+ * InCallPanel stays in slim layout until the sidebar shell finishes widening.
+ * Uses `transitionend` on that element’s `max-width` (no timer on the happy path);
+ * a short fallback timeout covers reduced-motion / no-op layout.
+ */
+function createInCallPanelSlimToggle(args: {
+  initialSlim: boolean;
+  parentOnOpenChange: (open: boolean) => void;
+  getShell: () => HTMLDivElement | undefined;
+}) {
+  const [panelIsSlim, setPanelIsSlim] = createSignal(args.initialSlim);
+  let shellEl: HTMLDivElement | undefined;
+  let onMaxWidthEnd: ((e: TransitionEvent) => void) | undefined;
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const detachExpandTracking = () => {
+    const el = shellEl;
+    const handler = onMaxWidthEnd;
+    shellEl = undefined;
+    onMaxWidthEnd = undefined;
+    if (el && handler) {
+      el.removeEventListener('transitionend', handler);
+    }
+    if (fallbackTimer !== undefined) {
+      globalThis.clearTimeout(fallbackTimer);
+      fallbackTimer = undefined;
+    }
+  };
+
+  const finishExpand = () => {
+    detachExpandTracking();
+    setPanelIsSlim(false);
+  };
+
+  onCleanup(detachExpandTracking);
+
+  return {
+    panelIsSlim,
+    handleSidebarOpenChange(open: boolean) {
+      detachExpandTracking();
+
+      if (!open) {
+        setPanelIsSlim(true);
+        args.parentOnOpenChange(open);
+        return;
+      }
+
+      args.parentOnOpenChange(open);
+
+      requestAnimationFrame(() => {
+        const el = args.getShell();
+        if (!el) {
+          setPanelIsSlim(false);
+          return;
+        }
+
+        const onEnd = (e: TransitionEvent) => {
+          if (e.propertyName !== 'max-width' || e.target !== el) return;
+          finishExpand();
+        };
+
+        shellEl = el;
+        onMaxWidthEnd = onEnd;
+        el.addEventListener('transitionend', onEnd);
+
+        fallbackTimer = globalThis.setTimeout(
+          finishExpand,
+          SIDEBAR_MAX_WIDTH_TRANSITION_MS + 80
+        );
+      });
+    },
+  } as const;
+}
+
 type AppSidebarProps = {
   sidebarState?: SidebarState;
   onOpenChange: (open: boolean) => void;
 };
 
 type SidebarHotkeyDeps = {
+  links: SidebarItem[];
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
@@ -135,6 +228,7 @@ type SidebarHotkeyDeps = {
 };
 
 export const registerSidebarHotkeys = ({
+  links,
   isSlim,
   onOpenChange,
   openWithSplit,
@@ -163,7 +257,7 @@ export const registerSidebarHotkeys = ({
   });
 
   const registeredGoToKeys = new Set<ValidHotkey>([
-    ...SIDEBAR_LINKS.map((link) => link.hotkey),
+    ...links.map((link) => link.hotkey),
   ]);
 
   // When the go to command scope is active, we want to prevent
@@ -219,7 +313,7 @@ export const registerSidebarHotkeys = ({
   });
 
   // Register navigation shortcuts in the global GO_TO command scope
-  for (const link of SIDEBAR_LINKS) {
+  for (const link of links) {
     const openSidebarView = (e?: KeyboardEvent) => {
       e?.preventDefault();
       if (hotkeyVisible()) {
@@ -238,10 +332,13 @@ export const registerSidebarHotkeys = ({
           const splitEl = document.querySelector(
             `[data-split-id="${activeSplit.id}"]`
           );
-          const searchInput =
-            splitEl?.querySelector<HTMLInputElement>('[data-soup-search]');
-          if (searchInput) {
-            searchInput.focus();
+          const searchContainer =
+            splitEl?.querySelector<HTMLElement>('[data-soup-search]');
+          if (searchContainer) {
+            const editable =
+              searchContainer.querySelector<HTMLElement>('[contenteditable]') ??
+              searchContainer;
+            editable.focus();
             return true;
           }
         }
@@ -316,9 +413,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div
-        class={`size-4 shrink-0 transition-colors duration-300 ${hovering() ? 'text-accent' : ''}`}
-      >
+      <div class="size-4 shrink-0">
         <Dynamic component={props.icon} triggerAnimation={hovering()} />
       </div>
       <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
@@ -326,7 +421,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       </span>
       <Show when={props.hotkeyToken}>
         {(token) => (
-          <div class="text-[0.625rem] text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-0.25 -my-1 group-data-[slim=true]/sidebar:invisible">
+          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:invisible">
             <Hotkey token={token()} class="flex gap-1" />
           </div>
         )}
@@ -335,12 +430,44 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
   );
 };
 
+const CALLS_LINK: SidebarItem = {
+  id: 'calls',
+  label: 'Calls',
+  href: LIST_VIEW_PATHS.calls,
+  icon: AnimatedCallIcon,
+  hotkey: 'l',
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { toggleSettings } = useSettingsState();
+  const notificationSettings = useNotificationSettings();
+  const callCtx = useCallContextOptional();
+
+  const showEnableNotifications = () =>
+    notificationSettings.isSupported && notificationSettings.canPrompt();
+
+  const handleEnableNotifications = async () => {
+    if (!notificationSettings.isSupported) return;
+    try {
+      await notificationSettings.toggle(true);
+    } catch (error) {
+      console.error('Failed to enable notifications:', error);
+    }
+  };
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
+
+  const visibleLinks = createMemo(() => {
+    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
+    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
+    return [
+      ...SIDEBAR_LINKS.slice(0, idx + 1),
+      CALLS_LINK,
+      ...SIDEBAR_LINKS.slice(idx + 1),
+    ];
+  });
 
   const resetHotkeysState = () => {
     setHotkeyVisible(false);
@@ -387,19 +514,31 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const isExpanded = () => props.sidebarState === 'expanded';
   const isSlim = () => props.sidebarState === 'slim';
+
+  let sidebarShell: HTMLDivElement | undefined;
+  const { panelIsSlim, handleSidebarOpenChange } = createInCallPanelSlimToggle({
+    initialSlim: isSlim(),
+    parentOnOpenChange: props.onOpenChange,
+    getShell: () => sidebarShell,
+  });
+
   const [sidebarBtnHovering, setSidebarBtnHovering] = createSignal(false);
 
   registerSidebarHotkeys({
+    links: visibleLinks(),
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
     isSlim,
-    onOpenChange: props.onOpenChange,
+    onOpenChange: handleSidebarOpenChange,
     openWithSplit: layout.openWithSplit,
   });
 
   return (
     <div
+      ref={(el) => {
+        sidebarShell = el ?? undefined;
+      }}
       class={cn(
         'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
@@ -411,17 +550,17 @@ export const AppSidebar = (props: AppSidebarProps) => {
       )}
       data-expanded={isExpanded()}
       data-slim={isSlim()}
-      style={{ transition: 'max-width ease-in-out 100ms' }}
+      style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
       <div class="flex items-center justify-between py-2 pl-2 pr-2 relative">
         <div class="flex items-center group/logo-area w-full">
           <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 ">
             <LogoIcon class="size-6" />
           </div>
-          <div class="grow-1 shrink-10 min-w-0" />
+          <div class="grow shrink-10 min-w-0" />
           <Button
             class="flex items-center justify-center rounded-xs p-0.5 px-2 bg-page [&_svg]:size-4"
-            onClick={() => props.onOpenChange(!isExpanded())}
+            onClick={() => handleSidebarOpenChange(!isExpanded())}
             onMouseEnter={() => setSidebarBtnHovering(true)}
             onMouseLeave={() => setSidebarBtnHovering(false)}
             tooltip={
@@ -437,7 +576,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5" />
+        <hr class="border-edge-muted" />
       </div>
 
       <div class="w-full px-2 my-[4.5px]">
@@ -451,12 +590,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="px-2">
-        <hr class="border-ink/5 mb-[8px]" />
+        <hr class="border-edge-muted mb-2" />
       </div>
 
       <nav>
         <ul class="w-full h-full px-2 flex flex-col gap-1">
-          <For each={SIDEBAR_LINKS}>
+          <For each={visibleLinks()}>
             {(link) => (
               <li class="flex items-center justify-center">
                 <SidebarLink
@@ -471,20 +610,32 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </nav>
 
       <div class="px-2">
-        <hr class="border-ink/5 my-[8px]" />
+        <hr class="border-edge-muted my-2" />
       </div>
 
-      <Show when={isExpanded()}>
-        <div class="block max-h-[clamp(10%,60%,20rem)]">
-          <ChannelsUnreadWidget />
+      <div class="block max-h-[clamp(10%,60%,20rem)]">
+        <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
+      </div>
+
+      <Show when={callCtx?.isInCall()}>
+        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
+          <InCallPanel isSlim={panelIsSlim} />
         </div>
       </Show>
 
-      <div class="px-2 mt-auto w-full">
+      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
         <hr class="border-edge-muted mb-[8px]" />
       </div>
 
-      <div class=" w-full px-2 flex flex-col">
+      <div class="w-full px-2 flex flex-col">
+        <Show when={showEnableNotifications()}>
+          <SidebarActionButton
+            label="Enable Notifications"
+            isSlim={isSlim}
+            onClick={handleEnableNotifications}
+            icon={() => <BellIcon class="size-4" />}
+          />
+        </Show>
         <SidebarActionButton
           label="Invite"
           isSlim={isSlim}
@@ -635,24 +786,26 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
             </div>
           </Show>
-          <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
-            {props.label}
-          </span>
+
+          <div class="flex items-center gap-1">
+            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:invisible">
+              {props.label}
+            </span>
+          </div>
 
           <Show when={isHovering() && !props.hotkeyVisible}>
             <div class="group-data-[slim=true]/sidebar:invisible ml-auto">
-              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-[0.625rem]">
+              <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={GO_TO_LEADER_KEY} />
                   </div>
-                  then
                   <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>
                 <Show when={props.standaloneHotkey}>
-                  <div class="text-[0.625rem] text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
+                  <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey shortcut={props.hotkey} />
                   </div>
                 </Show>

@@ -2,7 +2,7 @@ import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
 import type { UnifiedNotification } from './types';
-import { themeReactive } from '../block-theme/signals/themeReactive';
+import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import {
   getNotificationAction,
@@ -80,8 +80,11 @@ export async function maybeHandlePlatformNotification(
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
-  // Ignore document_mention notifications - they should not show as browser notifications
-  if (notification.notification_metadata.tag === 'document_mention') {
+  // Ignore notification types that should not show as browser notifications
+  if (
+    notification.notification_metadata.tag === 'document_mention' ||
+    notification.notification_metadata.tag === 'new_email'
+  ) {
     return;
   }
 

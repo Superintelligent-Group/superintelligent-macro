@@ -1,26 +1,30 @@
-import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import { isErr } from '@core/util/maybeResult';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
   SoupApiItem,
 } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
-import { isErr } from '@core/util/maybeResult';
+import {
+  partialMatchKey,
+  type InfiniteData,
+  type QueryKey,
+} from '@tanstack/solid-query';
+import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
+import type { SoupApiItemFilter } from '../items';
 import { soupKeys } from '../keys';
 import {
-  getSoupNormalizer,
   getNormalizationObjectKey,
+  getSoupNormalizer,
   type NormalizerData,
 } from './normalizer';
 import type {
-  SoupTransaction,
-  SoupEntityTag,
   SoupEntityPartial,
+  SoupEntityTag,
+  SoupTransaction,
 } from './types';
-import type { SoupApiItemFilter } from '../items';
-import { isAfter } from 'date-fns';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -81,6 +85,9 @@ export function invalidateAllSoup(): void {
   queryClient.invalidateQueries({
     queryKey: soupKeys.items._def,
   });
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.astItems._def,
+  });
 }
 
 /** O(1) check whether an entity exists in normy's normalized store. */
@@ -88,11 +95,13 @@ export function hasSoupEntity(entityId: string): boolean {
   return getSoupNormalizer().getObjectById(`soup:${entityId}`) != null;
 }
 
-/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id`). */
+/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id` and callRecord's `data.callId`). */
 export function getSoupItemId(item: SoupApiItem): string {
   switch (item.tag) {
     case 'channel':
       return item.data.channel.id;
+    case 'call':
+      return item.data.callId;
     default:
       return item.data.id;
   }
@@ -109,11 +118,14 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
     {
-      queryKey: soupKeys.items._def,
       predicate: (query) => {
+        const matchingKey =
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def);
+
         const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
-        if (!filter) return true;
-        return filter(item);
+        if (!filter) return matchingKey;
+        return filter(item) && matchingKey;
       },
     },
     (prev) => {
@@ -138,11 +150,19 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
  */
 export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.items._def });
+  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
 
   const previous = snapshotSoup();
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: soupKeys.items._def },
+    {
+      predicate(query) {
+        return (
+          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
+          partialMatchKey(query.queryKey, soupKeys.items._def)
+        );
+      },
+    },
     (prev) => {
       if (!prev || !prev.pages) return prev;
       return {
@@ -278,6 +298,7 @@ export function buildSingleEntityFilter(
       ...base,
       email_filters: { email_thread_ids: [entityId] },
     }))
+    .with('call', () => null)
     .exhaustive();
 }
 
@@ -302,6 +323,9 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
+  } else if (current.tag === 'call') {
+    // Call records don't have viewedAt — skip.
+    return;
   } else {
     optimisticUpdateSoupEntity({
       tag: current.tag,
@@ -337,6 +361,9 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
+  } else if (current.tag === 'call') {
+    // Call records use endedAt/startedAt, not updatedAt — skip optimistic timestamp updates.
+    return;
   } else {
     if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))
       return;
@@ -367,6 +394,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'channel' }, (r) => r.channel_id)
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)
+    .with({ type: 'call' }, (r) => r.call_id)
     .exhaustive();
 }
 
@@ -376,7 +404,7 @@ function snapshotSoup(): [
   InfiniteData<SoupPage, unknown> | undefined,
 ][] {
   return queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: soupKeys.items._def,
+    queryKey: soupKeys.astItems._def,
   });
 }
 

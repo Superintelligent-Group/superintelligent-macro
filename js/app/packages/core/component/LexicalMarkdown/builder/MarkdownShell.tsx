@@ -19,13 +19,14 @@ import {
 } from 'solid-js';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
-import { registerCommandEffect } from '../plugins';
+import { autoRegister, registerCommandEffect } from '../plugins';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '../utils/fileUploadUtils';
 import {
   editorIsEmpty,
+  focusEditorWithoutScroll,
   initializeEditorEmpty,
   initializeEditorWithState,
   setEditorStateFromMarkdown,
@@ -60,7 +61,9 @@ export const MarkdownShell: Component<
 
   const onConnect = () => {
     if (props.autofocus) {
-      setTimeout(() => editor.focus());
+      setTimeout(() => {
+        focusEditorWithoutScroll(editor);
+      });
     }
 
     if (props.initialState) {
@@ -94,10 +97,11 @@ export const MarkdownShell: Component<
   );
 
   // Placeholder visibility
-  createEffect(() => {
-    markdownState();
-    setShowPlaceholder(editorIsEmpty(editor));
-  });
+  autoRegister(
+    editor.registerUpdateListener(({ editorState }) => {
+      setShowPlaceholder(editorIsEmpty(editorState));
+    })
+  );
 
   // Register key handlers
   registerCommandEffect(
@@ -199,6 +203,7 @@ export const MarkdownShell: Component<
               editor.setRootElement(el);
               onConnect();
             });
+            props.refFn?.(el);
           }}
           contentEditable={!props.disabled}
         />
@@ -241,6 +246,7 @@ export const MarkdownShell: Component<
               disableMentionTracking={
                 builderConfig.mentions?.disableMentionTracking
               }
+              sources={builderConfig.mentions?.sources}
             />
           )}
         </Show>
@@ -250,10 +256,16 @@ export const MarkdownShell: Component<
             <ActionMenu
               editor={editor}
               menu={menu()}
-              useBlockBoundary={
-                typeof builderConfig.actions === 'object'
-                  ? (builderConfig.actions.useBlockBoundary ?? false)
-                  : false
+              useBlockBoundary={false}
+              additionalActions={
+                (builderConfig.actions &&
+                  builderConfig.actions.additionalActions) ||
+                undefined
+              }
+              ignoreActionIds={
+                (builderConfig.actions &&
+                  builderConfig.actions.ignoreActionIds) ||
+                undefined
               }
               portalScope={props.portalScope}
             />

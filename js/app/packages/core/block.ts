@@ -45,6 +45,7 @@ import {
  * List of valid block types that can be used in the application.
  */
 export const BlockRegistry = [
+  'call',
   'chat',
   'write',
   'pdf',
@@ -58,7 +59,7 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
-  'task',
+  'automation',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -86,11 +87,13 @@ export type BlockAlias = (typeof BlockAliasRegistry)[BlockAliasKeys];
  * Represents the block types that do not correspond to a document type.
  */
 export const NonDocumentBlockTypes = [
+  'call',
   'chat',
   'channel',
   'project',
   'email',
   'contact',
+  'automation',
 ] as const as (BlockName | BlockAlias)[];
 
 /**
@@ -99,7 +102,7 @@ export const NonDocumentBlockTypes = [
  * allowed blocks on the right.
  */
 export type BlockCombinationRules = {
-  [Key in BlockName]: Set<BlockName>;
+  [Key in BlockName | BlockAlias]: Set<BlockName>;
 };
 
 export type PreviewState = {
@@ -126,6 +129,7 @@ function exclude(excludeSet: BlockName[]) {
  * Defines the block combinations that are valid.
  */
 export const ValidBlockCombinations: BlockCombinationRules = {
+  call: allBlockNames,
   chat: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
   write: exclude(['write']),
@@ -140,10 +144,13 @@ export const ValidBlockCombinations: BlockCombinationRules = {
   video: allBlockNames,
   contact: allBlockNames,
   task: allBlockNames,
+  automation: allBlockNames,
+  csv: allBlockNames,
 } as const;
 
 // maps block name to valid parents
 export const ValidNestingCombinations: BlockCombinationRules = {
+  call: new Set([]),
   canvas: new Set(['md']),
   chat: new Set([]),
   pdf: new Set(['md']),
@@ -158,6 +165,8 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   video: new Set([]),
   contact: new Set([]),
   task: new Set([]),
+  automation: new Set([]),
+  csv: new Set([]),
 };
 
 export const LoadErrors = {

@@ -11,6 +11,7 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
+import { useHasPaidAccess } from '@core/auth/license';
 import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { pressedKeys } from '@core/hotkey/state';
@@ -22,15 +23,15 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
   const analytics = useAnalytics();
-  let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
   const input = useChatInputContext();
+  const hasPaid = useHasPaidAccess();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 
@@ -47,18 +48,29 @@ function SoupChatInputInner() {
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
-  const metaHeld = () => pressedKeys().has('cmd');
+  const [chatHasFocus, setChatHasFocus] = createSignal(false);
+  const metaHeld = () => chatHasFocus() && pressedKeys().has('cmd');
+
+  let containerRef!: HTMLDivElement;
 
   onMount(() => {
     attachHotkeys(containerRef);
+    const focusIn = () => setChatHasFocus(true);
+    const focusOut = () => setChatHasFocus(false);
+    containerRef.addEventListener('focusin', focusIn);
+    containerRef.addEventListener('focusout', focusOut);
+    onCleanup(() => {
+      containerRef.removeEventListener('focusin', focusIn);
+      containerRef.removeEventListener('focusout', focusOut);
+    });
   });
 
-  // cmd+j - Focus the soup chat input
+  // cmd+j - Focus AI chat
   registerHotkey({
     hotkey: 'cmd+j',
     scopeId: splitPanelContext.splitHotkeyScope,
     hotkeyToken: TOKENS.chat.input.focus,
-    description: 'Focus chat input',
+    description: 'Focus AI chat',
     keyDownHandler: () => {
       editor.controls.focus();
       return true;
@@ -68,6 +80,12 @@ function SoupChatInputInner() {
   const renameMutation = createRenameDssEntityMutation();
 
   const handleSend = async (request: ChatSendInput) => {
+    if (!hasPaid()) {
+      const { showPaywall } = usePaywallState();
+      showPaywall(PaywallKey.CHAT_LIMIT);
+      return;
+    }
+
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat
@@ -117,54 +135,50 @@ function SoupChatInputInner() {
   };
 
   return (
-    <Show when={!soup.previewEntity()}>
-      <div
-        ref={containerRef}
-        class="absolute bottom-px right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
-        style={{
-          'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
-        }}
-      >
-        <div class="w-full max-w-3xl">
-          <div class="pointer-events-auto">
-            <ChatInput
-              editor={editor}
-              onSend={handleSend}
-              onEscape={() => {
-                splitPanelContext.panelRef()?.focus();
-                return true;
-              }}
-              isPersistent={true}
-              autoFocusOnMount={false}
-              extraRightControls={() => (
-                <Tooltip
-                  tooltip="⌘ Enter to send in background"
-                  placement="top"
+    <div
+      ref={containerRef}
+      class="absolute bottom-0 right-px left-px pb-2 px-2 flex justify-center pointer-events-none"
+      classList={{ hidden: !!soup.previewEntity() }}
+      style={{
+        'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
+      }}
+    >
+      <div class="w-full max-w-3xl">
+        <div class="pointer-events-auto">
+          <ChatInput
+            editor={editor}
+            onSend={handleSend}
+            onEscape={() => {
+              splitPanelContext.panelRef()?.focus();
+              return true;
+            }}
+            isPersistent={true}
+            autoFocusOnMount={false}
+            extraRightControls={() => (
+              <Tooltip tooltip="⌘ Enter to send in background" placement="top">
+                <div
+                  class="flex items-center gap-1"
+                  classList={{
+                    'text-accent': metaHeld(),
+                  }}
                 >
                   <div
-                    class="flex items-center gap-1"
+                    class="flex border text-xxs rounded-xs items-center px-1 py-0.5"
                     classList={{
-                      'text-accent': metaHeld(),
+                      'border-accent text-accent': metaHeld(),
+                      'border-edge-muted': !metaHeld(),
                     }}
                   >
-                    <div
-                      class="flex border text-[0.625rem] rounded-xs items-center px-1 py-0.5"
-                      classList={{
-                        'border-accent text-accent': metaHeld(),
-                        'border-edge-muted': !metaHeld(),
-                      }}
-                    >
-                      <Hotkey shortcut="cmd+Enter" />
-                    </div>
-                    <span>Background</span>
+                    <Hotkey shortcut="cmd+Enter" />
                   </div>
-                </Tooltip>
-              )}
-            />
-          </div>
+                  <span>Background</span>
+                </div>
+              </Tooltip>
+            )}
+          />
         </div>
       </div>
-    </Show>
+    </div>
   );
 }
 

@@ -3,6 +3,10 @@
 #[cfg(test)]
 mod tests;
 
+use entity_access_management::domain::ports::EntityAccessManagementService;
+use model_entity::EntityType;
+use models_properties::EntityReference;
+use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,10 +33,14 @@ use s3_key::{
 };
 use tracing;
 
+use crate::domain::models::{
+    ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
+};
+
 use super::models::{
-    CloudFrontConfig, CreateDocumentRepoArgs, CreateTaskRequest, CreateTaskResponse, DocumentError,
-    EMPTY_SHA256, EditDocumentRepoArgs, EditDocumentServiceArgs, FileTypeUpdate,
-    LocationQueryParams,
+    CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CreateTaskRequest, CreateTaskResponse, DocumentError, EMPTY_SHA256, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, FileTypeUpdate, LocationQueryParams,
 };
 use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
@@ -42,6 +50,7 @@ pub struct DocumentServiceImpl<
     U: PresignedUploadUrlPort,
     T: TaskPropertiesPort,
     C: ConnectionService,
+    Eam: EntityAccessManagementService,
 > {
     repo: R,
     cloudfront_config: CloudFrontConfig,
@@ -49,10 +58,17 @@ pub struct DocumentServiceImpl<
     upload_url_service: U,
     task_properties_service: T,
     connection_service: C,
+    #[allow(dead_code)]
+    entity_access_management_service: Eam,
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
-    DocumentServiceImpl<R, U, T, C>
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+> DocumentServiceImpl<R, U, T, C, Eam>
 {
     /// Create a new document service.
     pub fn new(
@@ -62,6 +78,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         upload_url_service: U,
         task_properties_service: T,
         connection_service: C,
+        entity_access_management_service: Eam,
     ) -> Self {
         Self {
             repo,
@@ -70,6 +87,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             upload_url_service,
             task_properties_service,
             connection_service,
+            entity_access_management_service,
         }
     }
 
@@ -277,8 +295,13 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
     }
 }
 
-impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: ConnectionService>
-    DocumentService for DocumentServiceImpl<R, U, T, C>
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -456,6 +479,16 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .map_err(|e| DocumentError::Internal(e.into()))
     }
 
+    async fn get_document_comments(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<CommentThread>, DocumentError> {
+        self.repo
+            .get_document_comments(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
     async fn get_short_id(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -552,6 +585,13 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         // Update project modified timestamp
         if let Some(project_id) = &project_id {
             let project_id_str = project_id.to_string();
+            let document_uuid =
+                uuid::Uuid::parse_str(&document_response_metadata.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            // Update project
             let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -661,14 +701,26 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
         if let Some(old_project_id) = &document_context.project_id
             && !old_project_id.is_empty()
         {
-            let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
+            let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
+            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&document_uuid, EntityType::Document, &old_project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
+            let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
         }
         if let Some(project_id) = &args.project_id
             && !project_id.is_empty()
         {
-            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+            let project_id = uuid::Uuid::parse_str(project_id).unwrap();
+            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -689,6 +741,219 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             });
 
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, document_context, document_name))]
+    async fn copy_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: DocumentBasic,
+        user_id: MacroUserIdStr<'static>,
+        document_name: String,
+        query_version_id: Option<i64>,
+        sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+    ) -> Result<DocumentResponse, DocumentError> {
+        use model::document::response::DocumentResponseMetadata;
+
+        if document_name.graphemes(true).count() > 100 {
+            return Err(DocumentError::BadRequest("name too long".to_string()));
+        }
+
+        if document_context.deleted_at.is_some() {
+            return Err(DocumentError::BadRequest(
+                "cannot copy deleted document".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+
+        // Get full document metadata (at specific version or latest)
+        let mut original_metadata = if let Some(version_id) = query_version_id {
+            self.repo
+                .get_document_metadata_at_version(document_id, version_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        } else {
+            self.repo
+                .get_document_metadata(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        };
+
+        // Check project ownership - only copy project_id if the user owns the project
+        if let Some(project_id) = &original_metadata.project_id {
+            match self.repo.get_project_owner(project_id).await {
+                Ok(project_owner) => {
+                    if project_owner.as_ref() != user_id.as_ref() {
+                        original_metadata.project_id = None;
+                        original_metadata.project_name = None;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to get project owner");
+                    return Err(DocumentError::Internal(e.into()));
+                }
+            }
+        }
+
+        let file_type: Option<FileType> = document_context
+            .file_type
+            .as_deref()
+            .and_then(|f| FileType::from_str(f).ok());
+
+        // Validate DOCX has BOM
+        if file_type == Some(FileType::Docx) && original_metadata.document_bom.is_none() {
+            return Err(DocumentError::Internal(anyhow!("document bom is missing")));
+        }
+
+        // Clean the document name
+        let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
+
+        // Create the copy in the database
+        let new_metadata = self
+            .repo
+            .copy_document(CopyDocumentRepoArgs {
+                original_document: original_metadata.clone(),
+                user_id: user_id.clone(),
+                document_name,
+                file_type,
+            })
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        let new_document_id = new_metadata.document_id.clone();
+
+        // File-type-specific S3 operations
+        let copy_result = match file_type {
+            Some(FileType::Docx) => {
+                // Copy the converted PDF version
+                let url_encoded_owner = urlencoding::encode(original_metadata.owner.as_ref());
+                let source_key = build_docx_to_pdf_converted_document_key(
+                    &url_encoded_owner,
+                    &original_metadata.document_id,
+                );
+                let dest_key =
+                    build_docx_to_pdf_converted_document_key(user_id.as_ref(), &new_document_id);
+                self.upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+            }
+            Some(FileType::Md) => {
+                // Copy via sync service
+                if let Err(e) = self
+                    .sync_service_client
+                    .copy_document(
+                        &original_metadata.document_id,
+                        &new_document_id,
+                        sync_version_id,
+                    )
+                    .await
+                {
+                    tracing::error!(error=?e, "unable to copy document through sync service");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e));
+                }
+
+                // Also copy S3 file
+                let source_version_id = self
+                    .repo
+                    .get_latest_document_version_id(&original_metadata.document_id)
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?
+                    .0;
+
+                let source_key = build_cloud_storage_bucket_document_key(
+                    original_metadata.owner.as_ref(),
+                    &original_metadata.document_id,
+                    source_version_id,
+                );
+                let dest_key = build_cloud_storage_bucket_document_key(
+                    user_id.as_ref(),
+                    &new_document_id,
+                    new_metadata.document_version_id,
+                );
+                // Best effort S3 copy for live collab
+                let _ = self
+                    .upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "unable to copy live collab document");
+                    });
+                Ok(())
+            }
+            _ => {
+                // Copy PDF parts if applicable
+                if file_type == Some(FileType::Pdf)
+                    && let Err(e) = self
+                        .repo
+                        .copy_pdf_parts(&new_document_id, &original_metadata.document_id)
+                        .await
+                {
+                    tracing::error!(error=?e, "unable to copy pdf parts");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e.into()));
+                }
+
+                // Get source version id
+                let source_version_id = if file_type.is_none_or(|f| f.is_static()) {
+                    self.repo
+                        .get_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                } else {
+                    self.repo
+                        .get_latest_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                };
+
+                let source_key = build_cloud_storage_bucket_document_key(
+                    original_metadata.owner.as_ref(),
+                    &original_metadata.document_id,
+                    source_version_id,
+                );
+                let dest_key = build_cloud_storage_bucket_document_key(
+                    user_id.as_ref(),
+                    &new_document_id,
+                    new_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+            }
+        };
+
+        if let Err(e) = copy_result {
+            tracing::error!(error=?e, "unable to copy document files");
+            self.cleanup_document(&new_document_id).await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        // Copy task properties if the original document is a task
+        if original_metadata.sub_type == Some(document_sub_type::DocumentSubType::Task)
+            && let Err(e) = self
+                .task_properties_service
+                .copy_task_properties(&original_metadata.document_id, &new_document_id)
+                .await
+        {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to copy task properties");
+            self.cleanup_document(&new_document_id).await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        let document_response_metadata =
+            DocumentResponseMetadata::from_document_metadata(&new_metadata).map_err(|e| {
+                tracing::error!(error=?e, "unable to convert document metadata");
+                DocumentError::Internal(anyhow!("unable to convert document metadata"))
+            })?;
+
+        Ok(DocumentResponse {
+            document_metadata: document_response_metadata,
+            presigned_url: None,
+        })
     }
 
     #[tracing::instrument(skip(self))]
@@ -732,8 +997,8 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
                 CreateDocumentRepoArgs {
                     id: None,
                     sha: EMPTY_SHA256.to_string(),
-                    document_name: request.task_name,
-                    user_id,
+                    document_name: request.task_name.clone(),
+                    user_id: user_id.clone(),
                     file_type: Some(FileType::Md),
                     project_id: request.project_id,
                     email_attachment_id: None,
@@ -751,42 +1016,85 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort, C: Conne
             .document_id
             .clone();
 
+        let _ = self
+            .handle_task_properties(user_id, &document_id, &request)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error=?e,
+                    document_id=?document_id,
+                    "failed to assign task properties",
+                );
+            });
+
+        Ok(CreateTaskResponse { document_id })
+    }
+
+    /// Assigns the task properties to a document
+    #[tracing::instrument(skip(self, request), err)]
+    async fn handle_task_properties(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
         if request.share_with_team {
             let _ = self
                 .repo
-                .share_with_team(&plain_user_id, &document_id)
+                .share_with_team(user_id.as_ref(), document_id)
                 .await
                 .inspect_err(|e| {
                     tracing::error!(error=?e, "failed to share task with team");
                 });
         }
 
-        if let Some(properties) = request.property_values {
-            for property_input in properties {
-                let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
-                    tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
-                    continue;
-                };
+        // Use provided properties or assign default ones for task
+        let properties = if let Some(properties) = request.property_values.as_ref() {
+            properties
+        } else {
+            &vec![
+                PropertyInput {
+                    property_id: ASSIGNEES_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::MultiEntityReference {
+                        references: vec![EntityReference {
+                            entity_id: user_id.as_ref().to_string(),
+                            entity_type: models_properties::EntityType::User,
+                            specific_message_id: None,
+                        }],
+                    },
+                },
+                PropertyInput {
+                    property_id: STATUS_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::SelectOption {
+                        option_id: NOT_STARTED_STATUS_OPTION_ID,
+                    },
+                },
+            ]
+        };
 
-                let _ = self
-                    .task_properties_service
-                    .set_entity_property(
-                        &plain_user_id,
-                        &document_id,
-                        property_uuid,
-                        Some(property_input.value.clone()),
-                    )
-                    .await
-                    .inspect_err(|e| {
-                        tracing::warn!(
-                            property_id=?property_uuid,
+        for property_input in properties {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                continue;
+            };
+
+            let _ = self
+                .task_properties_service
+                .set_entity_property(
+                    user_id.as_ref(),
+                    document_id,
+                    property_uuid,
+                    Some(property_input.value.clone()),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(
                             error=?e,
-                            "failed to set property on task, continuing"
-                        );
-                    });
-            }
+                            property_uuid=?property_uuid,
+                            "unable to set entity property")
+                });
         }
 
-        Ok(CreateTaskResponse { document_id })
+        Ok(())
     }
 }

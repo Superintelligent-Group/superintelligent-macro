@@ -236,7 +236,9 @@
           "document",
           "project",
           "email_thread",
-          "team"
+          "team",
+          "call",
+          "static_file"
         ]
       },
       "GenericErrorResponse": {

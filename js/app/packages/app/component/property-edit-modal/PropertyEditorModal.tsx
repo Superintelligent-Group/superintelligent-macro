@@ -50,7 +50,7 @@ import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import {
   useListKeyBindings,
   type ListNavActions,
-} from './hooks/useListKeyBindings';
+} from '@core/util/useListKeyBindings';
 import {
   getEntityName,
   getEntityType,
@@ -107,15 +107,17 @@ export function PropertyEditorModal() {
   const handlePropertySave = (value: PropertyApiValues) => {
     const { selectedEntities, targetProperty } = propertyEditorState;
     if (!selectedEntities.length || !targetProperty) return;
+
+    // Snapshot before closing — closing resets selectedEntities.
+    const count = selectedEntities.length;
+    const message = `Set ${targetProperty.displayName} for ${
+      count === 1 ? selectedEntities[0].name : count + ' entities'
+    }`;
+
     saveProperties(selectedEntities, targetProperty, value).then((success) => {
-      if (success) {
-        const count = selectedEntities.length;
-        const message = `Set ${targetProperty.displayName} for ${count === 1 ? selectedEntities[0].name : count + ' entities'}`;
-        toast.success(message);
-      }
-      // failure toast handled by mutation
-      closePropertyEditor();
+      if (success) toast.success(message);
     });
+    closePropertyEditor();
   };
 
   const { dispose: disposeHotkey } = registerHotkey({
@@ -504,7 +506,7 @@ function SelectPropertyEditor(props: {
                 <p class="text-sm font-medium">{String(option.value.value)}</p>
               </div>
               <Show when={shouldShowHotkeys() && index() < 9}>
-                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                   <Hotkey shortcut={`${index() + 1}`} />
                 </div>
               </Show>

@@ -2,6 +2,7 @@ import {
   ComposeLayout,
   EmailComposeToolbar,
 } from '@block-email/component/compose';
+import { cn } from '@ui/utils/classname';
 import {
   type ComposeContextValue,
   ComposeProvider,
@@ -13,6 +14,7 @@ import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientC
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { isErr } from '@core/util/maybeResult';
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -35,7 +37,6 @@ type ComposeToolProps = {
 
 type SendEmailSnapshot = {
   bcc: Array<{ email: string; name: string | null }>;
-  body: string;
   cc: Array<{ email: string; name: string | null }>;
   replyingToId: string | null;
   subject: string;
@@ -43,7 +44,7 @@ type SendEmailSnapshot = {
 };
 
 function toEmailRecipients(
-  items: Array<{ email: string; name: string | null }>
+  items: Array<{ email: string; name?: string | null }>
 ): EmailRecipient[] {
   return items.map(convertContactInfoToEmailRecipient);
 }
@@ -74,7 +75,6 @@ function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
       name: item.name ?? null,
     })),
     subject: data.subject ?? '',
-    body: data.body ?? '',
     replyingToId: data.replyingToId ?? null,
   };
 }
@@ -167,12 +167,17 @@ export function ComposeTool(props: ComposeToolProps) {
   };
 
   const [recipients, setRecipients] = createSignal({
-    to: toEmailRecipients(props.initialData.to ?? []),
-    cc: toEmailRecipients(props.initialData.cc ?? []),
-    bcc: toEmailRecipients(props.initialData.bcc ?? []),
+    to: toEmailRecipients(
+      (props.initialData.to ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    cc: toEmailRecipients(
+      (props.initialData.cc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
+    bcc: toEmailRecipients(
+      (props.initialData.bcc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+    ),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
-  const [body, setBody] = createSignal(props.initialData.body ?? '');
   const [isSending, setIsSending] = createSignal(false);
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [validationErrors, setValidationErrors] = createSignal<
@@ -187,7 +192,7 @@ export function ComposeTool(props: ComposeToolProps) {
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      body: body(),
+      body: prepareEmailBody(editor())?.bodyHtml ?? '',
       replyingToId: props.initialData.replyingToId,
     };
   }
@@ -202,7 +207,7 @@ export function ComposeTool(props: ComposeToolProps) {
       });
     }
 
-    if (!body().trim()) {
+    if (!prepareEmailBody(editor())?.bodyText.trim()) {
       errors.push({ type: 'no_message', message: 'Write a message' });
     }
 
@@ -258,6 +263,7 @@ export function ComposeTool(props: ComposeToolProps) {
 
   async function handleSend() {
     if (ownerGateDisabled()) return;
+
     if (!validate()) return;
 
     setIsSending(true);
@@ -310,7 +316,7 @@ export function ComposeTool(props: ComposeToolProps) {
     attachments: () => [],
     sendTime: () => undefined,
     initialHtml: () => undefined,
-    initialMarkdown: () => props.initialData.body,
+    initialMarkdown: () => props.initialData.body ?? undefined,
     setRecipients: (field, value) => {
       setRecipients((prev) => ({ ...prev, [field]: value }));
       scheduleUpdate();
@@ -319,8 +325,7 @@ export function ComposeTool(props: ComposeToolProps) {
       setSubject(value);
       scheduleUpdate();
     },
-    onContentChange: (content) => {
-      setBody(content);
+    onContentChange: () => {
       scheduleUpdate();
     },
     onAddAttachments: (_: DraftFormAttachment[]) => {},
@@ -355,11 +360,11 @@ export function ComposeTool(props: ComposeToolProps) {
       <div class="relative">
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.chatId}:${props.messageId}:${props.toolCallId}`}
-          class={`flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input ${
-            uiDisabled()
-              ? '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
-              : ''
-          }`}
+          class={cn(
+            'flex flex-col w-full text-sm border border-edge-muted rounded-lg p-4 bg-input',
+            uiDisabled() &&
+              '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
+          )}
           header={
             showOwnerDisabledMessage() ? (
               <div class="text-xs text-ink-extra-muted/60">

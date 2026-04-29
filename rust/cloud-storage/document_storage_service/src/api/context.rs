@@ -1,5 +1,9 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use cal::{
+    domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
+    outbound::analytics_client::AnalyticsClientSink,
+};
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -39,12 +43,13 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsIngressQueue;
+use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use properties_service::PropertiesHandlerState;
+use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
 use secretsmanager_client::LocalOrRemoteSecret;
 use soup::{
@@ -76,13 +81,14 @@ type DssSoupState = SoupRouterState<
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         ChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
+        call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     >,
     DssEmailService,
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsIngressQueue>;
-type PropertiesService = PropertiesServiceImpl<
+pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
+pub(crate) type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl<EntityAccessService>,
     NotificationServiceImpl<NotificationIngressType>,
@@ -135,13 +141,32 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .await
             .map_err(Into::into)
     }
+
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        use system_properties::SystemPropertiesService as _;
+
+        self.system_properties
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
+            .map_err(Into::into)
+    }
 }
+
+pub(crate) type EntityAccessManagementService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
 
 pub(crate) type DocumentService = DocumentServiceImpl<
     PgDocumentRepo,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
+    EntityAccessManagementService,
 >;
 
 /// Type alias for the documents router state.
@@ -163,8 +188,16 @@ pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
 
 /// Type alias for the call service.
-pub(crate) type DssCallService =
-    CallServiceImpl<PgCallRepo, LivekitRtcClient, CallConnectionService>;
+pub(crate) type DssCallService = CallServiceImpl<
+    PgCallRepo,
+    LivekitRtcClient,
+    CallConnectionService,
+    EntityAccessService,
+    NotificationIngressType,
+    Option<call::outbound::s3_recording_storage::S3RecordingStorage>,
+    call::outbound::ai_call_summarizer::AiCallSummarizer,
+    crate::service::call_search_indexer::SqsCallSearchIndexer,
+>;
 
 /// Type alias for the call router state.
 pub(crate) type DssCallState = CallRouterState<DssCallService, EntityAccessService>;
@@ -179,9 +212,16 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 pub(crate) type GithubSyncServiceType =
     GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
 
+/// Type alias for the cal.com webhook service.
+pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
+
+/// Type alias for the cal.com webhook router state.
+pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
+    pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
@@ -209,6 +249,8 @@ pub(crate) struct ApiContext {
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,
+    pub cal_webhook_state: DssCalWebhookState,
+    pub entity_access_management_service: EntityAccessManagementService,
 }
 
 env_var! {
@@ -235,7 +277,7 @@ impl FromRef<ApiContext> for PropertiesHandlerState {
 impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
-            db: ctx.db.clone(),
+            db: ctx.readonly_db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
         }
     }

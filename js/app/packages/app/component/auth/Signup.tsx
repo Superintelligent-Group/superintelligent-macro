@@ -1,4 +1,4 @@
-import { ClippedPanel } from '@core/component/ClippedPanel';
+import { Panel } from '@ui';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { toast } from '@core/component/Toast/Toast';
@@ -12,7 +12,6 @@ import { LoginOptions } from './LoginOptions';
 import type { Stage } from './Shared';
 
 function PostSignupRedirect() {
-  const userInfo = useUserInfo();
   const navigate = useNavigate();
   const { initEmailLink } = useEmailLinks();
 
@@ -28,7 +27,7 @@ function PostSignupRedirect() {
         }
       }
     );
-    navigate(userInfo()?.tutorialComplete ? '/' : '/welcome', {
+    navigate('/', {
       replace: true,
     });
   });
@@ -81,11 +80,8 @@ export function Signup() {
           />
         </div>
 
-        <div class="w-full max-w-[420px] login-card">
-          <ClippedPanel
-            cornerRadius={'4px'}
-            class="bg-panel shadow-lg shadow-[#1111]"
-          >
+        <div class="w-full max-w-105 login-card">
+          <Panel>
             <div class="login-stagger">
               <div class="flex items-center justify-center py-10">
                 <LogoIcon class="size-20 text-accent" />
@@ -101,7 +97,7 @@ export function Signup() {
                 <LoginOptions signupMode setStage={(_stage: Stage) => {}} />
               </div>
             </div>
-          </ClippedPanel>
+          </Panel>
         </div>
       </div>
     </Show>

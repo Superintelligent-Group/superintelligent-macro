@@ -5,7 +5,7 @@ import {
   type MessageData,
 } from '../Message';
 import type { ApiThreadReply } from '@service-comms/client';
-import { MarkMessaageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadRail } from './ThreadRail';
 import type { MessageEditor } from '../Channel/create-message-editor';
@@ -30,10 +30,10 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
-  highlightedReplyId?: string;
   onReady?: (handle: ThreadReplyListHandle) => void;
   selectedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
+  onSelectReply?: (replyId: string) => void;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -74,24 +74,23 @@ export function ThreadReplyList(props: {
             <ThreadRail
               newMessage={listMetaByReplyId()[reply.id].isNewMessage}
             />
-            <MarkMessaageNotifications
+            <MarkMessageNotifications
               messageId={reply.id}
               channelId={props.channelId}
             >
               <ChannelMessage
                 channelId={props.channelId}
-                message={reply}
+                message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
                 listMeta={listMetaByReplyId()[reply.id]}
                 messageEditor={props.messageEditor}
-                highlighted={
-                  props.highlightedReplyId === reply.id || isReplySelected()
-                }
+                onClick={() => props.onSelectReply?.(reply.id)}
+                highlighted={isReplySelected()}
                 selectionState={
                   isReplySelected() ? { isSelected: true } : undefined
                 }
               />
-            </MarkMessaageNotifications>
+            </MarkMessageNotifications>
           </div>
         );
       }}

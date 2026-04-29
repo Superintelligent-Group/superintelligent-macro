@@ -14,6 +14,7 @@ import { BlockItemSplitLabel } from '@app/component/split-layout/components/Spli
 import { useAnalytics } from '@app/component/analytics-context';
 import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId } from '@core/block';
+import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   DocumentPropertiesButton,
   PROPERTIES_DRAWER_ID,
@@ -24,6 +25,7 @@ import {
   REFERENCES_DRAWER_ID,
 } from '@core/component/ReferencesModal';
 import {
+  getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
@@ -36,6 +38,7 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import DownloadSimple from '@icon/regular/download-simple.svg';
+import Info from '@icon/regular/info.svg';
 import Quotes from '@icon/regular/quotes.svg';
 import IconShared from '@macro-icons/wide/share.svg';
 import TagIcon from '@icon/regular/tag.svg';
@@ -64,6 +67,7 @@ export function TopBar() {
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const propertiesControl = useDrawerControl(PROPERTIES_DRAWER_ID);
+  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   let ref!: HTMLDivElement;
@@ -103,7 +107,12 @@ export function TopBar() {
   };
 
   const ops: FileOperation[] = [
-    { op: 'copy' },
+    {
+      label: 'Details',
+      icon: Info,
+      action: detailsControl.toggle,
+    },
+    { op: 'copy', divideAbove: true },
     { op: 'rename' },
     { op: 'moveToProject' },
     {
@@ -150,6 +159,7 @@ export function TopBar() {
       divideAbove: true,
       condition: () => !!canvasFile(),
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      focusTarget: getShareDrawerRecipientInput,
     },
   ];
 

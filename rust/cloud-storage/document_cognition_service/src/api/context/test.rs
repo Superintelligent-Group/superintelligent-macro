@@ -122,7 +122,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
     use notification::domain::service::SqsNotificationIngress;
-    use notification::outbound::queue::SqsIngressQueue;
+    use notification::outbound::queue::SqsQueue;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -204,12 +204,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
+        call::domain::ports::NoOpCallRecordQueryService,
     ));
 
-    let ingress_queue = SqsIngressQueue {
-        client: aws_sdk_sqs::Client::from_conf(sqs_config),
-        queue_url: "test-notification-ingress-queue".to_string(),
-    };
+    let ingress_queue = SqsQueue::new(
+        aws_sdk_sqs::Client::from_conf(sqs_config),
+        "test-notification-ingress-queue".to_string(),
+    );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
@@ -239,6 +240,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         s3_upload_adapter,
         ai_tools::NoOpTaskProperties,
         ai_tools::NoOpConnectionService,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
     );
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
@@ -280,6 +284,36 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service.clone(),
     );
 
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        ai_tools::NoOpCallRtcClient,
+        ai_tools::NoOpConnectionService,
+        (*entity_access_service).clone(),
+        ai_tools::NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        call_query_service,
+        (*entity_access_service).clone(),
+    );
+
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat::domain::service::ChatServiceImpl::new(
+            chat::outbound::postgres::PgChatRepo::new(pool.clone()),
+            Arc::new(ai_toolset::AsyncToolSet::new()),
+            (),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+        ),
+        (*entity_access_service).clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -289,6 +323,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
+        call_tool_context: call_tool_context.clone(),
+        chat_tool_context,
+        schedule_tool_context: ai_tools::no_op_schedule_context(),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -322,10 +359,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         memory_service,
         properties_tool_context,
         email_tool_context,
+        call_tool_context,
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
+        ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
+            redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
+        )),
     };
     Arc::new(api_context)
 }

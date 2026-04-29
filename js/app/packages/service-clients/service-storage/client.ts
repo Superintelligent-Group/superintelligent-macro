@@ -9,7 +9,10 @@ import { modificationDataReplacer } from '@block-pdf/util/buildModificationData'
 import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  SERVER_HOSTS,
+  SYNC_PERMISSION_TOKEN_DSS_HOST,
+} from '@core/constant/servers';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
@@ -31,6 +34,8 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type {
   AccessLevel,
+  PostSoupAstRequest,
+  CallRecordPreview,
   PostSoupRequest,
   SoupPage,
   View,
@@ -123,16 +128,21 @@ export type ItemType =
   | CloudStorageItemType
   | 'channel'
   | 'email'
-  | 'channel_message';
+  | 'channel_message'
+  | 'call'
+  | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 const itemTypeSet = new Set([
   'document',
-  'channel',
-  'email',
   'chat',
   'project',
+  'channel',
+  'email',
+  'channel_message',
+  'call',
+  'automation',
   'thread',
 ]);
 
@@ -146,12 +156,16 @@ export function blockNameToItemType(
   switch (blockName) {
     case 'chat':
       return 'chat';
+    case 'call':
+      return 'call';
     case 'channel':
       return 'channel';
     case 'project':
       return 'project';
     case 'email':
       return 'email';
+    case 'automation':
+      return 'automation';
     default:
       return DEFAULT_ITEM_TYPE;
   }
@@ -222,10 +236,26 @@ export const storageServiceClient = {
     });
   },
 
+  async getSoupAstItems(args: {
+    params: { cursor?: string | null };
+    body: PostSoupAstRequest;
+  }) {
+    const searchParams = args.params.cursor
+      ? `?cursor=${args.params.cursor}`
+      : '';
+
+    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
   permissionsTokens: {
+    // Uses SYNC_PERMISSION_TOKEN_DSS_HOST instead of dssFetch so that tokens are
+    // always signed by the DSS whose JWT secret matches the sync service's secret.
     async createPermissionToken(args) {
-      return await dssFetch<GetDocumentPermissionsTokenResponse>(
-        `/documents/permissions_token/${args.document_id}`,
+      return await fetchWithToken<GetDocumentPermissionsTokenResponse>(
+        `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${args.document_id}`,
         {
           method: 'POST',
         }
@@ -534,12 +564,28 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
+
   async getBatchDocumentPreviews(args: { document_ids: string[] }) {
     return mapOk(
       await dssFetch<{ previews: DocumentPreview[] }>(`/documents/preview`, {
         method: 'POST',
         body: JSON.stringify({ document_ids: args.document_ids }),
       }),
+      (result) => ({
+        previews: result.previews,
+      })
+    );
+  },
+
+  async getBatchCallPreviews(args: { call_ids: string[] }) {
+    return mapOk(
+      await dssFetch<{ previews: CallRecordPreview[] }>(
+        `/call/record/preview`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ callIds: args.call_ids }),
+        }
+      ),
       (result) => ({
         previews: result.previews,
       })
@@ -1013,20 +1059,16 @@ export const storageServiceClient = {
   getDocxExpandedParts,
 
   async upsertDocumentViewLocation({ documentId, location }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'POST',
-        body: JSON.stringify({ location }),
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'POST',
+      body: JSON.stringify({ location }),
+    });
   },
 
   async deleteDocumentViewLocation({ documentId }) {
-    return ok(
-      await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
-        method: 'DELETE',
-      })
-    );
+    return await dssFetch<{}>(`/user_document_view_location/${documentId}`, {
+      method: 'DELETE',
+    });
   },
 
   projects: {
@@ -1099,7 +1141,6 @@ export const storageServiceClient = {
       );
     },
 
-    // @ts-expect-error - TODO: we need to be able to return a string, the record<string, any> constraint is too strict
     async getUserAccessLevel({
       id,
     }): Promise<MaybeResult<FetchWithTokenErrorCode, AccessLevel>> {
@@ -1216,7 +1257,9 @@ export const storageServiceClient = {
       (result) => result.data
     );
   },
-} satisfies StorageServiceClient & typeof enhancements;
+} satisfies StorageServiceClient &
+  typeof enhancements &
+  Record<string, unknown>;
 
 export const uploadFileToPresignedUrl = async (
   presignedUrl: URL,

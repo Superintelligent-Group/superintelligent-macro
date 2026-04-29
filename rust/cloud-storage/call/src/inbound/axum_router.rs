@@ -15,13 +15,16 @@ use axum::{
     extract::{FromRef, FromRequestParts, State},
     http::{StatusCode, request::Parts},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use entity_access::{
-    domain::models::MemberParticipantRole,
-    domain::ports::EntityAccessService,
+    domain::{
+        models::{EditAccessLevel, MemberParticipantRole, ViewAccessLevel},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::{
-        CallWithChannelIdAccessLevelExtractor, ChannelAccessLevelExtractor,
+        CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor,
+        ChannelAccessLevelExtractor,
     },
 };
 use model_error_response::ErrorResponse;
@@ -29,7 +32,9 @@ use model_user::axum_extractor::MacroUserExtractor;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CallError, CallTokenResponse, LeaveCallResponse, TranscriptSegmentRequest,
+    CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
+    EditCallTranscriptRequest, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
+    LeaveCallResponse, MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -72,7 +77,14 @@ impl<S, Svc> FromRef<CallRouterState<S, Svc>> for Arc<Svc> {
 ///
 /// Routes:
 /// - `GET /{channel_id}` — get or create a call (join existing or start new)
+/// - `GET /{channel_id}/active` — check if an active call exists
 /// - `DELETE /{channel_id}` — leave or end a call
+/// - `GET /record/{call_id}` — get a full call record (transcript + participants)
+/// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
+/// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
+/// - `DELETE /record/{call_id}` — delete a call record
+/// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
+/// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, T>(state: CallRouterState<S, Svc>) -> Router<T>
 where
     S: CallService,
@@ -83,6 +95,28 @@ where
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc>).delete(leave_or_end_call_handler::<S, Svc>),
+        )
+        .route(
+            "/{channel_id}/active",
+            get(check_active_call_handler::<S, Svc>),
+        )
+        .route(
+            "/record/preview",
+            post(get_batch_call_record_preview_handler::<S, Svc>),
+        )
+        .route(
+            "/record/{call_id}",
+            get(get_call_record_handler::<S, Svc>)
+                .patch(edit_call_record_handler::<S, Svc>)
+                .delete(delete_call_record_handler::<S, Svc>),
+        )
+        .route(
+            "/record/{call_id}/transcript",
+            patch(edit_call_transcript_handler::<S, Svc>),
+        )
+        .route(
+            "/record/{call_id}/share-with-team/toggle",
+            post(toggle_share_with_team_handler::<S, Svc>),
         )
         .with_state(state)
 }
@@ -235,13 +269,237 @@ pub async fn get_or_create_call_handler<S: CallService, Svc: EntityAccessService
 ) -> Result<Json<CallTokenResponse>, CallError> {
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
-    let user_id = user.macro_user_id.as_ref();
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user_id)
+        .get_or_create_call(&channel_id, user.macro_user_id)
         .await?;
 
+    Ok(Json(response))
+}
+
+/// Handler for `GET /call/{channel_id}/active`.
+///
+/// Returns 200 with call info if an active call exists, or 204 No Content if not.
+#[utoipa::path(
+    get,
+    operation_id = "check_active_call",
+    path = "/call/{channel_id}/active",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+    ),
+    responses(
+        (status = 200, body = CallActiveResponse),
+        (status = 204, description = "No active call"),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn check_active_call_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+) -> Result<axum::response::Response, CallError> {
+    let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
+
+    match state.service.check_active_call(&channel_id).await? {
+        Some(response) => Ok(Json(response).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
+}
+
+/// Handler for `GET /call/record/{call_id}`.
+///
+/// Returns the full [`CallRecord`] (metadata + participants + transcript)
+/// for a call identified by its own id. Covers both active and archived calls.
+/// Access is validated via channel membership (MemberParticipantRole).
+#[utoipa::path(
+    get,
+    operation_id = "get_call_record",
+    path = "/call/record/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = CallRecord),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_record_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc>,
+) -> Result<Json<CallRecord>, CallError> {
+    let record = state
+        .service
+        .get_call_record(access.entity_access_receipt)
+        .await?;
+    Ok(Json(record))
+}
+
+/// Handler for `DELETE /call/record/{call_id}`.
+///
+/// Deletes a call record (and its participants/transcripts via cascade).
+/// Access is validated via channel membership (MemberParticipantRole).
+#[utoipa::path(
+    delete,
+    operation_id = "delete_call_record",
+    path = "/call/record/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 204, description = "Call record deleted"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn delete_call_record_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .delete_call_record(access.entity_access_receipt)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `PATCH /call/record/{call_id}`.
+///
+/// Edits a call record — currently supports updating the record's share
+/// permissions. Access is validated via channel membership
+#[utoipa::path(
+    patch,
+    operation_id = "edit_call_record",
+    path = "/call/record/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    request_body = EditCallRecordRequest,
+    responses(
+        (status = 204, description = "Call record updated"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn edit_call_record_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+    Json(request): Json<EditCallRecordRequest>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .edit_call_record(access.entity_access_receipt, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `PATCH /call/record/{call_id}/transcript`.
+///
+/// Applies per-diarized-speaker `custom_speaker` overrides to the call's
+/// archived transcript rows. Auth uses the same `EditAccessLevel` extractor
+/// as `edit_call_record_handler`.
+#[utoipa::path(
+    patch,
+    operation_id = "edit_call_transcript",
+    path = "/call/record/{call_id}/transcript",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    request_body = EditCallTranscriptRequest,
+    responses(
+        (status = 204, description = "Transcript updated"),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn edit_call_transcript_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+    Json(request): Json<EditCallTranscriptRequest>,
+) -> Result<StatusCode, CallError> {
+    state
+        .service
+        .edit_call_transcript(access.entity_access_receipt, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
+///
+/// Toggles the `share_with_team` flag on the active call. Returns the new
+/// value as the JSON body.
+#[utoipa::path(
+    post,
+    operation_id = "toggle_share_with_team",
+    path = "/call/record/{call_id}/share-with-team/toggle",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = bool, content_type = "application/json", description = "New value of share_with_team after toggle"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn toggle_share_with_team_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc>,
+) -> Result<Json<bool>, CallError> {
+    let new_value = state
+        .service
+        .toggle_share_with_team(access.entity_access_receipt)
+        .await?;
+    Ok(Json(new_value))
+}
+
+/// Handler for `POST /call/record/preview`.
+///
+/// Batch-fetches lightweight previews for a list of call ids. Mirrors the
+/// `POST /documents/preview` endpoint: no per-id access checks, duplicate
+/// ids are deduplicated server-side, and missing ids come back as
+/// `CallRecordPreview::DoesNotExist` rather than producing an error.
+#[utoipa::path(
+    post,
+    operation_id = "get_batch_call_record_preview",
+    path = "/call/record/preview",
+    request_body = GetBatchCallRecordPreviewRequest,
+    responses(
+        (status = 200, body = GetBatchCallRecordPreviewResponse),
+        (status = 400, body = ErrorResponse, description = "call_ids exceeds MAX_BATCH_CALL_IDS"),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_batch_call_record_preview_handler<S: CallService, Svc: EntityAccessService>(
+    State(state): State<CallRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Json(request): Json<GetBatchCallRecordPreviewRequest>,
+) -> Result<Json<GetBatchCallRecordPreviewResponse>, CallError> {
+    if request.call_ids.len() > MAX_BATCH_CALL_IDS {
+        return Err(CallError::InvalidRequest(format!(
+            "call_ids exceeds maximum batch size of {MAX_BATCH_CALL_IDS}"
+        )));
+    }
+
+    let response = state
+        .service
+        .get_batch_call_record_previews(request, user.macro_user_id)
+        .await?;
     Ok(Json(response))
 }
 
@@ -267,11 +525,10 @@ pub async fn leave_or_end_call_handler<S: CallService, Svc: EntityAccessService>
     user: MacroUserExtractor,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
     let channel_id = access.channel_id;
-    let user_id = user.macro_user_id.as_ref();
 
     let response = state
         .service
-        .leave_or_end_call(&channel_id, user_id)
+        .leave_or_end_call(&channel_id, user.macro_user_id)
         .await?;
 
     Ok(Json(response))
@@ -355,7 +612,9 @@ impl IntoResponse for CallError {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
+            CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
+            CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR

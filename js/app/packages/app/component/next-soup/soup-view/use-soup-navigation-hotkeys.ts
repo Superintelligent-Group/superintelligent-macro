@@ -2,23 +2,16 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { onCleanup, type Accessor } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { EntityData } from '@entity';
-
-const DEFAULT_ENTITY_SIZE = 40;
-const CONTEXT_ENTITIES_COUNT = 3;
-
-const CONTEXT_OFFSET = DEFAULT_ENTITY_SIZE * CONTEXT_ENTITIES_COUNT;
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
-  previewPanelRef: Accessor<HTMLElement | undefined>;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -31,20 +24,7 @@ export const useSoupNavigationHotkeys = (
 
     if (!handle) return;
 
-    // We add some space between the top and bottom when scrolling up/down
-
-    const scrollOffset = handle.getItemOffset(index);
-
-    // How many items should we show above/below the index we want to scroll to
-    let contextOffset = CONTEXT_ENTITIES_COUNT;
-
-    // If we're going to end up scrolling out of the top of scroll area,
-    // we set our offset to be negative
-    if (scrollOffset - CONTEXT_OFFSET < handle.scrollOffset) {
-      contextOffset *= -1;
-    }
-
-    virtualizerHandle()?.scrollToIndex(index + contextOffset, {
+    virtualizerHandle()?.scrollToIndex(index, {
       align: 'nearest',
     });
   };
@@ -136,7 +116,6 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
-  // Used outside soup view, does not need to be disposed
   registerHotkey({
     hotkey: ['j'],
     scopeId,
@@ -144,7 +123,7 @@ export const useSoupNavigationHotkeys = (
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: navigateDown,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowdown'],
@@ -154,7 +133,6 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  // Used outside soup view, does not need to be disposed
   registerHotkey({
     hotkey: ['k'],
     scopeId,
@@ -162,7 +140,7 @@ export const useSoupNavigationHotkeys = (
     description: 'Up',
     keyDownHandler: navigateUp,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowup'],
@@ -196,12 +174,14 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  const previewPanel = useMaybePreviewPanel();
-
   const getCollapsibleToggle = () => {
     const focusedId = soup.focus.id();
     if (!focusedId) return undefined;
-    const entityEl = document.querySelector(`[data-entity-id="${focusedId}"]`);
+    const splitEl = document.querySelector(
+      `[data-split-id="${splitHandle.id}"]`
+    );
+    if (!splitEl) return undefined;
+    const entityEl = splitEl.querySelector(`[data-entity-id="${focusedId}"]`);
     if (!entityEl) return undefined;
     return entityEl.querySelector(
       'button[data-collapsible-toggle]'
@@ -211,7 +191,7 @@ export const useSoupNavigationHotkeys = (
   registerHotkey({
     hotkey: ['h', 'arrowleft'],
     scopeId,
-    description: 'Navigate to parent context',
+    description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
     keyDownHandler: () => {
       const toggle = getCollapsibleToggle();
@@ -220,11 +200,7 @@ export const useSoupNavigationHotkeys = (
         return true;
       }
 
-      if (!previewPanel) return false;
-
-      previewPanel.onFocusOut();
-
-      return true;
+      return false;
     },
     registrationType: 'add',
     handlerPriority: 4,
@@ -234,7 +210,7 @@ export const useSoupNavigationHotkeys = (
   registerHotkey({
     hotkey: ['l', 'arrowright'],
     scopeId,
-    description: 'Navigate to child context',
+    description: 'Expand item',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
     keyDownHandler: () => {
       const toggle = getCollapsibleToggle();
@@ -243,24 +219,7 @@ export const useSoupNavigationHotkeys = (
         return true;
       }
 
-      const previewPanelContent = options.previewPanelRef();
-      // If there is no preview or the preview already contains focus, skip
-      if (
-        !previewPanelContent ||
-        previewPanelContent.contains(document.activeElement)
-      )
-        return false;
-
-      const previewPanelSoup = previewPanelContent?.querySelector(
-        'div[data-soup-view]'
-      );
-
-      // If it doesn't contain soup, skip
-      if (!previewPanelSoup || !(previewPanelSoup instanceof HTMLElement))
-        return false;
-
-      previewPanelSoup.focus();
-      return true;
+      return false;
     },
     registrationType: 'add',
     handlerPriority: 4,
