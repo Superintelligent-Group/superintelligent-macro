@@ -206,7 +206,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_TEST_THREADS: '16'
+      NEXTEST_TEST_THREADS: '32'
     services:
       postgres:
         image: postgres:16
@@ -253,6 +253,20 @@ jobs:
         uses: taiki-e/install-action@nextest
       - name: clear target dir if large
         run: scripts/clear-cargo-target-if-larger-than rust/cloud-storage/target 100 60
+      - name: configure postgres for concurrent tests
+        run: |
+          postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:16" { print $1; exit }')"
+          if [ -z "$postgres_container" ]; then
+            echo "postgres:16 service container not found" >&2
+            docker ps
+            exit 1
+          fi
+
+          docker exec "$postgres_container" psql -U user -d macrodb -c "ALTER SYSTEM SET max_locks_per_transaction = 256;"
+          docker restart "$postgres_container"
+          until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+            sleep 1
+          done
       - name: prepare tests
         run: |
           just rust/cloud-storage/setup_test_envs
