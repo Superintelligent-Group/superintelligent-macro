@@ -190,7 +190,7 @@ export function CommandMenuInner(props: {
         },
         {
           referredFrom: 'kommand-menu',
-          preferNewSplit: true,
+          preferNewSplit: openInNewSplit,
           allowDuplicate: true,
         }
       );
@@ -611,6 +611,10 @@ function CommandMenuFooter(props: {
                 }
               >
                 <HotkeyHint shortcut="enter" label="Search" />
+                <HotkeyHint
+                  shortcut="shift+enter"
+                  label="Search in new split"
+                />
               </Show>
             }
           >
