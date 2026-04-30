@@ -266,14 +266,7 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
-  return (
-    <ComposeTask
-      initialContent={params?.initialContent}
-      initialTitle={params?.initialTitle}
-      initialAssigneeId={params?.initialAssigneeId}
-      onSuccess={params?.onSuccess}
-    />
-  );
+  return <ComposeTask {...params} />;
 });
 registerComponent(
   'import-linear',
