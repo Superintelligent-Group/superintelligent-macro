@@ -1,511 +1,525 @@
-import { uploadProfilePicture } from '@core/component/ProfilePicture';
-import EditableField from '@core/component/EditableField';
-import { capitalize } from '@block-pdf/util/StringUtils';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { useHasPaidAccess } from '@core/auth/license';
-import { UserIcon } from '@core/component/UserIcon';
-import { useLogout } from '@core/auth/logout';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
-import { toast } from '@core/component/Toast/Toast';
-import { Button } from '@ui/components/Button';
-import { Panel } from '@ui';
-import {
-  blockNameToFileExtensions,
-  blockNameToMimeTypes,
-} from '@core/constant/allBlocks';
-import {
-  DEV_MODE_ENV,
-  ENABLE_EMAIL,
-  ENABLE_PROFILE_PICTURES,
-} from '@core/constant/featureFlags';
-import { usePaywallState } from '@core/constant/PaywallState';
-import { fileSelector } from '@core/directive/fileSelector';
-import {
-  type ProfilePictureItem,
-  useProfilePictureUrl,
-} from '@core/signal/profilePicture';
-import IconUpload from '@macro-icons/macro-upload.svg';
-import { authServiceClient } from '@service-auth/client';
-import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
-import { createMemo, createResource, createSignal, Show } from 'solid-js';
-import {
-    useEmailLinks,
-  useEmailLinksStatus,
-} from '@core/email-link';
-import {
-  type SupportedNotificationSettings,
-  useNotificationSettings,
-} from '@notifications';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
-import { invoke } from '@tauri-apps/api/core';
+ import { uploadProfilePicture } from '@core/component/ProfilePicture';
+ import EditableField from '@core/component/EditableField';
+ import { capitalize } from '@block-pdf/util/StringUtils';
 
-// NOTE: solid directives
-false && fileSelector;
+ import { useHasPaidAccess } from '@core/auth/license';
+ import { UserIcon } from '@core/component/UserIcon';
+ import { useLogout } from '@core/auth/logout';
+ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+ import { Modal, Overlay, Content, Header, Message, ButtonBar } from '@core/component/Modal';
+ import { toast } from '@core/component/Toast/Toast';
+ import { Button } from '@ui/components/Button';
+ import { Panel } from '@ui';
+ import {
+   blockNameToFileExtensions,
+   blockNameToMimeTypes,
+ } from '@core/constant/allBlocks';
+ import {
+   DEV_MODE_ENV,
+   ENABLE_EMAIL,
+   ENABLE_PROFILE_PICTURES,
+ } from '@core/constant/featureFlags';
+ import { usePaywallState } from '@core/constant/PaywallState';
+ import { fileSelector } from '@core/directive/fileSelector';
+ import {
+   type ProfilePictureItem,
+   useProfilePictureUrl,
+ } from '@core/signal/profilePicture';
+ import IconUpload from '@macro-icons/macro-upload.svg';
+ import { authServiceClient } from '@service-auth/client';
+ import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
+ import { createMemo, createResource, createSignal, Show } from 'solid-js';
+ import {
+     useEmailLinks,
+   useEmailLinksStatus,
+ } from '@core/email-link';
+ import {
+   type SupportedNotificationSettings,
+   useNotificationSettings,
+ } from '@notifications';
+ import { useAnalytics } from '@app/component/analytics-context';
+ import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
+ import { invoke } from '@tauri-apps/api/core';
 
-function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
-  switch (status.status) {
-    case 'Idle': return 'Idle';
-    case 'CheckingForUpdate': return 'Checking for update...';
-    case 'UpdateFound': return `Update available: v${status.data.version}`;
-    case 'NoUpdateNeeded': return 'Up to date';
-    case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
-    case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
-    case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
-    case 'Completed': return 'Update ready';
-    case 'Error': return 'An error occurred when checking for updates';
-  }
-}
+ // NOTE: solid directives
+ false && fileSelector;
 
-function useUserName() {
-  const fetchUserName = async () => {
-    const [_, response] = await authServiceClient.getUserName();
-    if (response) {
-      return response;
-    }
+ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
+   switch (status.status) {
+     case 'Idle': return 'Idle';
+     case 'CheckingForUpdate': return 'Checking for update...';
+     case 'UpdateFound': return `Update available: v${status.data.version}`;
+     case 'NoUpdateNeeded': return 'Up to date';
+     case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
+     case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
+     case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
+     case 'Completed': return 'Update ready';
+     case 'Error': return 'An error occurred when checking for updates';
+   }
+ }
 
-    return null;
-  };
+ function useUserName() {
+   const fetchUserName = async () => {
+     const [_, response] = await authServiceClient.getUserName();
+     if (response) {
+       return response;
+     }
 
-  const [userNameResource] = createResource(fetchUserName);
+     return null;
+   };
 
-  const userName = createMemo(() => {
-    if (userNameResource.loading) return undefined;
-    return userNameResource() || undefined;
-  });
+   const [userNameResource] = createResource(fetchUserName);
 
-  return userName;
-}
+   const userName = createMemo(() => {
+     if (userNameResource.loading) return undefined;
+     return userNameResource() || undefined;
+   });
 
-// Not accessible if user is not authenticated
-export function Account() {
-  const email = useEmail();
-  const userId = useUserId();
-  const licenseStatus = useLicenseStatus();
-  const logout = useLogout();
-  const { showPaywall } = usePaywallState();
-  const hasPaidAccess = useHasPaidAccess();
-  const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
-  const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
-  const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
+   return userName;
+ }
 
-  const { disconnect: disconnectEmail } = useEmailLinks();
+ // Not accessible if user is not authenticated
+ export function Account() {
+   const email = useEmail();
+   const userId = useUserId();
+   const licenseStatus = useLicenseStatus();
+   const logout = useLogout();
+   const { showPaywall } = usePaywallState();
+   const hasPaidAccess = useHasPaidAccess();
+   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
+   const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
+   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
+   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
-  const userName = useUserName();
-  const [updatedFirstName, setUpdatedFirstName] = createSignal<
-    string | undefined
-  >(undefined);
-  const [updatedLastName, setUpdatedLastName] = createSignal<
-    string | undefined
-  >(undefined);
+   const { disconnect: disconnectEmail } = useEmailLinks();
 
-  const emailActive = useEmailLinksStatus();
+   const userName = useUserName();
+   const [updatedFirstName, setUpdatedFirstName] = createSignal<
+     string | undefined
+   >(undefined);
+   const [updatedLastName, setUpdatedLastName] = createSignal<
+     string | undefined
+   >(undefined);
 
-  const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
-    const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
-    return response?.link_exists ?? false;
-  });
+   const emailActive = useEmailLinksStatus();
 
-  const handleGithubEnable = async () => {
-    const [_, url] = await authServiceClient.initGithubLink(window.location.href);
-    if (url) {
-      window.location.href = url;
-    }
-  };
+   const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
+     const [_, response] = await authServiceClient.checkLinkExists({ idp_name: 'github' });
+     return response?.link_exists ?? false;
+   });
 
-  const handleGithubDisable = async () => {
-    await authServiceClient.deleteGithubLink();
-    refetchGithubLink();
-  };
+   const handleGithubEnable = async () => {
+     const [_, url] = await authServiceClient.initGithubLink(window.location.href);
+     if (url) {
+       window.location.href = url;
+     }
+   };
 
-  const firstName = () => {
-    // Display any updated first name immediately without having to refetch
-    if (updatedFirstName() !== undefined) return updatedFirstName();
-    const userNameValue = userName();
-    if (userNameValue && userNameValue.first_name) {
-      return userNameValue.first_name;
-    }
-    return undefined;
-  };
+   const handleGithubDisable = async () => {
+     await authServiceClient.deleteGithubLink();
+     refetchGithubLink();
+   };
 
-  const lastName = () => {
-    // Display any updated last name immediately without having to refetch
-    if (updatedLastName() !== undefined) return updatedLastName();
-    const userNameValue = userName();
-    if (userNameValue && userNameValue.last_name) {
-      return userNameValue.last_name;
-    }
-    return undefined;
-  };
+   const firstName = () => {
+     // Display any updated first name immediately without having to refetch
+     if (updatedFirstName() !== undefined) return updatedFirstName();
+     const userNameValue = userName();
+     if (userNameValue && userNameValue.first_name) {
+       return userNameValue.first_name;
+     }
+     return undefined;
+   };
 
-  const logoutHandler = () => {
-    logout();
-  };
+   const lastName = () => {
+     // Display any updated last name immediately without having to refetch
+     if (updatedLastName() !== undefined) return updatedLastName();
+     const userNameValue = userName();
+     if (userNameValue && userNameValue.last_name) {
+       return userNameValue.last_name;
+     }
+     return undefined;
+   };
 
-  const deleteAccountHandler = async () => {
-    await authServiceClient.deleteUser();
-    logout();
-  };
+   const logoutHandler = () => {
+     logout();
+   };
 
-  return (
-    <div
-      class="h-full overflow-y-auto"
-      style="scrollbar-width: none;"
-    >
-      <div class="max-w-2xl mx-auto p-2">
-        <Panel depth={2}>
-          <div class="text-ink">
-            <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
-              <div class="text-sm font-semibold">Account</div>
-              <Show when={ENABLE_PROFILE_PICTURES && userId()}>
-                <div class="flex items-center gap-2">
-                  <div
-                    use:fileSelector={{
-                      acceptedFileExtensions: blockNameToFileExtensions.image,
-                      acceptedMimeTypes: blockNameToMimeTypes.image,
-                      onSelect: async (files: File[]) => {
-                        let response = await uploadProfilePicture(files[0]);
-                        if (!response || !userId()) return;
-                        let { url } = response;
-                        let pic: ProfilePictureItem = {
-                          _createdAt: new Date(),
-                          url,
-                          id: userId()!,
-                          loading: false,
-                        };
-                        // update the cache directly to force a reload
-                        const [_, controls] = useProfilePictureUrl(userId());
-                        controls.mutate(pic);
-                      },
-                    }}
-                  >
-                    <DeprecatedTextButton text="Upload" icon={IconUpload} theme="accent" />
-                  </div>
-                  <UserIcon
-                    id={userId() as string}
-                    isDeleted={false}
-                    size="md"
-                    class="bg-transparent"
-                  />
-                </div>
-              </Show>
-            </div>
-            <div class="grid gap-px bg-edge border-b border-edge">
+   const deleteAccountHandler = async () => {
+     await authServiceClient.deleteUser();
+     logout();
+   };
 
-            <Row label="Email">
-              <span class="ph-no-capture text-sm text-ink-muted">
-                {email() ?? ''}
-              </span>
-            </Row>
+   return (
+     <div
+       class="h-full overflow-y-auto"
+       style="scrollbar-width: none;"
+     >
+       <div class="max-w-2xl mx-auto p-2">
+         <Panel depth={2}>
+           <div class="text-ink">
+             <div class="relative flex items-center justify-between h-10 px-6 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge after:content-['']">
+               <div class="text-sm font-semibold">Account</div>
+               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
+                 <div class="flex items-center gap-2">
+                   <div
+                     class="inline-flex"
+                     use:fileSelector={{
+                       acceptedFileExtensions: blockNameToFileExtensions.image,
+                       acceptedMimeTypes: blockNameToMimeTypes.image,
+                       onSelect: async (files: File[]) => {
+                         let response = await uploadProfilePicture(files[0]);
+                         if (!response || !userId()) return;
+                         let { url } = response;
+                         let pic: ProfilePictureItem = {
+                           _createdAt: new Date(),
+                           url,
+                           id: userId()!,
+                           loading: false,
+                         };
+                         // update the cache directly to force a reload
+                         const [_, controls] = useProfilePictureUrl(userId());
+                         controls.mutate(pic);
+                       },
+                     }}
+                   >
+                     <Button variant="secondary" size="sm" class="[&_svg]:size-3.5">
+                       <IconUpload />
+                       Upload
+                     </Button>
+                   </div>
+                   <UserIcon
+                     id={userId() as string}
+                     isDeleted={false}
+                     size="md"
+                     class="bg-transparent"
+                   />
+                 </div>
+               </Show>
+             </div>
+             <div class="grid gap-px bg-edge border-b border-edge">
 
-            <Row label="First Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={firstName()}
-                onSave={(newValue: string) => {
-                  setUpdatedFirstName(newValue);
-                  authServiceClient.putUserName({ first_name: newValue });
-                }}
-                placeholder="Enter First Name"
-                allowEmpty={true}
-              />
-            </Row>
+             <Row label="Email">
+               <span class="ph-no-capture text-sm text-ink-muted">
+                 {email() ?? ''}
+               </span>
+             </Row>
 
-            <Row label="Last Name">
-              <EditableField
-                class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
-                value={lastName()}
-                onSave={(newValue: string) => {
-                  setUpdatedLastName(newValue);
-                  authServiceClient.putUserName({ last_name: newValue });
-                }}
-                placeholder="Enter Last Name"
-                allowEmpty={true}
-              />
-            </Row>
+             <Row label="First Name">
+               <EditableField
+                 class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                 value={firstName()}
+                 onSave={(newValue: string) => {
+                   setUpdatedFirstName(newValue);
+                   authServiceClient.putUserName({ first_name: newValue });
+                 }}
+                 placeholder="Enter First Name"
+                 allowEmpty={true}
+               />
+             </Row>
 
-            <Row label="License Status">
-              <div class="flex items-center gap-3">
-                <span class="text-sm text-ink-muted">
-                  {capitalize(licenseStatus() ?? '')}
-                </span>
-                <Show when={!hasPaidAccess()}>
-                  <DeprecatedTextButton
-                    theme="accent"
-                    text="Upgrade"
-                    onClick={() => showPaywall()}
-                  />
-                </Show>
-              </div>
-            </Row>
+             <Row label="Last Name">
+               <EditableField
+                 class="ph-no-capture [&_span]:text-sm [&_span]:text-ink-muted [&_span]:leading-normal"
+                 value={lastName()}
+                 onSave={(newValue: string) => {
+                   setUpdatedLastName(newValue);
+                   authServiceClient.putUserName({ last_name: newValue });
+                 }}
+                 placeholder="Enter Last Name"
+                 allowEmpty={true}
+               />
+             </Row>
 
-            <BundleUpdateRow />
+             <Row label="License Status">
+               <div class="flex items-center gap-3">
+                 <span class="text-sm text-ink-muted">
+                   {capitalize(licenseStatus() ?? '')}
+                 </span>
+                 <Show when={!hasPaidAccess()}>
+                   <Button variant="secondary" size="sm" onClick={() => showPaywall()}>
+                     Upgrade
+                   </Button>
+                 </Show>
+               </div>
+             </Row>
 
-            <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
-              <Row label="Email">
-                <Show
-                  when={!emailActive()}
-                  fallback={
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Disable"
-                      onClick={() => setShowEmailModal(true)}
-                    />
-                  }
-                >
-                  <Show when={!showEnableEmailModal()}>
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Enable"
-                      onClick={() => setShowEnableEmailModal(true)}
-                    />
-                  </Show>
-                </Show>
-              </Row>
-            </Show>
+             <BundleUpdateRow />
 
-            <Row label="GitHub">
-              <Show
-                when={!githubLinkExists.loading}
-                fallback={
-                  <span class="text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Show
-                  when={!githubLinkExists()}
-                  fallback={
-                    <DeprecatedTextButton
-                      theme="base"
-                      text="Disable"
-                      onClick={handleGithubDisable}
-                    />
-                  }
-                >
-                  <DeprecatedTextButton
-                    theme="base"
-                    text="Enable"
-                    onClick={handleGithubEnable}
-                  />
-                </Show>
-              </Show>
-            </Row>
+             <Show when={ENABLE_EMAIL && (!emailActive() || DEV_MODE_ENV)}>
+               <Row label="Email">
+                 <Show
+                   when={!emailActive()}
+                   fallback={
+                     <Button
+                       variant="secondary"
+                       size="sm"
+                       onClick={() => setShowEmailModal(true)}
+                     >
+                       Disable
+                     </Button>
+                   }
+                 >
+                   <Show when={!showEnableEmailModal()}>
+                     <Button
+                       variant="secondary"
+                       size="sm"
+                       onClick={() => setShowEnableEmailModal(true)}
+                     >
+                       Enable
+                     </Button>
+                   </Show>
+                 </Show>
+               </Row>
+             </Show>
 
-            <NotificationToggle />
+             <Row label="GitHub">
+               <Show
+                 when={!githubLinkExists.loading}
+                 fallback={
+                   <span class="text-sm text-ink-muted">Loading…</span>
+                 }
+               >
+                 <Show
+                   when={!githubLinkExists()}
+                   fallback={
+                     <Button
+                       variant="secondary"
+                       size="sm"
+                       onClick={handleGithubDisable}
+                     >
+                       Disable
+                     </Button>
+                   }
+                 >
+                   <Button
+                     variant="secondary"
+                     size="sm"
+                     onClick={handleGithubEnable}
+                   >
+                     Enable
+                   </Button>
+                 </Show>
+               </Show>
+             </Row>
 
-            </div>
+             <NotificationToggle />
 
-            <div class="flex items-center justify-end h-10 px-6">
-              <DeprecatedTextButton
-                text="Logout"
-                theme="base"
-                onClick={logoutHandler}
-              />
-            </div>
+             </div>
 
-            <Show when={showEnableEmailModal()}>
-              <div class="flex flex-row items-center">
-                <div class="text-sm">
-                  Email requires additional Google permissions. Select the permissions on sign-in to enable.
-                </div>
-                <div class="ml-auto flex flex-row">
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Logout"
-                    onClick={() => {
-                      setShowEnableEmailModal(false);
-                      logout();
-                    }}
-                  />
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Cancel"
-                    onClick={() => setShowEnableEmailModal(false)}
-                  />
-                </div>
-              </div>
-            </Show>
+             <div class="flex items-center justify-end h-10 px-6">
+               <Button variant="secondary" size="sm" onClick={logoutHandler}>
+                 Logout
+               </Button>
+             </div>
 
-            <Show when={showEmailModal()}>
-              <div class="flex flex-row items-center">
-                <div class="text-sm">
-                  Disabling will clear all email data from Macro
-                </div>
-                <div class="ml-auto flex flex-row">
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Confirm"
-                    onClick={async () => {
-                      setShowEmailModal(false);
-                      await disconnectEmail().match(
-                        () => {
-                          toast.success('Email disabled — clearing your email data, this may take a moment.');
-                        },
-                        () => {
-                          toast.failure('Failed to disable email. Please try again.');
-                        },
-                      );
-                    }}
-                  />
-                  <DeprecatedTextButton
-                    theme="clear"
-                    text="Cancel"
-                    onClick={() => setShowEmailModal(false)}
-                  />
-                </div>
-              </div>
-            </Show>
+             <Show when={showEnableEmailModal()}>
+               <div class="flex flex-row items-center px-6 py-3 gap-3">
+                 <div class="text-sm">
+                   Email requires additional Google permissions. Select the permissions on sign-in to enable.
+                 </div>
+                 <div class="ml-auto flex flex-row gap-2">
+                   <Button
+                     variant="secondary"
+                     size="sm"
+                     onClick={() => {
+                       setShowEnableEmailModal(false);
+                       logout();
+                     }}
+                   >
+                     Logout
+                   </Button>
+                   <Button
+                     variant="secondary"
+                     size="sm"
+                     onClick={() => setShowEnableEmailModal(false)}
+                   >
+                     Cancel
+                   </Button>
+                 </div>
+               </div>
+             </Show>
 
-            <Show when={isNativeMobilePlatform()}>
-              <div class="border-t border-edge pt-4">
-                <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
-                  Delete Account
-                </Button>
-                <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
-                  <Overlay />
-                  <Content>
-                    <Header>Delete Account</Header>
-                    <Message>
-                      Are you sure you want to delete your account? This action is
-                      permanent and cannot be undone.
-                    </Message>
-                    <ButtonBar>
-                      <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button variant="destructive" onClick={() => {
-                        setShowDeleteModal(false);
-                        setShowDeleteConfirmModal(true);
-                      }}>
-                        Delete
-                      </Button>
-                    </ButtonBar>
-                  </Content>
-                </Modal>
-                <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
-                  <Overlay />
-                  <Content>
-                    <Header>Are you absolutely sure?</Header>
-                    <Message>
-                      This will permanently delete your account and all associated
-                      data. This cannot be undone.
-                    </Message>
-                    <ButtonBar>
-                      <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button variant="destructive" onClick={deleteAccountHandler}>
-                        Delete My Account
-                      </Button>
-                    </ButtonBar>
-                  </Content>
-                </Modal>
-              </div>
-            </Show>
-          </div>
-        </Panel>
-      </div>
-    </div>
-  );
-}
+             <Show when={showEmailModal()}>
+               <div class="flex flex-row items-center px-6 py-3 gap-3">
+                 <div class="text-sm">
+                   Disabling will clear all email data from Macro
+                 </div>
+                 <div class="ml-auto flex flex-row gap-2">
+                   <Button
+                     variant="secondary"
+                     size="sm"
+                     onClick={async () => {
+                       setShowEmailModal(false);
+                       await disconnectEmail().match(
+                         () => {
+                           toast.success('Email disabled — clearing your email data, this may take a moment.');
+                         },
+                         () => {
+                           toast.failure('Failed to disable email. Please try again.');
+                         },
+                       );
+                     }}
+                   >
+                     Confirm
+                   </Button>
+                   <Button
+                     variant="secondary"
+                     size="sm"
+                     onClick={() => setShowEmailModal(false)}
+                   >
+                     Cancel
+                   </Button>
+                 </div>
+               </div>
+             </Show>
 
-function Row(props: { label: string; children?: any }) {
-  return (
-    <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
-      <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
-      <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
-    </div>
-  );
-}
+             <Show when={isNativeMobilePlatform()}>
+               <div class="border-t border-edge pt-4">
+                 <Button variant="destructive" onClick={() => setShowDeleteModal(true)}>
+                   Delete Account
+                 </Button>
+                 <Modal open={showDeleteModal()} onOpenChange={setShowDeleteModal}>
+                   <Overlay />
+                   <Content>
+                     <Header>Delete Account</Header>
+                     <Message>
+                       Are you sure you want to delete your account? This action is
+                       permanent and cannot be undone.
+                     </Message>
+                     <ButtonBar>
+                       <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+                         Cancel
+                       </Button>
+                       <Button variant="destructive" onClick={() => {
+                         setShowDeleteModal(false);
+                         setShowDeleteConfirmModal(true);
+                       }}>
+                         Delete
+                       </Button>
+                     </ButtonBar>
+                   </Content>
+                 </Modal>
+                 <Modal open={showDeleteConfirmModal()} onOpenChange={setShowDeleteConfirmModal}>
+                   <Overlay />
+                   <Content>
+                     <Header>Are you absolutely sure?</Header>
+                     <Message>
+                       This will permanently delete your account and all associated
+                       data. This cannot be undone.
+                     </Message>
+                     <ButtonBar>
+                       <Button variant="secondary" onClick={() => setShowDeleteConfirmModal(false)}>
+                         Cancel
+                       </Button>
+                       <Button variant="destructive" onClick={deleteAccountHandler}>
+                         Delete My Account
+                       </Button>
+                     </ButtonBar>
+                   </Content>
+                 </Modal>
+               </div>
+             </Show>
+           </div>
+         </Panel>
+       </div>
+     </div>
+   );
+ }
 
-function NotificationToggle() {
-  const settings = useNotificationSettings();
+ function Row(props: { label: string; children?: any }) {
+   return (
+     <div class="grid grid-cols-[145px_1fr] gap-px bg-edge">
+       <div class="bg-panel flex items-center justify-start h-10 px-6 text-sm">{props.label}</div>
+       <div class="bg-panel flex items-center justify-end h-10 px-6 text-right">{props.children}</div>
+     </div>
+   );
+ }
 
-  return (
-    <Show
-      when={settings.isSupported && settings}
-      fallback={<NotificationNotSupported />}
-    >
-      {(s) => <NotificationSettings settings={s()} />}
-    </Show>
-  );
-}
+ function NotificationToggle() {
+   const settings = useNotificationSettings();
 
-function NotificationSettings(props: {
-  settings: SupportedNotificationSettings;
-}) {
-  const analytics = useAnalytics()
+   return (
+     <Show
+       when={settings.isSupported && settings}
+       fallback={<NotificationNotSupported />}
+     >
+       {(s) => <NotificationSettings settings={s()} />}
+     </Show>
+   );
+ }
 
-  const handleToggle = () =>  {
-    analytics.track('notifications_toggled')
-    props.settings.toggle(!props.settings.isEnabled())
-  }
+ function NotificationSettings(props: {
+   settings: SupportedNotificationSettings;
+ }) {
+   const analytics = useAnalytics()
+
+   const handleToggle = () =>  {
+     analytics.track('notifications_toggled')
+     props.settings.toggle(!props.settings.isEnabled())
+   }
 
 
-  return (
-    <Row label="Notifications">
-      <DeprecatedTextButton
-        theme="base"
-        text={props.settings.isEnabled() ? "Disable" : "Enable"}
-        onClick={handleToggle}
-      />
-    </Row>
-  );
-}
+   return (
+     <Row label="Notifications">
+       <Button variant="secondary" size="sm" onClick={handleToggle}>
+         {props.settings.isEnabled() ? 'Disable' : 'Enable'}
+       </Button>
+     </Row>
+   );
+ }
 
-function NotificationNotSupported() {
-  return (
-    <Row label="Notifications">
-      <span class="text-sm text-ink-muted">Not supported on this device</span>
-    </Row>
-  );
-}
+ function NotificationNotSupported() {
+   return (
+     <Row label="Notifications">
+       <span class="text-sm text-ink-muted">Not supported on this device</span>
+     </Row>
+   );
+ }
 
-function bundleUpdateAction(
-  status: BundleUpdateStatus,
-  cancelWifiWait: () => void,
-): { label: string; action: () => void } | null {
-  switch (status.status) {
-    case 'Idle':
-      return { label: 'Check for Update', action: () => invoke('check_for_update') };
-    case 'Error':
-      return { label: 'Retry', action: () => invoke('check_for_update') };
-    case 'UpdateFound':
-      return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
-    case 'WaitingForWifi':
-      return { label: 'Download anyway', action: cancelWifiWait };
-    case 'Completed':
-      return { label: 'Update', action: () => invoke('perform_update') };
-    default:
-      return null;
-  }
-}
+ function bundleUpdateAction(
+   status: BundleUpdateStatus,
+   cancelWifiWait: () => void,
+ ): { label: string; action: () => void } | null {
+   switch (status.status) {
+     case 'Idle':
+       return { label: 'Check for Update', action: () => invoke('check_for_update') };
+     case 'Error':
+       return { label: 'Retry', action: () => invoke('check_for_update') };
+     case 'UpdateFound':
+       return { label: 'Download', action: () => invoke('grant_bundle_update', { approved: true }).catch(console.error) };
+     case 'WaitingForWifi':
+       return { label: 'Download anyway', action: cancelWifiWait };
+     case 'Completed':
+       return { label: 'Update', action: () => invoke('perform_update') };
+     default:
+       return null;
+   }
+ }
 
-function BundleUpdateRow() {
-  const tauri = useTauri();
-  return (
-    <Show when={tauri}>
-      {(ctx) => {
-        const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
-        return (
-          <Row label="App Update">
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-ink-muted">
-                {formatBundleUpdateStatus(status())}
-              </span>
-              <Show when={action()}>
-                {(a) => (
-                  <Button variant="accent" size="sm" onClick={a().action}>
-                    {a().label}
-                  </Button>
-                )}
-              </Show>
-            </div>
-          </Row>
-        );
-      }}
-    </Show>
-  );
-}
+ function BundleUpdateRow() {
+   const tauri = useTauri();
+   return (
+     <Show when={tauri}>
+       {(ctx) => {
+         const status = () => ctx().bundleUpdateStatus();
+         const action = () => bundleUpdateAction(status(), ctx().cancelWifiWait);
+         return (
+           <Row label="App Update">
+             <div class="flex items-center gap-3">
+               <span class="text-sm text-ink-muted">
+                 {formatBundleUpdateStatus(status())}
+               </span>
+               <Show when={action()}>
+                 {(a) => (
+                   <Button variant="secondary" size="sm" onClick={a().action}>
+                     {a().label}
+                   </Button>
+                 )}
+               </Show>
+             </div>
+           </Row>
+         );
+       }}
+     </Show>
+   );
+ }
