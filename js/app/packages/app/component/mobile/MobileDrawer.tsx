@@ -90,7 +90,7 @@ function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
   ]);
   return (
     <Dynamic
-      component={(local.as ?? 'div') as ValidComponent}
+      component={(local.as ?? 'div')}
       class={cn('px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide', local.class)}
       {...rest}
     >
@@ -131,7 +131,7 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
 
   return (
     <Dynamic
-      component={(local.as ?? 'div') as ValidComponent}
+      component={(local.as ?? 'div')}
       class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
       {...rest}
     >

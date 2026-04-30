@@ -14,7 +14,6 @@ class ShareViewController: UIViewController {
         // before it has a chance to do anything. Use a near-transparent scrim instead.
         view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
 
-        // Safety valve: if loading hangs for any reason, bail out after 15 s.
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
             self?.complete()
         }
@@ -82,8 +81,6 @@ class ShareViewController: UIViewController {
         defaultExt: String,
         completion: @escaping (Data?, String) -> Void
     ) {
-        // loadDataRepresentation is the recommended API for Share Extensions —
-        // it handles UTType conformance correctly and always fires the callback.
         provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, _ in
             if let data {
                 completion(data, defaultExt)
@@ -141,8 +138,6 @@ class ShareViewController: UIViewController {
         }
 
         // Walk up the responder chain looking for the UIApplication instance.
-        // Casting to UIApplication is more reliable on modern iOS than the
-        // old responds(to: NSSelectorFromString("openURL:")) + perform approach.
         var foundViaChain = false
         var responder: UIResponder? = self
         while let r = responder {

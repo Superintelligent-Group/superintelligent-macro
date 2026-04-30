@@ -117,6 +117,11 @@ async function uploadPendingShareAttachment(options: {
   isActive: () => boolean;
 }) {
   const kind = getPendingShareAttachmentKind(options.file);
+  if (kind === 'document') {
+    toast.failure(`Can't share ${options.file.name} from iOS yet`);
+    return;
+  }
+
   const pendingId = `pending-share:${options.file.token}`;
 
   options.tracker.addAttachment(
@@ -124,10 +129,6 @@ async function uploadPendingShareAttachment(options: {
   );
 
   try {
-    if (kind === 'document') {
-      throw new Error('Unsupported iOS share attachment type');
-    }
-
     const result = await throwOnErr(() =>
       staticFileClient.makePresignedUrl({
         file_name: options.file.name,
@@ -484,15 +485,12 @@ export function IosShareSheet() {
         setAwaitingFirstInteraction(false);
       };
 
-      const handlePointerDown = () => releaseDismissGuard();
-      const handleKeyDown = () => releaseDismissGuard();
-
-      window.addEventListener('pointerdown', handlePointerDown, true);
-      window.addEventListener('keydown', handleKeyDown, true);
+      window.addEventListener('pointerdown', releaseDismissGuard, true);
+      window.addEventListener('keydown', releaseDismissGuard, true);
 
       onCleanup(() => {
-        window.removeEventListener('pointerdown', handlePointerDown, true);
-        window.removeEventListener('keydown', handleKeyDown, true);
+        window.removeEventListener('pointerdown', releaseDismissGuard, true);
+        window.removeEventListener('keydown', releaseDismissGuard, true);
       });
     })
   );

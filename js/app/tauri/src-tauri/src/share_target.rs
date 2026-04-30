@@ -82,7 +82,11 @@ fn consume_pending_share_filenames(
         let path = container_path.join(name);
         if let Err(error) = std::fs::remove_file(&path) {
             if error.kind() != std::io::ErrorKind::NotFound {
-                continue;
+                tracing::warn!(
+                    "failed to delete consumed shared file {}: {}",
+                    path.display(),
+                    error
+                );
             }
         }
     }

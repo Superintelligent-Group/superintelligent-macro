@@ -112,10 +112,7 @@ export function ShareTargetProvider(props: {
 
     try {
       await clearSharedFiles(files.map((file) => file.token));
-    } catch {
-      setPendingShareFiles([]);
-      setPendingShareFileNames([]);
-    }
+    } catch {}
   };
 
   onMount(() => {
