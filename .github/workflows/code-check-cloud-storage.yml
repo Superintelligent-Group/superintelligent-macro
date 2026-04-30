@@ -7,7 +7,10 @@ on:
 env:
   CARGO_INCREMENTAL: '0'
   CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
   RUST_BACKTRACE: '1'
+  RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
 
 concurrency:
   group: code-check-cloud-storage-${{ github.ref }}
@@ -156,7 +159,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-latest-middy
     env:
-      RUSTFLAGS: "-Dwarnings"
+      RUSTFLAGS: "-Dwarnings -C link-arg=-fuse-ld=lld"
       RUSTDOCFLAGS: "-Dwarnings"
       SQLX_OFFLINE: true
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
@@ -170,6 +173,13 @@ jobs:
         with:
           clean: false
       - uses: ./.github/actions/setup-rust
+      - name: setup lld
+        run: |
+          if ! command -v ld.lld >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y lld
+          fi
+          ld.lld --version
       - name: clear target dir if large
         run: scripts/clear-cargo-target-if-larger-than rust/cloud-storage/target 100 60
       - name: fmt
@@ -187,7 +197,13 @@ jobs:
   test:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: test (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: linux-latest-beefy 
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+        total: [2]
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -196,6 +212,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_PARTITION: slice:${{ matrix.shard }}/${{ matrix.total }}
       NEXTEST_TEST_THREADS: '16'
     services:
       postgres:
@@ -218,6 +235,13 @@ jobs:
         with:
           clean: false
       - uses: ./.github/actions/setup-rust
+      - name: setup lld
+        run: |
+          if ! command -v ld.lld >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y lld
+          fi
+          ld.lld --version
       - uses: actions/cache@v4
         with:
           path: |
@@ -244,7 +268,7 @@ jobs:
         run: |
           cd rust/cloud-storage
 
-          args=(--all-features --test-threads "$NEXTEST_TEST_THREADS")
+          args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS" --partition "$NEXTEST_PARTITION")
           if [ -n "$NEXTEST_FILTER" ]; then
             args+=(-E "$NEXTEST_FILTER")
           fi
