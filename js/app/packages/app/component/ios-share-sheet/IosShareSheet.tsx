@@ -1,11 +1,11 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { useUserId } from '@core/context/user';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { getDestinationFromOptions } from '@core/component/NewMessage';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
+import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr, throwOnErr } from '@core/util/maybeResult';
 import { Button } from '@ui/components/Button';
 import {
@@ -325,7 +325,6 @@ function IosShareSheetComposer(props: {
           hideBorder
           noPadding
           focusOnMount
-          mobileHorizontalScroll
         />
       </div>
 
