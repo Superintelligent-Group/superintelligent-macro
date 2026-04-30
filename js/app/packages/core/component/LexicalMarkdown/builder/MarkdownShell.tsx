@@ -66,6 +66,9 @@ export const MarkdownShell: Component<
       });
     }
 
+    const hasInitialContent =
+      props.initialState !== undefined || props.initialValue !== undefined;
+
     if (props.initialState) {
       initializeEditorWithState(editor, props.initialState);
     } else if (props.initialValue) {
@@ -75,6 +78,14 @@ export const MarkdownShell: Component<
     }
 
     didInitializeContent = true;
+
+    // Lexical's update listener fires markdownState synchronously inside the
+    // initialization above, before didInitializeContent flips. The deferred
+    // effect skips that change, so consumers never see the initial value.
+    // Surface it explicitly here so onChange wires up the initial content.
+    if (hasInitialContent) {
+      builderConfig.handlers.onChange?.(markdownState());
+    }
   };
 
   // Track editable state
