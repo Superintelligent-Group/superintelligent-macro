@@ -2,6 +2,7 @@ import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
   isEntityItem,
+  isSearchContentItem,
   type CommandMenuItem,
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -169,6 +170,25 @@ export function CommandMenuInner(props: {
           }
         );
       }
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
+
+    // Handle search-content rows (open the sidebar Search view with prefilled query)
+    if (isSearchContentItem(item)) {
+      openWithSplit(
+        {
+          type: 'component',
+          id: 'search',
+          params: { initialQuery: item.query },
+        },
+        {
+          referredFrom: 'kommand-menu',
+          preferNewSplit: true,
+          allowDuplicate: true,
+        }
+      );
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -550,6 +570,8 @@ function CommandMenuFooter(props: {
   const isCommand = () =>
     props.selectedItem && isCommandItem(props.selectedItem);
   const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
+  const isSearchContent = () =>
+    props.selectedItem && isSearchContentItem(props.selectedItem);
 
   return (
     <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
@@ -571,9 +593,19 @@ function CommandMenuFooter(props: {
           <Show
             when={isCommand() || props.isEntityActionMode}
             fallback={
-              <Show when={isEntity()}>
-                <HotkeyHint shortcut="enter" label="Open" />
-                <HotkeyHint shortcut="shift+enter" label="Open in new split" />
+              <Show
+                when={isSearchContent()}
+                fallback={
+                  <Show when={isEntity()}>
+                    <HotkeyHint shortcut="enter" label="Open" />
+                    <HotkeyHint
+                      shortcut="shift+enter"
+                      label="Open in new split"
+                    />
+                  </Show>
+                }
+              >
+                <HotkeyHint shortcut="enter" label="Search" />
               </Show>
             }
           >

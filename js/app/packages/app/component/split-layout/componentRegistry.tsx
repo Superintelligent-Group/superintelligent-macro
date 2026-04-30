@@ -241,7 +241,7 @@ registerComponent(
 
 registerComponent(
   'search',
-  withAuth(() => {
+  withAuth((params: { initialQuery?: string } = {}) => {
     usePageViewTracking('search');
     const preset = getViewPreset('search');
     return (
@@ -249,6 +249,7 @@ registerComponent(
         viewName="Search"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
+        initialSearchText={params.initialQuery}
       />
     );
   })

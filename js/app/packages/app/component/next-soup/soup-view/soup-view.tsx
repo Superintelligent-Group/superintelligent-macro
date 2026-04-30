@@ -191,6 +191,7 @@ interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
+  initialSearchText?: string;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -310,6 +311,7 @@ export const SoupView = (props: SoupViewProps) => {
                     <SoupSearchbar
                       variant="secondary"
                       autoFocus
+                      initialValue={props.initialSearchText}
                       onDismiss={() => setNarrowSearchExpanded(false)}
                     />
                   </div>
@@ -330,7 +332,10 @@ export const SoupView = (props: SoupViewProps) => {
                   }}
                   expanded={() => (
                     <div class="w-52">
-                      <SoupSearchbar variant="secondary" />
+                      <SoupSearchbar
+                        variant="secondary"
+                        initialValue={props.initialSearchText}
+                      />
                     </div>
                   )}
                   collapsed={() => (
@@ -353,7 +358,7 @@ export const SoupView = (props: SoupViewProps) => {
                 />
               </Show>
             </SplitHeaderRight>
-            <SoupFiltersBar />
+            <SoupFiltersBar initialSearchText={props.initialSearchText} />
           </div>
           <Show when={hasLinkError()}>
             <EmailPermissionsBanner />

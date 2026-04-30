@@ -39,8 +39,19 @@ type CommandItem = {
   displayHotkeySequence?: HotkeySequenceStep[];
 };
 
+/** Search-content item: triggers full-text search in the sidebar Search view */
+type SearchContentItem = {
+  id: string;
+  kind: 'search-content';
+  bucket: 'search-content';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  query: string;
+};
+
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem;
+type CommandMenuItem = QuickAccessItem | CommandItem | SearchContentItem;
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -52,6 +63,35 @@ function isEntityItem(item: CommandMenuItem): item is EntityItem {
 
 function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
+}
+
+function isSearchContentItem(
+  item: CommandMenuItem
+): item is SearchContentItem {
+  return item.kind === 'search-content';
+}
+
+/** Categories that support content-search via the sidebar Search view */
+const CONTENT_SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
+  'all',
+  'channels',
+  'dms',
+  'documents',
+  'tasks',
+  'chats',
+  'people',
+]);
+
+function makeSearchContentItem(query: string): SearchContentItem {
+  return {
+    id: `search-content:${query}`,
+    kind: 'search-content',
+    bucket: 'search-content',
+    searchText: query,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    query,
+  };
 }
 
 function createSearchConfig(hasQuery: boolean): FreshSortConfig {
@@ -235,19 +275,34 @@ export function useCommandItems(
     });
   });
 
+  const shouldShowSearchContentRow = (q: string) => {
+    if (!q.trim()) return false;
+    if (CommandState.commandScopeCommands().length > 0) return false;
+    if (CommandState.isEntityActionMode()) return false;
+    return CONTENT_SEARCHABLE_CATEGORIES.has(categoryFilter());
+  };
+
   const filteredItems = createMemo(() => {
     const q = query();
     const items = categoryItems();
 
-    if (!q) {
-      return items;
+    const ranked = q ? search()(items, q).map((result) => result.item) : items;
+
+    if (shouldShowSearchContentRow(q)) {
+      return [makeSearchContentItem(q), ...ranked];
     }
 
-    return search()(items, q).map((result) => result.item);
+    return ranked;
   });
 
   return filteredItems;
 }
 
-export { isEntityItem, isUserItem, isCommandItem };
-export type { QuickAccessItem, CommandMenuItem, CommandItem, Bucket };
+export { isEntityItem, isUserItem, isCommandItem, isSearchContentItem };
+export type {
+  QuickAccessItem,
+  CommandMenuItem,
+  CommandItem,
+  SearchContentItem,
+  Bucket,
+};

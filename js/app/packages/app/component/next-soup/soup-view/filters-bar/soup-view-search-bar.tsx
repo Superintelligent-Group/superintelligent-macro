@@ -18,6 +18,7 @@ interface SoupSearchbarProps {
   autoFocus?: boolean;
   onDismiss?: () => void;
   placeholder?: string;
+  initialValue?: string;
 }
 
 const variantStyles: Record<SearchbarVariant, string> = {
@@ -133,6 +134,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
             config={editor}
             placeholder={props.placeholder ?? 'Search'}
             autofocus={props.autoFocus}
+            initialValue={props.initialValue}
             class="min-h-0! overflow-visible!"
           />
         </div>
