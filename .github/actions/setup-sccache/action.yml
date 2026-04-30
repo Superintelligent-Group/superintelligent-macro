@@ -6,7 +6,7 @@ inputs:
   version:
     description: sccache release version to install
     required: false
-    default: v0.10.0
+    default: v0.15.0
   cache-key-prefix:
     description: Prefix for the local GitHub Actions cache key
     required: false
@@ -21,10 +21,10 @@ runs:
         path: |
           ~/.cache/sccache
           ~/.local/bin/sccache
-        key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-${{ github.job }}-${{ github.run_id }}
+        key: ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-${{ github.job }}-${{ github.run_id }}
         restore-keys: |
-          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-
-          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ runner.arch }}-
+          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/rust-toolchain.toml', 'rust/cloud-storage/Cargo.lock', 'rust/sync-service/Cargo.lock') }}-
+          ${{ inputs.cache-key-prefix }}-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Install sccache
       shell: bash
@@ -39,8 +39,14 @@ runs:
         sccache_bin="$install_dir/sccache"
         echo "$install_dir" >> "$GITHUB_PATH"
         if [[ -x "$sccache_bin" ]] && "$sccache_bin" --version >/dev/null 2>&1; then
-          echo "sccache already installed: $($sccache_bin --version)"
-          exit 0
+          installed_version="$($sccache_bin --version | awk '{print "v" $2}')"
+          if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+            echo "sccache already installed: $($sccache_bin --version)"
+            exit 0
+          fi
+
+          echo "Replacing $($sccache_bin --version) with sccache ${SCCACHE_VERSION}"
+          rm -f "$sccache_bin"
         fi
 
         os="$(uname -s)"

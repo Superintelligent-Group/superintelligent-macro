@@ -196,6 +196,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_TEST_THREADS: '16'
     services:
       postgres:
         image: postgres:16
@@ -242,11 +243,13 @@ jobs:
       - name: run tests
         run: |
           cd rust/cloud-storage
+
+          args=(--all-features --test-threads "$NEXTEST_TEST_THREADS")
           if [ -n "$NEXTEST_FILTER" ]; then
-            cargo nextest run --all-features -E "$NEXTEST_FILTER"
-          else
-            cargo nextest run --all-features
+            args+=(-E "$NEXTEST_FILTER")
           fi
+
+          cargo nextest run "${args[@]}"
       - name: show sccache stats
         if: always()
         run: sccache --show-stats || true
