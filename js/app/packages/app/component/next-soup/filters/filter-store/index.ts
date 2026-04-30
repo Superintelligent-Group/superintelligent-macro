@@ -1,4 +1,4 @@
-export type { PropertyFilter, QueryState, Query } from './types';
+export type { DateRangeFilter, PropertyFilter, QueryState, Query } from './types';
 
 export { defineQueryFilters } from './compile';
 
