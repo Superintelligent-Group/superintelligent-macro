@@ -50,10 +50,32 @@ jobs:
         uses: biomejs/setup-biome@v2
         with:
           version: 2.4.12
+      - uses: cachix/install-nix-action@v27
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v15
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - uses: actions/cache@v4
+        if: needs.path-check.outputs.api_changed == 'true'
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            rust/cloud-storage/target/
+          key: ${{ runner.os }}-cargo-codegen-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-codegen-
       - name: Generate API Types
         if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
-        run: bun run gen-api -- --check
+        run: nix develop ${{ github.workspace }}#default --command bun run gen-api -- --check
+        env:
+          SQLX_OFFLINE: "true"
       - name: Check Types
         working-directory: js/app
         run: |

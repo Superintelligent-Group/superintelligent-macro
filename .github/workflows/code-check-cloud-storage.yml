@@ -27,27 +27,26 @@ jobs:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-latest-middy
-    env:
-      CARGO_TERM_COLOR: always
-      RUSTFLAGS: "-Dwarnings"
-      RUSTDOCFLAGS: "-Dwarnings"
-      SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
-      - name: fmt
-        run: |
-          cd rust/cloud-storage
-          cargo fmt --check
-      - name: clippy
-        run: |
-          cd rust/cloud-storage
-          cargo clippy --all-features
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-x86_64-linux-check-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-check-
+      - uses: cachix/cachix-action@v15
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: fmt + clippy
+        run: nix build .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy
 
   test:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: linux-latest-beefy 
+    runs-on: linux-latest-beefy
     services:
       postgres:
         image: postgres:16
@@ -64,32 +63,37 @@ jobs:
         ports:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-x86_64-linux-test-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-x86_64-linux-test-
+      - uses: cachix/cachix-action@v15
+        with:
+          name: macro-inc
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+            rust/cloud-storage/target/
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
-      - name: install dependencies
-        run: |
-          command -v just || cargo install just --locked
-          command -v sqlx || cargo install sqlx-cli --locked
-          command -v cargo-nextest || cargo install cargo-nextest --locked
+            ${{ runner.os }}-cargo-test-
       - name: prepare tests
         run: |
-          just rust/cloud-storage/setup_test_envs
-          just rust/cloud-storage/initialize_dbs
+          nix develop --command just rust/cloud-storage/setup_test_envs
+          nix develop --command just rust/cloud-storage/initialize_dbs
       - name: run tests
-        run: |
-          cd rust/cloud-storage
-          cargo nextest run --all-features
+        run: nix develop --command sh -c 'cd rust/cloud-storage && cargo nextest run --all-features'
 
   diff-check:
     needs: path-check
