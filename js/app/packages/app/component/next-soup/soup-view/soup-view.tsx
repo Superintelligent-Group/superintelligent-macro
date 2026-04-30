@@ -799,7 +799,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (restored || isProjectList) return;
     restored = true;
 
-    const cached = listStateCache.get(cacheKey);
+    const cached = props.skipPersistedState
+      ? undefined
+      : listStateCache.get(cacheKey);
     if (cached) {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
