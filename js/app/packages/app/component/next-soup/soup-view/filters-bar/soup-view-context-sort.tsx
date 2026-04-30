@@ -1,6 +1,9 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { SortDropdown } from '@app/component/next-soup/soup-view/filters-bar/sort-dropdown';
+import { Button } from '@app/component/next-soup/soup-view/filters-bar/button';
+import SortIcon from '@macro-icons/wide/sort.svg';
+import ChevronDownIcon from '@icon/regular/caret-down.svg';
 import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
@@ -52,7 +55,7 @@ export const SoupViewContextSort = () => {
   });
 
   return (
-    <Switch>
+    <Switch fallback={<SortPlaceholder />}>
       <Match when={isComponentListView('inbox')}>
         <InboxSort {...openProps()} />
       </Match>
@@ -77,6 +80,26 @@ export const SoupViewContextSort = () => {
     </Switch>
   );
 };
+
+/**
+ * Invisible placeholder that occupies the same space as the sort dropdown
+ * trigger button. Used in views that don't support sorting (e.g. search,
+ * calls) so the preview icon to the left of it stays in a stable position
+ * across all soup splits.
+ */
+const SortPlaceholder = () => (
+  <div class="invisible" aria-hidden="true">
+    <Button
+      variant="secondary"
+      size="sm"
+      class="whitespace-nowrap rounded-xs [&_svg]:size-4"
+      tabIndex={-1}
+    >
+      <SortIcon />
+      <ChevronDownIcon class="size-4" />
+    </Button>
+  </div>
+);
 
 const useSortDropdown = (options: SortOption[] = DEFAULT_SORT_OPTIONS) => {
   const { soup } = useSoupView();

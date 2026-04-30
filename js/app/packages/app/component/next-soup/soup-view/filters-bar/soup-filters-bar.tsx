@@ -1,8 +1,7 @@
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ListView } from '@app/constants/list-views';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
 import { isMobile } from '@core/mobile/isMobile';
@@ -54,18 +53,6 @@ export const SoupFiltersBar = () => {
     },
   });
 
-  const component = createMemo(() => {
-    const content = panel.handle.content();
-
-    if (content.type !== 'component') return;
-
-    return content.id;
-  });
-
-  const isComponentListView = (listView: ListView) => {
-    return component() === listView;
-  };
-
   return (
     <Show when={!isMobile()}>
       <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
@@ -78,6 +65,7 @@ export const SoupFiltersBar = () => {
           isOptionActive={isOptionActive}
         />
         <div class="flex-1" />
+        <SoupViewContextSort />
         <Tooltip tooltip={<LabelAndHotKey label="Preview" shortcut="space" />}>
           <Button
             variant={soup.previewEntity() ? 'primary' : 'ghost'}
@@ -90,9 +78,6 @@ export const SoupFiltersBar = () => {
             <AnimatedPreviewIcon triggerAnimation={previewBtnHovering()} />
           </Button>
         </Tooltip>
-        <Show when={!isComponentListView('search')}>
-          <SoupViewContextSort />
-        </Show>
       </div>
     </Show>
   );
