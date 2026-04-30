@@ -66,9 +66,7 @@ function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
-function isSearchContentItem(
-  item: CommandMenuItem
-): item is SearchContentItem {
+function isSearchContentItem(item: CommandMenuItem): item is SearchContentItem {
   return item.kind === 'search-content';
 }
 
