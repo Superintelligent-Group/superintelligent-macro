@@ -72,10 +72,9 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   );
 }
 
-type ExtendDiv<T extends ValidComponent = 'div'> =
-  ComponentProps<T> & {
-    as?: T;
-  };
+type ExtendDiv<T extends ValidComponent = 'div'> = ComponentProps<T> & {
+  as?: T;
+};
 
 /**
  * Component for rendering style Drawer Section Labels.
@@ -83,15 +82,14 @@ type ExtendDiv<T extends ValidComponent = 'div'> =
 function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
   props: ExtendDiv<T>
 ) {
-  const [local, rest] = splitProps(props, [
-    'as',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
   return (
     <Dynamic
-      component={(local.as ?? 'div')}
-      class={cn('px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide', local.class)}
+      component={local.as ?? 'div'}
+      class={cn(
+        'px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide',
+        local.class
+      )}
       {...rest}
     >
       {local.children}
@@ -105,14 +103,10 @@ function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
 function MobileDrawerSection<T extends ValidComponent = 'div'>(
   props: ExtendDiv<T>
 ) {
-  const [local, rest] = splitProps(props, [
-    'as',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['as', 'class', 'children']);
   return (
     <Dynamic
-      component={(local.as ?? 'div')}
+      component={local.as ?? 'div'}
       class={cn('bg-menu rounded-2xl mx-3', local.class)}
       {...rest}
     >
@@ -131,7 +125,7 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
 
   return (
     <Dynamic
-      component={(local.as ?? 'div')}
+      component={local.as ?? 'div'}
       class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
       {...rest}
     >

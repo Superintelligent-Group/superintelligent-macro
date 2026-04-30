@@ -112,7 +112,9 @@ export function ShareTargetProvider(props: {
 
     try {
       await clearSharedFiles(files.map((file) => file.token));
-    } catch {}
+    } catch (error) {
+      console.error('failed to clear shared files', error);
+    }
   };
 
   const clearLoadedPendingShare = (files: readonly PendingShareFile[]) => {
@@ -157,8 +159,9 @@ export function ShareTargetProvider(props: {
             () => {}
           );
         }
-      } catch {
+      } catch (error) {
         clearLoadedPendingShare(previousFiles);
+        console.error('failed to load pending share files', error);
       }
     };
 
@@ -172,7 +175,9 @@ export function ShareTargetProvider(props: {
         await unlisten;
         const filenames = await getPendingShareFilenames();
         await loadPendingShareFiles(filenames);
-      } catch {}
+      } catch (error) {
+        console.error('failed to initialize iOS share target', error);
+      }
     })();
 
     onCleanup(() => void unlisten.then((fn) => fn()));

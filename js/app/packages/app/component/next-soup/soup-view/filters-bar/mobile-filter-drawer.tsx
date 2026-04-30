@@ -287,7 +287,9 @@ export const MobileFilterDrawer = () => {
                 >
                   {/* Filter section */}
                   <Show when={categories().length > 0 || isTasksView()}>
-                    <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
+                    <MobileDrawer.Label class="pt-4">
+                      Filters
+                    </MobileDrawer.Label>
                   </Show>
 
                   <div>

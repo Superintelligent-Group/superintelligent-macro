@@ -34,7 +34,10 @@ import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
-import type { PendingShareFile } from '@macro/tauri';
+import type {
+  PendingShareFile,
+  UploadPendingShareFileArgs,
+} from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient } from '@service-comms/client';
@@ -97,11 +100,7 @@ async function uploadPendingShareAttachment(options: {
   file: PendingShareFile;
   tracker: InputAttachmentTracker;
   uploadPendingShareFile:
-    | ((args: {
-        token: string;
-        uploadUrl: string;
-        mimeType: string;
-      }) => Promise<void>)
+    | ((args: UploadPendingShareFileArgs) => Promise<void>)
     | undefined;
   isActive: () => boolean;
 }) {
@@ -162,7 +161,12 @@ function ShareSheetHeaderActions(props: {
 }) {
   return (
     <div class="shrink-0 flex items-center justify-between px-3 pb-3 text-sm font-medium text-ink min-h-11">
-      <Button variant="ghost" size="sm" onClick={props.handleCancel} class="pl-0">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={props.handleCancel}
+        class="pl-0"
+      >
         Cancel
       </Button>
       <Button
@@ -362,22 +366,22 @@ function IosShareSheetComposer(props: {
     hasSendableInputContent(inputState.view());
 
   const handleHeaderSend = () => {
-    void inputState.commands.send().catch(() => {});
+    void inputState.commands.send().catch((error) => {
+      console.error('failed to send from iOS share sheet header action', error);
+    });
   };
 
   return (
     <div class="flex h-full flex-col">
-      <ErrorBoundary fallback={(error) => <ShareSheetComposerError error={error} />}>
+      <ErrorBoundary
+        fallback={(error) => <ShareSheetComposerError error={error} />}
+      >
         <ShareSheetHeaderActions
           canSend={canSend}
           handleCancel={props.handleCancel}
           handleSend={handleHeaderSend}
         />
-        <MobileDrawer.Label>
-          <span>
-            Recipients
-          </span>
-        </MobileDrawer.Label>
+        <MobileDrawer.Label>Recipients</MobileDrawer.Label>
         <MobileDrawer.Section>
           <div class="shrink-0 px-2 py-2">
             <RecipientSelector<'user' | 'contact' | 'channel'>
@@ -395,7 +399,11 @@ function IosShareSheetComposer(props: {
         </MobileDrawer.Section>
 
         <MobileDrawer.Section class="min-h-0 flex-1 overflow-y-auto my-3">
-          <Input.Root input={inputState.view()} commands={inputState.commands} class="bg-transparent border-none rounded-none">
+          <Input.Root
+            input={inputState.view()}
+            commands={inputState.commands}
+            class="bg-transparent border-none rounded-none"
+          >
             <ChannelInputContainer>
               <Input.DropZone
                 onDragStart={(valid) => inputState.setIsDraggedOver(valid)}

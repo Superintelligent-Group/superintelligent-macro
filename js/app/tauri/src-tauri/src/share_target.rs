@@ -427,7 +427,13 @@ pub(crate) fn pop_shared_files(
                     files.push(staged_file);
                     consumed_filenames.push(name);
                 }
-                Err(_) => {}
+                Err(error) => {
+                    tracing::warn!(
+                        "failed to stage shared file {}: {}",
+                        path.display(),
+                        error
+                    );
+                }
             }
         }
 
@@ -530,7 +536,11 @@ pub(crate) async fn upload_shared_file_to_presigned_url(
 
             if let Err(error) = std::fs::remove_file(&path) {
                 if error.kind() != std::io::ErrorKind::NotFound {
-                    let _ = error;
+                    tracing::warn!(
+                        "failed to delete staged shared file after upload {}: {}",
+                        path.display(),
+                        error
+                    );
                 }
             }
 
