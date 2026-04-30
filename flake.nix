@@ -97,6 +97,33 @@
         # Pre-built deps — this derivation is what Cachix caches to skip dep recompilation
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
+        openApiBins = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+            pname = "cloud-storage-openapi";
+            doCheck = false;
+            cargoBuildCommand = "cargo build";
+            cargoExtraArgs = pkgs.lib.concatStringsSep " " [
+              "--bin document_storage_service_openapi"
+              "--bin comms_service_openapi"
+              "--bin properties_service_openapi"
+              "--bin document_cognition_service_openapi"
+              "--bin authentication_service_openapi"
+              "--bin notification_service_openapi"
+              "--bin static_file_service_openapi"
+              "--bin connection_gateway_openapi"
+              "--bin contacts_service_openapi"
+              "--bin unfurl_service_openapi"
+              "--bin email_service_openapi"
+              "--bin search_service_openapi"
+              "--bin scheduled_action_openapi"
+              "--bin document_cognition_service_models"
+              "--bin gen_tool_schemas"
+            ];
+          }
+        );
+
         shellTools = with pkgs; [
           parallel
           docker-compose
@@ -141,10 +168,48 @@
               cargoClippyExtraArgs = "--all-features -- -D warnings";
             }
           );
+          gen-api =
+            let
+              openApiFiles = pkgs.lib.cleanSourceWith {
+                src = ./js/app/packages/service-clients;
+                filter = path: _type: pkgs.lib.hasSuffix "openapi.json" path;
+              };
+              crateToDir = {
+                document_storage_service = "service-storage";
+                comms_service = "service-comms";
+                properties_service = "service-properties";
+                document_cognition_service = "service-cognition";
+                authentication_service = "service-auth";
+                notification_service = "service-notification";
+                static_file_service = "service-static-files";
+                connection_gateway = "service-connection";
+                contacts_service = "service-contacts";
+                unfurl_service = "service-unfurl";
+                email_service = "service-email";
+                search_service = "service-search";
+                scheduled_action = "service-scheduled-action";
+              };
+              checkScript = pkgs.lib.concatStringsSep "\n" (
+                pkgs.lib.mapAttrsToList (crate: dir: ''
+                  echo -n "Checking ${dir}/openapi.json ... "
+                  if ! diff \
+                    <("${openApiBins}/bin/${crate}_openapi" | ${pkgs.jq}/bin/jq --sort-keys .) \
+                    <(${pkgs.jq}/bin/jq --sort-keys . < "${openApiFiles}/${dir}/openapi.json"); then
+                    echo "FAIL: run 'bun run gen-api' and commit the result"
+                    exit 1
+                  fi
+                  echo "ok"
+                '') crateToDir
+              );
+            in
+            pkgs.runCommand "cloud-storage-gen-api-check" { RUST_LOG = "error"; } ''
+              ${checkScript}
+              touch $out
+            '';
         };
 
         packages = {
-          inherit cargoArtifacts;
+          inherit cargoArtifacts openApiBins;
           default = cargoArtifacts;
         };
 
