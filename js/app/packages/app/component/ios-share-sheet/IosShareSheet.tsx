@@ -1,5 +1,7 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -7,18 +9,28 @@ import type { WithCustomUserInput } from '@core/user';
 import { invalidateContacts } from '@core/user/contactService';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { isErr, throwOnErr } from '@core/util/maybeResult';
+import {
+  chatRuleset,
+  handleFileFolderDrop,
+  uploadFile,
+} from '@core/util/upload';
 import { Button } from '@ui/components/Button';
 import {
-  ChannelInput,
+  FormatButtons,
   Input,
+  applyInlineFormat,
+  applyNodeFormat,
+  createConfiguredChannelMarkdownEditor,
   createInputAttachmentTracker,
+  createInputState,
+  createMentionsTracker,
+  uploadInputAttachments,
   type InputAttachmentData,
   type InputAttachmentKind,
   type InputAttachmentTracker,
   type InputSnapshot,
-  useInput,
-  useInputCommands,
 } from '@channel/Input';
+import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import {
@@ -30,6 +42,7 @@ import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { commsServiceClient } from '@service-comms/client';
 import { staticFileClient } from '@service-static-files/client';
+import { isIOS } from '@solid-primitives/platform';
 import {
   ErrorBoundary,
   createEffect,
@@ -38,7 +51,6 @@ import {
   onCleanup,
   type Accessor,
   Show,
-  Suspense,
 } from 'solid-js';
 
 // Use the current staged file tokens as the share-session identity.
@@ -151,42 +163,28 @@ async function uploadPendingShareAttachment(options: {
   }
 }
 
-function ShareSheetInputActions(props: { hasRecipients: Accessor<boolean> }) {
-  const input = useInput();
-  const commands = useInputCommands();
-
-  const canSend = () =>
-    props.hasRecipients() &&
-    !input().hasPendingAttachments &&
-    hasSendableInputContent(input());
-
+function ShareSheetHeaderActions(props: {
+  canSend: Accessor<boolean>;
+  handleCancel: () => void;
+  handleSend: () => void;
+}) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
-        <Input.AttachFilesAction />
-        <Input.ToggleFormatAction />
-      </Input.Actions.Left>
-      <Input.Actions.Right>
-        <Button
-          variant={canSend() ? 'accent' : 'secondary'}
-          size="sm"
-          disabled={!canSend()}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            void commands.send().catch(() => {});
-          }}
-        >
-          Send
-        </Button>
-      </Input.Actions.Right>
-    </Input.Actions>
-  );
-}
-
-function ShareSheetComposerLoading() {
-  return (
-    <div class="macro-message-width flex min-h-32 w-full items-center justify-center rounded-[5px] border border-edge-muted bg-input px-4 py-6 text-sm text-ink-muted">
-      Preparing composer…
+    <div class="shrink-0 flex items-center justify-between px-3 pb-3 text-sm font-medium text-ink min-h-11">
+      <Button variant="ghost" size="sm" onClick={props.handleCancel} class="pl-0">
+        Cancel
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="shrink-0 ml-2 pl-2 disabled:text-ink-muted text-accent"
+        disabled={!props.canSend()}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          props.handleSend();
+        }}
+      >
+        Send
+      </Button>
     </div>
   );
 }
@@ -211,6 +209,9 @@ function IosShareSheetComposer(props: {
   const { all: destinationOptions } = useCombinedRecipients();
   const attachmentTracker = createInputAttachmentTracker();
   const composerId = crypto.randomUUID();
+  const mentionsTracker = createMentionsTracker();
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
+  let clearComposer = () => {};
 
   const [selectedOptions, setSelectedOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
@@ -306,50 +307,156 @@ function IosShareSheetComposer(props: {
     void shareTarget?.clearPendingShareFiles();
   };
 
+  const inputState = createInputState({
+    initialInput: {
+      mode: 'channel',
+      id: `ios-share-input-${composerId}`,
+      placeholder: 'Add a message',
+    },
+    mentions: mentionsTracker.mentions,
+    attachmentTracker,
+    clearComposer: () => clearComposer(),
+    attachFiles: async (files) => {
+      await uploadInputAttachments({
+        files,
+        tracker: attachmentTracker,
+        uploadFile: async (file) =>
+          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
+      });
+    },
+    clearInput: () => markdownEditor.controls.clear(),
+    callbacks: { onSend: handleSend },
+  });
+
+  const markdownEditor = createConfiguredChannelMarkdownEditor({
+    namespace: `ios-share-input-${composerId}`,
+    enableMentions: true,
+    scrollContainer,
+    onMentionCreate: (mention) => {
+      mentionsTracker.onMentionCreate(mention);
+    },
+    onMentionRemove: (mention) => {
+      mentionsTracker.onMentionRemove(mention);
+    },
+    onChange: (markdown) => {
+      inputState.setValue(markdown);
+    },
+    onEnter: () => {
+      if (isMobile()) return false;
+      void inputState.commands.send();
+      return true;
+    },
+    onPasteFilesAndDirs: (files, directories) => {
+      void handleFileFolderDrop(files, directories, (entries) =>
+        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      );
+    },
+    onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
+  });
+
+  clearComposer = () => {
+    if (isIOS) {
+      markdownEditor.controls.blur();
+      markdownEditor.controls.clear();
+      requestAnimationFrame(() => markdownEditor.controls.focus());
+    } else {
+      markdownEditor.controls.clear();
+    }
+  };
+
+  const canSend = () =>
+    selectedOptions().length > 0 &&
+    !inputState.view().hasPendingAttachments &&
+    hasSendableInputContent(inputState.view());
+
+  const handleHeaderSend = () => {
+    void inputState.commands.send().catch(() => {});
+  };
+
   return (
     <div class="flex h-full flex-col">
-      <div class="shrink-0 flex items-center gap-2 px-3 pt-3 pb-2 border-b border-edge-muted/50">
-        <Button variant="ghost" size="sm" onClick={props.handleCancel}>
-          Cancel
-        </Button>
-      </div>
-
-      <div class="shrink-0 border-b border-edge-muted/50 px-1 py-2">
-        <RecipientSelector<'user' | 'contact' | 'channel'>
-          placeholder="To: Email or group"
-          setSelectedOptions={setSelectedOptions}
-          selectedOptions={selectedOptions()}
-          options={destinationOptions}
-          triggerMode="input"
-          noBrackets
-          hideBorder
-          noPadding
-          focusOnMount
+      <ErrorBoundary fallback={(error) => <ShareSheetComposerError error={error} />}>
+        <ShareSheetHeaderActions
+          canSend={canSend}
+          handleCancel={props.handleCancel}
+          handleSend={handleHeaderSend}
         />
-      </div>
+        <MobileDrawer.Label>
+          <span>
+            Recipients
+          </span>
+        </MobileDrawer.Label>
+        <MobileDrawer.Section>
+          <div class="shrink-0 px-2 py-2">
+            <RecipientSelector<'user' | 'contact' | 'channel'>
+              placeholder="To: Email or group"
+              setSelectedOptions={setSelectedOptions}
+              selectedOptions={selectedOptions()}
+              options={destinationOptions}
+              triggerMode="input"
+              noBrackets
+              hideBorder
+              noPadding
+              focusOnMount
+            />
+          </div>
+        </MobileDrawer.Section>
 
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <ErrorBoundary
-          fallback={(error) => <ShareSheetComposerError error={error} />}
-        >
-          <Suspense fallback={<ShareSheetComposerLoading />}>
-            <ChannelInput
-              input={{
-                mode: 'channel',
-                id: `ios-share-input-${composerId}`,
-                placeholder: 'Add a message',
-              }}
-              attachmentTracker={attachmentTracker}
-              markdownNamespace={`ios-share-input-${composerId}`}
-              onSend={handleSend}
-            >
-              <ShareSheetInputActions
-                hasRecipients={() => selectedOptions().length > 0}
-              />
-            </ChannelInput>
-          </Suspense>
-        </ErrorBoundary>
-      </div>
+        <MobileDrawer.Section class="min-h-0 flex-1 overflow-y-auto my-3">
+          <Input.Root input={inputState.view()} commands={inputState.commands} class="bg-transparent border-none rounded-none">
+            <ChannelInputContainer>
+              <Input.DropZone
+                onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+                onDragEnd={() => inputState.setIsDraggedOver(false)}
+              >
+                <Input.Layout>
+                  <Input.DropOverlay />
+                  <Input.FormatRibbon>
+                    <FormatButtons
+                      selectionState={() => markdownEditor.selection}
+                      onInlineFormat={(format) =>
+                        applyInlineFormat(markdownEditor.lexical, format)
+                      }
+                      onNodeFormat={(format) =>
+                        applyNodeFormat(markdownEditor.lexical, format)
+                      }
+                    />
+                  </Input.FormatRibbon>
+                  <Input.EditorShell
+                    ref={setScrollContainer}
+                    onClick={(event) => {
+                      if (!isMobile()) {
+                        event.stopPropagation();
+                        markdownEditor.controls.focus();
+                      }
+                    }}
+                  >
+                    <Input.Editor>
+                      <MarkdownShell
+                        config={markdownEditor}
+                        placeholder={inputState.view().placeholder}
+                        initialValue={inputState.view().value}
+                        autofocus={false}
+                        class="text-sm"
+                      />
+                    </Input.Editor>
+                  </Input.EditorShell>
+                  <Input.Attachments kind="media" />
+                  <Input.Attachments kind="document" />
+                  <Input.Footer>
+                    <Input.Actions>
+                      <Input.Actions.Left>
+                        <Input.AttachFilesAction />
+                        <Input.ToggleFormatAction />
+                      </Input.Actions.Left>
+                    </Input.Actions>
+                  </Input.Footer>
+                </Input.Layout>
+              </Input.DropZone>
+            </ChannelInputContainer>
+          </Input.Root>
+        </MobileDrawer.Section>
+      </ErrorBoundary>
     </div>
   );
 }
@@ -417,6 +524,7 @@ export function IosShareSheet() {
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
           <MobileDrawer.Content aria-label="Share to Macro">
+            <MobileDrawer.Handle />
             <Show when={isOpen() ? shareBatchKey() : undefined} keyed>
               {(batchKey) => (
                 <IosShareSheetComposer
