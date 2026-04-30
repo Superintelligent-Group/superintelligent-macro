@@ -192,6 +192,12 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
   initialSearchText?: string;
+  /**
+   * When true, ignore any persisted (localStorage) filter/tab state on mount
+   * and apply the supplied `initial*` values verbatim. Used when the view is
+   * opened with explicit intent (e.g. Cmd+K "Search for [query]").
+   */
+  skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
   /**
    * Client-side entities to merge into the soup results. Useful for entity
@@ -373,6 +379,7 @@ export const SoupView = (props: SoupViewProps) => {
               <SoupViewFileDropzone>
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
+                  skipPersistedState={props.skipPersistedState}
                 />
               </SoupViewFileDropzone>
             </Suspense>
@@ -398,6 +405,7 @@ interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
   initialClientFilters?: SetPredicatesInput<string>;
+  skipPersistedState?: boolean;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -697,9 +705,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Restore previewEntity synchronously so the first-render effect sees the
   // correct value and avoids a transient window where previewEntity is undefined.
-  const initialPersistedState = !persistenceDisabled
-    ? untrack(persistedState)
-    : null;
+  const initialPersistedState =
+    !persistenceDisabled && !props.skipPersistedState
+      ? untrack(persistedState)
+      : null;
   soup.setPreviewEntity(initialPersistedState?.previewEntity);
 
   // Set initial state

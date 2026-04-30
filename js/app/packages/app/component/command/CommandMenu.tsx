@@ -37,6 +37,7 @@ import { InlineEntity, type EntityData } from '@entity';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isListViewID } from '@app/constants/list-views';
 import { useAnalytics } from '@app/component/analytics-context';
+import { getCategorySearchFilters } from './category-search-filters';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -177,11 +178,16 @@ export function CommandMenuInner(props: {
 
     // Handle search-content rows (open the sidebar Search view with prefilled query)
     if (isSearchContentItem(item)) {
+      const overrides = getCategorySearchFilters(item.category);
       openWithSplit(
         {
           type: 'component',
           id: 'search',
-          params: { initialQuery: item.query },
+          params: {
+            initialQuery: item.query,
+            initialFilters: overrides?.filters,
+            initialClientFilters: overrides?.clientFilters,
+          },
         },
         {
           referredFrom: 'kommand-menu',

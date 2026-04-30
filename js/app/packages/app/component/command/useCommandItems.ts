@@ -48,6 +48,7 @@ type SearchContentItem = {
   sortTimestamp: number;
   timestamps: TimestampedItem;
   query: string;
+  category: CategoryFilter;
 };
 
 /** Combined item type for command menu (quickAccess items + commands) */
@@ -82,15 +83,19 @@ const CONTENT_SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'people',
 ]);
 
-function makeSearchContentItem(query: string): SearchContentItem {
+function makeSearchContentItem(
+  query: string,
+  category: CategoryFilter
+): SearchContentItem {
   return {
-    id: `search-content:${query}`,
+    id: `search-content:${category}:${query}`,
     kind: 'search-content',
     bucket: 'search-content',
     searchText: query,
     sortTimestamp: 0,
     timestamps: { viewedAt: undefined, updatedAt: undefined },
     query,
+    category,
   };
 }
 
@@ -289,7 +294,7 @@ export function useCommandItems(
     const ranked = q ? search()(items, q).map((result) => result.item) : items;
 
     if (shouldShowSearchContentRow(q)) {
-      return [makeSearchContentItem(q), ...ranked];
+      return [makeSearchContentItem(q, categoryFilter()), ...ranked];
     }
 
     return ranked;
