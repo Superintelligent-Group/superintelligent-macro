@@ -78,16 +78,12 @@ jobs:
         with:
           name: macro-inc
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            rust/cloud-storage/target/
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-test-
+      - name: restore crane dependency artifacts
+        run: |
+          ARTIFACTS=$(nix build .#cargoArtifacts --no-link --print-out-paths)
+          mkdir -p rust/cloud-storage/target
+          zstd -d "$ARTIFACTS/target.tar.zst" --stdout | tar -xf - -C rust/cloud-storage/target
+          chmod -R +w rust/cloud-storage/target
       - name: prepare tests
         run: |
           nix develop --command just rust/cloud-storage/setup_test_envs
