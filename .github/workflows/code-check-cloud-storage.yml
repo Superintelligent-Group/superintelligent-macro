@@ -206,7 +206,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
-      NEXTEST_TEST_THREADS: '32'
+      NEXTEST_TEST_THREADS: '16'
     services:
       postgres:
         image: postgres:16
