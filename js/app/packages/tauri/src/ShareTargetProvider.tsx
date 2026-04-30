@@ -115,6 +115,15 @@ export function ShareTargetProvider(props: {
     } catch {}
   };
 
+  const clearLoadedPendingShare = (files: readonly PendingShareFile[]) => {
+    setPendingShareFiles([]);
+    setPendingShareFileNames([]);
+
+    if (files.length > 0) {
+      void clearSharedFiles(files.map((file) => file.token)).catch(() => {});
+    }
+  };
+
   onMount(() => {
     if (props.os !== 'ios') {
       return;
@@ -137,6 +146,7 @@ export function ShareTargetProvider(props: {
       try {
         const files = await popSharedFiles(filenames);
         if (files.length === 0) {
+          clearLoadedPendingShare(previousFiles);
           return;
         }
 
@@ -147,7 +157,9 @@ export function ShareTargetProvider(props: {
             () => {}
           );
         }
-      } catch {}
+      } catch {
+        clearLoadedPendingShare(previousFiles);
+      }
     };
 
     const unlisten = listen<ShareFilesReadyPayload>(

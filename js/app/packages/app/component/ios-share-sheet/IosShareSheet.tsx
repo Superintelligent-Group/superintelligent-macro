@@ -33,10 +33,7 @@ import {
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
-import {
-  getAttachmentKindFromFile,
-  iconTypeFromFilename,
-} from '@channel/Input/utils/file-helpers';
+import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import type { PendingShareFile } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
 import { invalidateListChannels } from '@queries/channel/channels';
@@ -67,16 +64,17 @@ function getPendingShareAttachmentKind(
   });
 }
 
+type ShareSheetAttachmentKind = Extract<InputAttachmentKind, 'image' | 'video'>;
+
 function buildPendingAttachment(
   file: PendingShareFile,
   pendingId: string,
-  kind: InputAttachmentKind
+  kind: ShareSheetAttachmentKind
 ): InputAttachmentData {
   return {
     id: pendingId,
     name: file.name,
     kind,
-    iconType: kind === 'document' ? iconTypeFromFilename(file.name) : undefined,
     pending: true,
     previewSrc: kind === 'image' ? file.previewSrc : undefined,
   };
@@ -85,17 +83,8 @@ function buildPendingAttachment(
 function buildUploadedAttachment(
   file: PendingShareFile,
   staticFileId: string,
-  kind: InputAttachmentKind
+  kind: ShareSheetAttachmentKind
 ): InputAttachmentData {
-  if (kind === 'document') {
-    return {
-      id: staticFileId,
-      name: file.name,
-      kind,
-      iconType: iconTypeFromFilename(file.name),
-    };
-  }
-
   return {
     id: staticFileId,
     name: file.name,
@@ -117,6 +106,8 @@ async function uploadPendingShareAttachment(options: {
   isActive: () => boolean;
 }) {
   const kind = getPendingShareAttachmentKind(options.file);
+  // The iOS share extension only hands the app images and videos today, and
+  // this upload path only creates static-file attachments for those media types.
   if (kind === 'document') {
     toast.failure(`Can't share ${options.file.name} from iOS yet`);
     return;
@@ -179,7 +170,7 @@ function ShareSheetHeaderActions(props: {
         size="sm"
         class="shrink-0 ml-2 pl-2 disabled:text-ink-muted text-accent"
         disabled={!props.canSend()}
-        onPointerDown={(event) => {
+        onClick={(event) => {
           event.preventDefault();
           props.handleSend();
         }}

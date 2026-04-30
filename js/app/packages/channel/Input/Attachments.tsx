@@ -77,8 +77,8 @@ function MediaAttachmentItem(props: {
 
   const pendingOverlay = () => (
     <Show when={isPending()}>
-      <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/20">
-        <SpinnerIcon class="w-4 h-4 animate-spin text-white" />
+      <div class="absolute inset-0 flex items-center justify-center rounded-2xl">
+        <SpinnerIcon class="w-4 h-4 animate-spin" />
       </div>
     </Show>
   );
@@ -87,9 +87,7 @@ function MediaAttachmentItem(props: {
     <div class="ph-no-capture relative group">
       <Switch
         fallback={
-          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-            <SpinnerIcon class="w-4 h-4 animate-spin" />
-          </div>
+          <div class="size-23 rounded-2xl border border-edge bg-menu" />
         }
       >
         <Match
@@ -110,8 +108,6 @@ function MediaAttachmentItem(props: {
                 fallback={<MediaImage.Fallback square />}
               />
             </button>
-            {pendingOverlay()}
-            {removeButton()}
           </MediaImage.Root>
         </Match>
 
@@ -125,9 +121,10 @@ function MediaAttachmentItem(props: {
               <MediaVideo.PlayOverlay />
             </MediaVideo.Root>
           </button>
-          {removeButton()}
         </Match>
       </Switch>
+      {pendingOverlay()}
+      {removeButton()}
     </div>
   );
 }

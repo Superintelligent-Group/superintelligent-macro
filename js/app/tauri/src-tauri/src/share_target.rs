@@ -26,6 +26,8 @@ struct ShareFilesReadyPayload {
 const SHARED_FILE_STAGING_DIR_NAME: &str = "ios-share-staging";
 #[cfg(target_os = "ios")]
 const STALE_SHARED_FILE_TTL_SECS: u64 = 60 * 60 * 24;
+#[cfg(any(target_os = "ios", test))]
+const STAGED_SHARED_FILE_NOT_FOUND_ERROR: &str = "staged shared file not found";
 
 #[derive(Serialize)]
 pub(crate) struct StagedSharedFile {
@@ -200,7 +202,12 @@ fn staged_shared_file_path(app: &AppHandle, token: &str) -> Result<std::path::Pa
         }
     }
 
-    Err("staged shared file not found".to_string())
+    Err(STAGED_SHARED_FILE_NOT_FOUND_ERROR.to_string())
+}
+
+#[cfg(any(target_os = "ios", test))]
+fn is_staged_shared_file_not_found_error(error: &str) -> bool {
+    error == STAGED_SHARED_FILE_NOT_FOUND_ERROR
 }
 
 #[cfg(target_os = "ios")]
@@ -439,7 +446,11 @@ pub(crate) fn clear_shared_files(app: tauri::AppHandle, tokens: Vec<String>) -> 
     #[cfg(target_os = "ios")]
     {
         for token in tokens {
-            let path = staged_shared_file_path(&app, &token)?;
+            let path = match staged_shared_file_path(&app, &token) {
+                Ok(path) => path,
+                Err(error) if is_staged_shared_file_not_found_error(&error) => continue,
+                Err(error) => return Err(error),
+            };
             if let Err(error) = std::fs::remove_file(path) {
                 if error.kind() != std::io::ErrorKind::NotFound {
                     return Err(format!("failed to delete staged shared file: {error}"));
@@ -595,5 +606,15 @@ mod tests {
             remaining_pending_share_filenames(&pending, &consumed),
             vec!["share_old.jpg".to_string(), "share_next.png".to_string()]
         );
+    }
+
+    #[test]
+    fn staged_shared_file_not_found_error_matches_helper() {
+        assert!(is_staged_shared_file_not_found_error(
+            STAGED_SHARED_FILE_NOT_FOUND_ERROR
+        ));
+        assert!(!is_staged_shared_file_not_found_error(
+            "failed to read shared file staging directory"
+        ));
     }
 }
