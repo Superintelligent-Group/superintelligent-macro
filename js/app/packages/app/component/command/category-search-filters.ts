@@ -1,4 +1,8 @@
-import type { Query } from '@app/component/next-soup/filters/filter-store/types';
+import {
+  defineQueryFilters,
+  NIL_UUID,
+  type Query,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { CategoryFilter } from './types';
 
@@ -7,30 +11,44 @@ export type CategorySearchFilters = {
   clientFilters: SetPredicatesInput<string>;
 };
 
-const CATEGORY_FILTER_MAP: Partial<Record<CategoryFilter, CategorySearchFilters>> = {
+/**
+ * Maps a Cmd+K category to the search-view filter overrides applied when the
+ * user picks "Search for [query]". Mirrors the search view's INDEX_OPTIONS so
+ * removing/replacing the resulting "Type:" chip behaves the same as if the
+ * user had picked it from the filter dropdown.
+ */
+const CATEGORY_FILTER_MAP: Partial<
+  Record<CategoryFilter, CategorySearchFilters>
+> = {
   channels: {
-    filters: {},
-    clientFilters: { and: ['channels'] },
+    filters: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
+    clientFilters: { or: ['channels'] },
   },
   dms: {
-    filters: { include: { channelType: ['direct_message'] } },
-    clientFilters: { and: ['people'] },
+    filters: defineQueryFilters({
+      include: { channelType: ['direct_message'] },
+      exclude: { channelId: [NIL_UUID] },
+    }),
+    clientFilters: { or: ['channels'] },
   },
   documents: {
-    filters: { exclude: { subType: ['task'] } },
-    clientFilters: { and: ['document-or-file'] },
+    filters: defineQueryFilters({ exclude: { subType: ['task'] } }),
+    clientFilters: { or: ['document-or-file'] },
   },
   tasks: {
-    filters: { include: { subType: ['task'] } },
-    clientFilters: { and: ['task'] },
+    filters: defineQueryFilters({ include: { subType: ['task'] } }),
+    clientFilters: { or: ['task'] },
   },
   chats: {
-    filters: {},
-    clientFilters: { and: ['agent'] },
+    filters: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
+    clientFilters: { or: ['agent'] },
   },
   people: {
-    filters: { include: { channelType: ['direct_message'] } },
-    clientFilters: { and: ['people'] },
+    filters: defineQueryFilters({
+      include: { channelType: ['direct_message'] },
+      exclude: { channelId: [NIL_UUID] },
+    }),
+    clientFilters: { or: ['channels'] },
   },
 };
 
