@@ -320,38 +320,37 @@ export const SoupView = (props: SoupViewProps) => {
               <Show when={isMobile() && !narrowSearchExpanded()}>
                 <SettingsButton />
               </Show>
-              <Show when={!isComponentListView('search')}>
-                <CollapsibleHeaderItem
-                  id="search"
-                  priority={0}
-                  onCollapsedChange={(isCollapsed) => {
-                    setSearchIsCollapsed(isCollapsed);
-                    if (!isCollapsed) setNarrowSearchExpanded(false);
-                  }}
-                  expanded={() => (
-                    <div class="w-52">
-                      <SoupSearchbar variant="secondary" />
-                    </div>
-                  )}
-                  collapsed={() => (
-                    <Show when={!narrowSearchExpanded()}>
-                      <Tooltip
-                        tooltip={
-                          <LabelAndHotKey label="Search" shortcut="⌘F" />
-                        }
+              <CollapsibleHeaderItem
+                id="search"
+                priority={0}
+                onCollapsedChange={(isCollapsed) => {
+                  setSearchIsCollapsed(isCollapsed);
+                  if (!isCollapsed) setNarrowSearchExpanded(false);
+                }}
+                expanded={() => (
+                  <div class="w-52">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus={isComponentListView('search')}
+                    />
+                  </div>
+                )}
+                collapsed={() => (
+                  <Show when={!narrowSearchExpanded()}>
+                    <Tooltip
+                      tooltip={<LabelAndHotKey label="Search" shortcut="⌘F" />}
+                    >
+                      <Button
+                        variant="ghost"
+                        class="p-1 rounded-xs"
+                        onClick={() => setNarrowSearchExpanded(true)}
                       >
-                        <Button
-                          variant="ghost"
-                          class="p-1 rounded-xs"
-                          onClick={() => setNarrowSearchExpanded(true)}
-                        >
-                          <SearchIcon class="size-4 touch:size-6" />
-                        </Button>
-                      </Tooltip>
-                    </Show>
-                  )}
-                />
-              </Show>
+                        <SearchIcon class="size-4 touch:size-6" />
+                      </Button>
+                    </Tooltip>
+                  </Show>
+                )}
+              />
             </SplitHeaderRight>
             <SoupFiltersBar />
           </div>
