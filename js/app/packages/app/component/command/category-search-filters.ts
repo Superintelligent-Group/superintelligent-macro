@@ -11,12 +11,8 @@ export type CategorySearchFilters = {
   clientFilters: SetPredicatesInput<string>;
 };
 
-/**
- * Maps a Cmd+K category to the search-view filter overrides applied when the
- * user picks "Search for [query]". Mirrors the search view's INDEX_OPTIONS so
- * removing/replacing the resulting "Type:" chip behaves the same as if the
- * user had picked it from the filter dropdown.
- */
+// Mirrors the search view's INDEX_OPTIONS so the resulting Type: chip can be
+// removed/replaced like any other.
 const CATEGORY_FILTER_MAP: Partial<
   Record<CategoryFilter, CategorySearchFilters>
 > = {

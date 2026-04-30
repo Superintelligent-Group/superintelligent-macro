@@ -192,11 +192,7 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Partial<QueryState>;
   initialSearchText?: string;
-  /**
-   * When true, ignore any persisted (localStorage) filter/tab state on mount
-   * and apply the supplied `initial*` values verbatim. Used when the view is
-   * opened with explicit intent (e.g. Cmd+K "Search for [query]").
-   */
+  /** Ignore localStorage on mount and use the supplied `initial*` values. */
   skipPersistedState?: boolean;
   disableLocalSearch?: boolean;
   /**

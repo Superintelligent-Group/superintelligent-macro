@@ -176,7 +176,6 @@ export function CommandMenuInner(props: {
       return;
     }
 
-    // Handle search-content rows (open the sidebar Search view with prefilled query)
     if (isSearchContentItem(item)) {
       const overrides = getCategorySearchFilters(item.category);
       openWithSplit(

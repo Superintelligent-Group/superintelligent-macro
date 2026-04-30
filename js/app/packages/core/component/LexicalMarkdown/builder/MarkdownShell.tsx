@@ -79,10 +79,8 @@ export const MarkdownShell: Component<
 
     didInitializeContent = true;
 
-    // Lexical's update listener fires markdownState synchronously inside the
-    // initialization above, before didInitializeContent flips. The deferred
-    // effect skips that change, so consumers never see the initial value.
-    // Surface it explicitly here so onChange wires up the initial content.
+    // The deferred markdownState effect misses the synchronous change inside
+    // init, so push the initial value out to onChange manually.
     if (hasInitialContent) {
       builderConfig.handlers.onChange?.(markdownState());
     }
