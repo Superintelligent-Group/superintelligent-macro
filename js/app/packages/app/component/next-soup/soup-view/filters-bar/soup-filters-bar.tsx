@@ -11,6 +11,7 @@ import { AnimatedPreviewIcon } from '@macro-icons/wide/animating/preview';
 import { useSoup } from '../../soup-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useAnalytics } from '@app/component/analytics-context';
+import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 
 export const SoupFiltersBar = () => {
   const {
@@ -56,6 +57,7 @@ export const SoupFiltersBar = () => {
   return (
     <Show when={!isMobile()}>
       <div class="flex items-start gap-2 px-2 py-1.5 border-b border-edge-muted w-full">
+        <SoupViewCreateButton />
         <UnifiedFilterDropdown />
         <ActiveFilterChips
           filters={activeFiltersList()}

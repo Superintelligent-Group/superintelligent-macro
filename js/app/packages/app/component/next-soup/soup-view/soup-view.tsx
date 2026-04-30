@@ -91,7 +91,6 @@ import {
   MobileSoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { SettingsButton } from '@app/component/settings/SettingsButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
@@ -297,9 +296,6 @@ export const SoupView = (props: SoupViewProps) => {
                       collapsed={() => <CollapsedSoupViewTabs />}
                       containerClass="h-full"
                     />
-                  </Show>
-                  <Show when={!isMobile()}>
-                    <SoupViewCreateButton />
                   </Show>
                   <Show when={isMobile()}>
                     <MobileFilterDrawer />
