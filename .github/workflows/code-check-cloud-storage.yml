@@ -4,6 +4,11 @@ on:
     branches: [ 'main' ]
     types: [opened, synchronize, reopened, ready_for_review]
 
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+
 concurrency:
   group: code-check-cloud-storage-${{ github.ref }}
   cancel-in-progress: true
@@ -13,28 +18,160 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      nextest_filter: ${{ steps.package-filter.outputs.nextest_filter }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          clean: false
+          fetch-depth: 350
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             should_run:
               - 'rust/cloud-storage/**'
+              - 'rust/rust-toolchain.toml'
+              - '.github/actions/setup-rust/**'
+              - '.github/actions/setup-sccache/**'
+              - 'scripts/clear-cargo-target-if-larger-than'
               - .github/workflows/code-check-cloud-storage.yml
+      - name: compute nextest package filter
+        id: package-filter
+        if: steps.filter.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GITHUB_BASE_REF:-}" ]; then
+            compare_rev="$(git rev-parse HEAD~1)"
+          else
+            git fetch origin "$GITHUB_BASE_REF" --depth=350
+            compare_rev="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"
+          fi
+
+          changed_files="$(git diff --name-only "$compare_rev" "$GITHUB_SHA")"
+          printf '%s\n' "$changed_files" > /tmp/changed-files
+
+          # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
+          if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-sccache)/.*|scripts/clear-cargo-target-if-larger-than|\.github/workflows/code-check-cloud-storage\.yml)$'; then
+            echo "Workspace-level change detected; running all tests"
+            echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          filterset="$(
+            python3 <<'PY'
+          import glob
+          import re
+          from pathlib import Path
+          
+          repo = Path.cwd().resolve()
+          workspace = repo / 'rust' / 'cloud-storage'
+          changed_files = [line for line in Path('/tmp/changed-files').read_text().splitlines() if line]
+          
+          def workspace_members(manifest: Path) -> list[str]:
+              members = []
+              in_workspace = False
+              in_members = False
+          
+              for raw_line in manifest.read_text().splitlines():
+                  line = raw_line.split('#', 1)[0].strip()
+                  if not line:
+                      continue
+                  if line.startswith('['):
+                      in_workspace = line == '[workspace]'
+                      continue
+                  if not in_workspace:
+                      continue
+                  if line.startswith('members') and '[' in line:
+                      in_members = True
+                  if in_members:
+                      members.extend(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', line))
+                      if ']' in line:
+                          in_members = False
+              return members
+          
+          def package_name(manifest: Path) -> str | None:
+              in_package = False
+              for raw_line in manifest.read_text().splitlines():
+                  line = raw_line.split('#', 1)[0].strip()
+                  if not line:
+                      continue
+                  if line.startswith('['):
+                      in_package = line == '[package]'
+                      continue
+                  if in_package:
+                      match = re.match(r'name\s*=\s*"([^"]+)"', line)
+                      if match:
+                          return match.group(1)
+              return None
+          
+          packages = []
+          for member in workspace_members(workspace / 'Cargo.toml'):
+              for member_dir in glob.glob(str(workspace / member)):
+                  manifest = Path(member_dir) / 'Cargo.toml'
+                  if not manifest.exists():
+                      continue
+                  name = package_name(manifest)
+                  if name:
+                      packages.append((manifest.parent.resolve(), name))
+          
+          changed_packages = set()
+          for changed_file in changed_files:
+              path = (repo / changed_file).resolve()
+              if path != workspace and workspace not in path.parents:
+                  continue
+          
+              matching_packages = [
+                  (manifest_dir, name)
+                  for manifest_dir, name in packages
+                  if path == manifest_dir or manifest_dir in path.parents
+              ]
+              if matching_packages:
+                  _, name = max(matching_packages, key=lambda item: len(item[0].parts))
+                  changed_packages.add(name)
+          
+          def escape_nextest_name(name: str) -> str:
+              return (
+                  name
+                  .replace('\\', '\\\\')
+                  .replace(')', '\\)')
+                  .replace(',', '\\,')
+              )
+          
+          if changed_packages:
+              print('|'.join(f'rdeps(={escape_nextest_name(name)})' for name in sorted(changed_packages)))
+          PY
+          )"
+
+          if [ -z "$filterset" ]; then
+            echo "No package-specific Rust changes detected; running all tests"
+          else
+            echo "nextest filter: $filterset"
+          fi
+          echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
 
   check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-latest-middy
     env:
-      CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Dwarnings"
       RUSTDOCFLAGS: "-Dwarnings"
       SQLX_OFFLINE: true
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          clean: false
       - uses: ./.github/actions/setup-rust
+      - name: clear target dir if large
+        run: scripts/clear-cargo-target-if-larger-than rust/cloud-storage/target 100 60
       - name: fmt
         run: |
           cd rust/cloud-storage
@@ -43,11 +180,22 @@ jobs:
         run: |
           cd rust/cloud-storage
           cargo clippy --all-features
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
 
   test:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: linux-latest-beefy 
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
     services:
       postgres:
         image: postgres:16
@@ -66,6 +214,8 @@ jobs:
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v6
+        with:
+          clean: false
       - uses: ./.github/actions/setup-rust
       - uses: actions/cache@v4
         with:
@@ -81,7 +231,10 @@ jobs:
         run: |
           command -v just || cargo install just --locked
           command -v sqlx || cargo install sqlx-cli --locked
-          command -v cargo-nextest || cargo install cargo-nextest --locked
+      - name: install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: clear target dir if large
+        run: scripts/clear-cargo-target-if-larger-than rust/cloud-storage/target 100 60
       - name: prepare tests
         run: |
           just rust/cloud-storage/setup_test_envs
@@ -89,7 +242,14 @@ jobs:
       - name: run tests
         run: |
           cd rust/cloud-storage
-          cargo nextest run --all-features
+          if [ -n "$NEXTEST_FILTER" ]; then
+            cargo nextest run --all-features -E "$NEXTEST_FILTER"
+          else
+            cargo nextest run --all-features
+          fi
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
 
   diff-check:
     needs: path-check

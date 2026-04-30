@@ -1,15 +1,32 @@
 name: Setup Rust
-description: Installs rust
+
+description: Installs Rust and configures cargo/sccache caching.
+
+inputs:
+  sccache:
+    description: Configure sccache as RUSTC_WRAPPER
+    required: false
+    default: 'true'
 
 runs:
   using: composite
   steps:
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-    - name: setup rust version
+    - name: setup rust toolchain
       shell: bash
-      run: rustup update stable && rustup default stable
+      run: |
+        set -euo pipefail
+
+        if [[ -f rust/rust-toolchain.toml ]]; then
+          toolchain="$(grep -E '^\s*channel\s*=' rust/rust-toolchain.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+        else
+          toolchain="stable"
+        fi
+
+        rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+        rustup default "$toolchain"
+    - name: setup sccache
+      if: ${{ inputs.sccache == 'true' }}
+      uses: ./.github/actions/setup-sccache
     - name: setup rust caching
       uses: Swatinem/rust-cache@v2
       with:
