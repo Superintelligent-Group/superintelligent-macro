@@ -13,9 +13,13 @@ export type CategorySearchFilters = {
 
 // Each Cmd+K category maps to a search-view INDEX_OPTIONS value so the
 // resulting Type: chip behaves the same as one picked from the filter
-// dropdown. Categories that need a sub-refinement on top of the index (e.g.
-// DMs/People narrow the Channels index to direct messages) supply an extra
-// include filter in CATEGORY_INCLUDE_REFINEMENTS.
+// dropdown. Some categories layer an extra refinement on the index — the
+// soup channels sidebar splits the same `channels` index into "People" (DMs)
+// and "Teams" (non-DMs) the same way.
+//
+// Note: the search backend doesn't honor channelType filters yet (the
+// soup→search arg conversion drops them); these refinements are correct in
+// the soup model and will start filtering once the backend supports it.
 const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, string>> = {
   channels: 'channels',
   dms: 'channels',
@@ -25,10 +29,27 @@ const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, string>> = {
   people: 'channels',
 };
 
-const CATEGORY_INCLUDE_REFINEMENTS: Partial<Record<CategoryFilter, FieldFilters>> = {
-  dms: { channelType: ['direct_message'] },
-  people: { channelType: ['direct_message'] },
+type Refinement = { include?: FieldFilters; exclude?: FieldFilters };
+
+const DM_TYPE: FieldFilters = { channelType: ['direct_message'] };
+
+const CATEGORY_REFINEMENTS: Partial<Record<CategoryFilter, Refinement>> = {
+  channels: { exclude: DM_TYPE },
+  dms: { include: DM_TYPE },
+  people: { include: DM_TYPE },
 };
+
+function applyRefinement(base: Query, refinement: Refinement): Query {
+  return {
+    ...base,
+    include: refinement.include
+      ? { ...base.include, ...refinement.include }
+      : base.include,
+    exclude: refinement.exclude
+      ? { ...base.exclude, ...refinement.exclude }
+      : base.exclude,
+  };
+}
 
 export function getCategorySearchFilters(
   category: CategoryFilter
@@ -38,12 +59,9 @@ export function getCategorySearchFilters(
   const option = INDEX_OPTIONS.find((o) => o.value === indexValue);
   if (!option) return undefined;
 
-  const refinement = CATEGORY_INCLUDE_REFINEMENTS[category];
-  const filters: Query = refinement
-    ? {
-        ...option.queryFilters,
-        include: { ...option.queryFilters.include, ...refinement },
-      }
+  const refinement = CATEGORY_REFINEMENTS[category];
+  const filters = refinement
+    ? applyRefinement(option.queryFilters, refinement)
     : option.queryFilters;
 
   return {
