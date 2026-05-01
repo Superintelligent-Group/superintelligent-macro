@@ -11,7 +11,11 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { batch } from 'solid-js';
-import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
+import {
+  $getRoot,
+  COMMAND_PRIORITY_HIGH,
+  KEY_ARROW_DOWN_COMMAND,
+} from 'lexical';
 import {
   createSignal,
   createEffect,
@@ -132,6 +136,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       applyOverrides: ({ query, filters, clientFilters }) => {
         batch(() => {
           editor.controls.setMarkdown(query);
+          editor.controls.getLexical().update(() => {
+            $getRoot().selectEnd();
+          });
           editor.controls.blur();
           if (filters !== undefined) queryFilters.replace(filters);
           if (clientFilters !== undefined) soup.predicates.set(clientFilters);
