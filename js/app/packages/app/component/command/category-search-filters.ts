@@ -26,7 +26,6 @@ const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, string>> = {
   documents: 'document-or-file',
   tasks: 'task',
   chats: 'agent',
-  people: 'channels',
 };
 
 type Refinement = { include?: FieldFilters; exclude?: FieldFilters };
@@ -36,7 +35,6 @@ const DM_TYPE: FieldFilters = { channelType: ['direct_message'] };
 const CATEGORY_REFINEMENTS: Partial<Record<CategoryFilter, Refinement>> = {
   channels: { exclude: DM_TYPE },
   dms: { include: DM_TYPE },
-  people: { include: DM_TYPE },
 };
 
 function applyRefinement(base: Query, refinement: Refinement): Query {

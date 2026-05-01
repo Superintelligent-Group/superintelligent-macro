@@ -78,7 +78,6 @@ const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'documents',
   'tasks',
   'chats',
-  'people',
 ]);
 
 function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
