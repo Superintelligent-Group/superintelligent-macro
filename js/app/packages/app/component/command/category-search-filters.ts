@@ -1,8 +1,8 @@
-import {
-  defineQueryFilters,
-  NIL_UUID,
-  type Query,
-} from '@app/component/next-soup/filters/filter-store';
+import { INDEX_OPTIONS } from '@app/component/next-soup/soup-view/filters-bar/search-filter-controls';
+import type {
+  FieldFilters,
+  Query,
+} from '@app/component/next-soup/filters/filter-store/types';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { CategoryFilter } from './types';
 
@@ -11,45 +11,43 @@ export type CategorySearchFilters = {
   clientFilters: SetPredicatesInput<string>;
 };
 
-// Mirrors the search view's INDEX_OPTIONS so the resulting Type: chip can be
-// removed/replaced like any other.
-const CATEGORY_FILTER_MAP: Partial<
-  Record<CategoryFilter, CategorySearchFilters>
-> = {
-  channels: {
-    filters: defineQueryFilters({ exclude: { channelId: [NIL_UUID] } }),
-    clientFilters: { or: ['channels'] },
-  },
-  dms: {
-    filters: defineQueryFilters({
-      include: { channelType: ['direct_message'] },
-      exclude: { channelId: [NIL_UUID] },
-    }),
-    clientFilters: { or: ['channels'] },
-  },
-  documents: {
-    filters: defineQueryFilters({ exclude: { subType: ['task'] } }),
-    clientFilters: { or: ['document-or-file'] },
-  },
-  tasks: {
-    filters: defineQueryFilters({ include: { subType: ['task'] } }),
-    clientFilters: { or: ['task'] },
-  },
-  chats: {
-    filters: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
-    clientFilters: { or: ['agent'] },
-  },
-  people: {
-    filters: defineQueryFilters({
-      include: { channelType: ['direct_message'] },
-      exclude: { channelId: [NIL_UUID] },
-    }),
-    clientFilters: { or: ['channels'] },
-  },
+// Each Cmd+K category maps to a search-view INDEX_OPTIONS value so the
+// resulting Type: chip behaves the same as one picked from the filter
+// dropdown. Categories that need a sub-refinement on top of the index (e.g.
+// DMs/People narrow the Channels index to direct messages) supply an extra
+// include filter in CATEGORY_INCLUDE_REFINEMENTS.
+const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, string>> = {
+  channels: 'channels',
+  dms: 'channels',
+  documents: 'document-or-file',
+  tasks: 'task',
+  chats: 'agent',
+  people: 'channels',
+};
+
+const CATEGORY_INCLUDE_REFINEMENTS: Partial<Record<CategoryFilter, FieldFilters>> = {
+  dms: { channelType: ['direct_message'] },
+  people: { channelType: ['direct_message'] },
 };
 
 export function getCategorySearchFilters(
   category: CategoryFilter
 ): CategorySearchFilters | undefined {
-  return CATEGORY_FILTER_MAP[category];
+  const indexValue = CATEGORY_TO_INDEX[category];
+  if (!indexValue) return undefined;
+  const option = INDEX_OPTIONS.find((o) => o.value === indexValue);
+  if (!option) return undefined;
+
+  const refinement = CATEGORY_INCLUDE_REFINEMENTS[category];
+  const filters: Query = refinement
+    ? {
+        ...option.queryFilters,
+        include: { ...option.queryFilters.include, ...refinement },
+      }
+    : option.queryFilters;
+
+  return {
+    filters,
+    clientFilters: { or: [indexValue] },
+  };
 }
