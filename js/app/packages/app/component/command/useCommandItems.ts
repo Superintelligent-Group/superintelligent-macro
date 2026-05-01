@@ -39,11 +39,11 @@ type CommandItem = {
   displayHotkeySequence?: HotkeySequenceStep[];
 };
 
-/** Search-content item: triggers full-text search in the sidebar Search view */
-type SearchContentItem = {
+/** Search item: triggers full-text search in the sidebar Search view */
+type SearchItem = {
   id: string;
-  kind: 'search-content';
-  bucket: 'search-content';
+  kind: 'search';
+  bucket: 'search';
   searchText: string;
   sortTimestamp: number;
   timestamps: TimestampedItem;
@@ -52,7 +52,7 @@ type SearchContentItem = {
 };
 
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem | SearchContentItem;
+type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem;
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -66,12 +66,12 @@ function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
-function isSearchContentItem(item: CommandMenuItem): item is SearchContentItem {
-  return item.kind === 'search-content';
+function isSearchItem(item: CommandMenuItem): item is SearchItem {
+  return item.kind === 'search';
 }
 
-/** Categories that support content-search via the sidebar Search view */
-const CONTENT_SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
+/** Categories that surface a "Search for [query]" row in the command menu */
+const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'all',
   'channels',
   'dms',
@@ -81,14 +81,11 @@ const CONTENT_SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'people',
 ]);
 
-function makeSearchContentItem(
-  query: string,
-  category: CategoryFilter
-): SearchContentItem {
+function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
   return {
-    id: `search-content:${category}:${query}`,
-    kind: 'search-content',
-    bucket: 'search-content',
+    id: `search:${category}:${query}`,
+    kind: 'search',
+    bucket: 'search',
     searchText: query,
     sortTimestamp: 0,
     timestamps: { viewedAt: undefined, updatedAt: undefined },
@@ -278,11 +275,11 @@ export function useCommandItems(
     });
   });
 
-  const shouldShowSearchContentRow = (q: string) => {
+  const shouldShowSearchRow = (q: string) => {
     if (!q.trim()) return false;
     if (CommandState.commandScopeCommands().length > 0) return false;
     if (CommandState.isEntityActionMode()) return false;
-    return CONTENT_SEARCHABLE_CATEGORIES.has(categoryFilter());
+    return SEARCHABLE_CATEGORIES.has(categoryFilter());
   };
 
   const filteredItems = createMemo(() => {
@@ -291,8 +288,8 @@ export function useCommandItems(
 
     const ranked = q ? search()(items, q).map((result) => result.item) : items;
 
-    if (shouldShowSearchContentRow(q)) {
-      return [makeSearchContentItem(q, categoryFilter()), ...ranked];
+    if (shouldShowSearchRow(q)) {
+      return [makeSearchItem(q, categoryFilter()), ...ranked];
     }
 
     return ranked;
@@ -301,11 +298,11 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export { isEntityItem, isUserItem, isCommandItem, isSearchContentItem };
+export { isEntityItem, isUserItem, isCommandItem, isSearchItem };
 export type {
   QuickAccessItem,
   CommandMenuItem,
   CommandItem,
-  SearchContentItem,
+  SearchItem,
   Bucket,
 };

@@ -2,7 +2,7 @@ import { DialogWrapper } from '@core/component/DialogWrapper';
 import {
   isCommandItem,
   isEntityItem,
-  isSearchContentItem,
+  isSearchItem,
   type CommandMenuItem,
 } from './useCommandItems';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -177,7 +177,7 @@ export function CommandMenuInner(props: {
       return;
     }
 
-    if (isSearchContentItem(item)) {
+    if (isSearchItem(item)) {
       const overrides = getCategorySearchFilters(item.category);
       const splitManager = globalSplitManager();
       const active = splitManager?.activeSplit();
@@ -597,8 +597,8 @@ function CommandMenuFooter(props: {
   const isCommand = () =>
     props.selectedItem && isCommandItem(props.selectedItem);
   const isEntity = () => props.selectedItem && isEntityItem(props.selectedItem);
-  const isSearchContent = () =>
-    props.selectedItem && isSearchContentItem(props.selectedItem);
+  const isSearch = () =>
+    props.selectedItem && isSearchItem(props.selectedItem);
 
   return (
     <div class="flex items-center gap-4 px-4 py-2 bg-panel border-t border-edge-muted text-xs text-ink-extra-muted/80">
@@ -621,7 +621,7 @@ function CommandMenuFooter(props: {
             when={isCommand() || props.isEntityActionMode}
             fallback={
               <Show
-                when={isSearchContent()}
+                when={isSearch()}
                 fallback={
                   <Show when={isEntity()}>
                     <HotkeyHint shortcut="enter" label="Open" />

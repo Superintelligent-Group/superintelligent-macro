@@ -5,9 +5,9 @@ import { For, Match, Show, Switch } from 'solid-js';
 import {
   isCommandItem,
   isEntityItem,
-  isSearchContentItem,
+  isSearchItem,
   type CommandMenuItem,
-  type SearchContentItem,
+  type SearchItem,
 } from './useCommandItems';
 import { Entity, type EntityData } from '@entity';
 import { cn } from '@ui/utils/classname';
@@ -119,7 +119,7 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
-function SearchContentDisplay(props: { item: SearchContentItem }) {
+function SearchDisplay(props: { item: SearchItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
@@ -135,8 +135,8 @@ function SearchContentDisplay(props: { item: SearchContentItem }) {
 function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
-      <Match when={isSearchContentItem(props.item) && props.item}>
-        {(item) => <SearchContentDisplay item={item()} />}
+      <Match when={isSearchItem(props.item) && props.item}>
+        {(item) => <SearchDisplay item={item()} />}
       </Match>
       <Match when={isCommandItem(props.item) && props.item}>
         {(item) => <CommandDisplay item={item()} />}
