@@ -76,7 +76,7 @@ export const SoupFiltersBar = (props: SoupFiltersBarProps = {}) => {
       <Match when={isComponentListView('search')}>
         <div class="w-full flex flex-col gap-2 p-2 border-b border-edge-muted">
           <SoupSearchbar
-            autoFocus
+            autoFocus={!props.initialSearchText}
             placeholder="Search, @mention contacts"
             initialValue={props.initialSearchText}
           />
