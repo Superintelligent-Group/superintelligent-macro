@@ -38,6 +38,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { isListViewID } from '@app/constants/list-views';
 import { useAnalytics } from '@app/component/analytics-context';
 import { getCategorySearchFilters } from './category-search-filters';
+import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -178,6 +179,27 @@ export function CommandMenuInner(props: {
 
     if (isSearchContentItem(item)) {
       const overrides = getCategorySearchFilters(item.category);
+      const splitManager = globalSplitManager();
+      const active = splitManager?.activeSplit();
+      const activeContent = active?.content();
+      const activeIsSearch =
+        activeContent?.type === 'component' && activeContent.id === 'search';
+
+      if (!openInNewSplit && activeIsSearch && active) {
+        const controller = getSearchSplit(active.id);
+        if (controller) {
+          controller.applyOverrides({
+            query: item.query,
+            filters: overrides?.filters,
+            clientFilters: overrides?.clientFilters,
+          });
+          active.activate();
+          CommandState.close();
+          CommandState.setQuery('');
+          return;
+        }
+      }
+
       openWithSplit(
         {
           type: 'component',

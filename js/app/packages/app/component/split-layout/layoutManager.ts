@@ -419,11 +419,7 @@ function createPinnedMount(
 
 function sameIdentity(a: SplitContent, b: SplitContent): boolean {
   if (a.type !== b.type) return false;
-  if (a.id !== b.id) return false;
-  // Distinct params on a component split forces a fresh mount on reattach;
-  // history navigation reuses the same reference, so back/forward still match.
-  if (a.type === 'component' && a.params !== b.params) return false;
-  return true;
+  return a.id === b.id;
 }
 
 function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {

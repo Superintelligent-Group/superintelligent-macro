@@ -1,15 +1,25 @@
 import XIcon from '@icon/regular/x.svg?component-solid';
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import { cn } from '@ui/utils/classname';
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { registerSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Hotkey } from '@core/component/Hotkey';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { markdownToPlainText } from '@lexical-core/utils/parsers';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { batch } from 'solid-js';
 import { COMMAND_PRIORITY_HIGH, KEY_ARROW_DOWN_COMMAND } from 'lexical';
-import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
+import {
+  createSignal,
+  createEffect,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 
 type SearchbarVariant = 'filled' | 'secondary';
 
@@ -29,7 +39,9 @@ const variantStyles: Record<SearchbarVariant, string> = {
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
-  const { setSearchText, setSearchPaused, setSearchMentions } = useSoupView();
+  const { setSearchText, setSearchPaused, setSearchMentions, queryFilters } =
+    useSoupView();
+  const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
   const [hasContent, setHasContent] = createSignal(false);
@@ -112,6 +124,21 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   });
 
   onCleanup(searchHotkey.dispose);
+
+  onMount(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component' || content.id !== 'search') return;
+    const dispose = registerSearchSplit(panel.handle.id, {
+      applyOverrides: ({ query, filters, clientFilters }) => {
+        batch(() => {
+          editor.controls.setMarkdown(query);
+          if (filters !== undefined) queryFilters.replace(filters);
+          if (clientFilters !== undefined) soup.predicates.set(clientFilters);
+        });
+      },
+    });
+    onCleanup(dispose);
+  });
 
   return (
     <div
